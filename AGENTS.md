@@ -6,6 +6,12 @@
 - **Dev**: `bun run dev:backend` (backend) and `bun run dev:frontend` (frontend, separate terminals)
 - **Tests**: No formal test suite (POC project)
 
+## Environment Variables
+- **AUTH_TOKEN**: Authentication token for all interfaces (required)
+- **DATA_DIR**: Directory where markdown articles are stored (default: ./data)
+- **PORT**: Server port (default: 5000)
+- **MCP_SERVER_ENABLED**: Enable/disable MCP server (case insensitive: true/True/TRUE, default: true)
+
 ## Code Style
 - **Runtime**: Bun (use `bun run`, not `npm`)
 - **Modules**: ESM only (`"type": "module"` in package.json, `.ts` extensions in imports allowed)

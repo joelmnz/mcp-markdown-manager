@@ -4,6 +4,7 @@ import { existsSync, mkdirSync } from 'fs';
 
 const PORT = parseInt(process.env.PORT || '5000');
 const DATA_DIR = process.env.DATA_DIR || '/data';
+const MCP_SERVER_ENABLED = process.env.MCP_SERVER_ENABLED?.toLowerCase() === 'true';
 
 // Ensure data directory exists
 if (!existsSync(DATA_DIR)) {
@@ -18,6 +19,9 @@ const server = Bun.serve({
     
     // Handle MCP endpoint
     if (url.pathname === '/mcp' && request.method === 'POST') {
+      if (!MCP_SERVER_ENABLED) {
+        return new Response('MCP server disabled', { status: 404 });
+      }
       return handleMCPRequest(request);
     }
     
@@ -56,3 +60,4 @@ const server = Bun.serve({
 console.log(`🚀 Article Manager server running on http://localhost:${PORT}`);
 console.log(`📁 Data directory: ${DATA_DIR}`);
 console.log(`🔒 Authentication: ${process.env.AUTH_TOKEN ? 'Enabled' : 'MISSING - Set AUTH_TOKEN!'}`);
+console.log(`🤖 MCP Server: ${MCP_SERVER_ENABLED ? 'Enabled' : 'Disabled'}`);
