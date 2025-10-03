@@ -33,7 +33,7 @@ export function Login({ onLogin }: LoginProps) {
   return (
     <div className="login-container">
       <div className="login-box">
-        <h1>Article Manager</h1>
+        <h1>MCP Markdown Manager</h1>
         <p className="login-subtitle">Enter your authentication token</p>
         <form onSubmit={handleSubmit}>
           <input

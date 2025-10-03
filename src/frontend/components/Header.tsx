@@ -12,7 +12,7 @@ export function Header({ theme, onThemeToggle, onLogout }: HeaderProps) {
   
   const mcpConfig = {
     "mcpServers": {
-      "article-manager": {
+      "mcp-markdown-manager": {
         "url": `${apiBaseUrl}/mcp`,
         "transport": {
           "type": "http",
@@ -27,7 +27,7 @@ export function Header({ theme, onThemeToggle, onLogout }: HeaderProps) {
   return (
     <header className="header">
       <div className="header-content">
-        <a href="/" className="header-title">Article Manager</a>
+        <a href="/" className="header-title">MCP Markdown Manager</a>
         <div className="header-actions">
           <button onClick={() => setShowInfo(!showInfo)} className="icon-button" title="API & MCP Info">
             ℹ️
