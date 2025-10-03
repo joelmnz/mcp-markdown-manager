@@ -13,6 +13,8 @@ export interface ArticleMetadata {
   filename: string;
   title: string;
   created: string;
+  // Filesystem last modified time, used for sorting in listings
+  modified: string;
 }
 
 const DATA_DIR = process.env.DATA_DIR || '/data';
@@ -80,26 +82,28 @@ export async function listArticles(): Promise<ArticleMetadata[]> {
   
   for (const filename of mdFiles) {
     const filepath = join(DATA_DIR, filename);
+    // Always read filesystem mtime for reliable "last updated" sorting
+    const stats = await stat(filepath);
+    const modified = stats.mtime.toISOString();
+
     const content = await readFile(filepath, 'utf-8');
     const parsed = parseFrontmatter(content);
-    
-    let created = parsed.created;
-    if (!created) {
-      const stats = await stat(filepath);
-      created = stats.birthtime.toISOString();
-    }
-    
+
+    // Preserve authored creation date when present; otherwise fall back to modified
+    const created = parsed.created || modified;
+
     const title = parsed.title || extractTitle(parsed.body);
     
     articles.push({
       filename,
       title,
-      created
+      created,
+      modified
     });
   }
   
-  // Sort by creation date (newest first)
-  articles.sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime());
+  // Sort by last modified date (newest first) to reflect most recently updated files in UI
+  articles.sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime());
   
   return articles;
 }
@@ -128,7 +132,8 @@ export async function readArticle(filename: string): Promise<Article | null> {
   let created = parsed.created;
   if (!created) {
     const stats = await stat(filepath);
-    created = stats.birthtime.toISOString();
+    // Align with listArticles: use last modified time when no frontmatter date
+    created = stats.mtime.toISOString();
   }
   
   const title = parsed.title || extractTitle(parsed.body);

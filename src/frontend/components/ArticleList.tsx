@@ -37,8 +37,10 @@ export function ArticleList({ articles, onArticleClick }: ArticleListProps) {
           className="article-item"
           onClick={() => onArticleClick(article.filename)}
         >
-          <h3 className="article-item-title">{article.title}</h3>
-          <p className="article-item-date">{formatDate(article.created)}</p>
+          <div className="article-item-header">
+            <h3 className="article-item-title">{article.title}</h3>
+            <span className="article-item-date">{formatDate(article.created)}</span>
+          </div>
         </div>
       ))}
     </div>

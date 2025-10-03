@@ -515,7 +515,7 @@ body {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 1.5rem;
+  padding: 1rem;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -526,10 +526,16 @@ body {
   transform: translateY(-2px);
 }
 
+.article-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .article-item-title {
   font-size: 1.25rem;
-  margin-bottom: 0.5rem;
   color: var(--text-primary);
+  margin: 0;
 }
 
 .article-item-date {
