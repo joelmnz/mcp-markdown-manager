@@ -494,6 +494,59 @@ Delete an article.
 }
 ```
 
+### Using with Agent Zero
+
+[Agent Zero](https://github.com/agent0ai/agent-zero) is an AI agent framework that supports MCP servers via the Streamable HTTP transport. To connect this MCP server to Agent Zero:
+
+1. **Start the MCP Markdown Manager** with a configured `AUTH_TOKEN`:
+   ```bash
+   docker run -d -p 8097:5000 \
+     -e AUTH_TOKEN="your-secret-token-here" \
+     -e MCP_SERVER_ENABLED="true" \
+     -v $(pwd)/data:/data \
+     ghcr.io/joelmnz/mcp-markdown-manager:latest
+   ```
+
+2. **Configure Agent Zero** by adding the following to your `tmp/settings.json` under the `mcp_servers` key:
+   ```json
+   {
+     "name": "mcp-markdown-manager",
+     "description": "Markdown article manager for research and notes",
+     "type": "streaming-http",
+     "url": "http://localhost:8097/mcp",
+     "headers": {
+       "Authorization": "Bearer your-secret-token-here"
+     },
+     "disabled": false
+   }
+   ```
+
+   **Important Notes:**
+   - Replace `your-secret-token-here` with your actual `AUTH_TOKEN`
+   - If running both Agent Zero and MCP server in Docker, use the appropriate network hostname instead of `localhost`
+   - The `type: "streaming-http"` is required for proper MCP protocol support
+   - The server uses the MCP Streamable HTTP transport specification with session management
+
+3. **Verify the connection** by checking Agent Zero logs for successful tool discovery. You should see 6 tools registered:
+   - `mcp_markdown_manager.listArticles`
+   - `mcp_markdown_manager.searchArticles`
+   - `mcp_markdown_manager.readArticle`
+   - `mcp_markdown_manager.createArticle`
+   - `mcp_markdown_manager.updateArticle`
+   - `mcp_markdown_manager.deleteArticle`
+
+4. **Use the tools** by instructing Agent Zero, for example:
+   - "Create a new article about Python decorators"
+   - "List all my articles"
+   - "Search for articles about machine learning"
+
+**Transport Details:**
+- The server implements the MCP Streamable HTTP transport protocol
+- Session management is handled automatically with `mcp-session-id` headers
+- POST requests are used for initialization and method calls
+- GET requests establish Server-Sent Event (SSE) streams for real-time updates
+- DELETE requests terminate sessions
+
 ## Article Format
 
 Articles are stored as markdown files with YAML frontmatter:
