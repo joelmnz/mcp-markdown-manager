@@ -16,18 +16,30 @@ const server = Bun.serve({
   port: PORT,
   async fetch(request) {
     const url = new URL(request.url);
+    const startTime = Date.now();
+    
+    const logRequest = (status: number) => {
+      const duration = Date.now() - startTime;
+      const timestamp = new Date().toISOString();
+      console.log(`[${timestamp}] ${request.method} ${url.pathname} ${status} ${duration}ms`);
+    };
     
     // Handle MCP endpoint
     if (url.pathname === '/mcp' && request.method === 'POST') {
       if (!MCP_SERVER_ENABLED) {
+        logRequest(404);
         return new Response('MCP server disabled', { status: 404 });
       }
-      return handleMCPRequest(request);
+      const response = await handleMCPRequest(request);
+      logRequest(response.status);
+      return response;
     }
     
     // Handle API endpoints
     if (url.pathname.startsWith('/api/') || url.pathname === '/health') {
-      return handleApiRequest(request);
+      const response = await handleApiRequest(request);
+      logRequest(response.status);
+      return response;
     }
     
     // Serve static files from public directory
@@ -41,18 +53,22 @@ const server = Bun.serve({
       const file = Bun.file(publicDir + filePath);
       
       if (await file.exists()) {
+        logRequest(200);
         return new Response(file);
       }
       
       // Fallback to index.html for client-side routing
       const indexFile = Bun.file(publicDir + '/index.html');
       if (await indexFile.exists()) {
+        logRequest(200);
         return new Response(indexFile);
       }
       
+      logRequest(404);
       return new Response('Not Found', { status: 404 });
     }
     
+    logRequest(404);
     return new Response('Not Found', { status: 404 });
   },
 });

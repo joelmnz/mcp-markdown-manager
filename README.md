@@ -11,8 +11,9 @@ A complete full-stack TypeScript monolithic article management system designed f
 - 🔐 **Bearer token authentication** for all interfaces
 - 🌐 **REST API** for programmatic access
 - 🤖 **MCP server** integration for AI agent access
-- 🐳 **Docker support** with multi-stage builds
+- 🐳 **Docker support** with multi-stage builds and non-root user
 - ⚡ **Bun runtime** for fast TypeScript execution
+- 📊 **Request logging** for monitoring and debugging
 
 ## Architecture
 
@@ -679,7 +680,8 @@ ls -la public/
 - Use HTTPS in production (reverse proxy recommended)
 - Regularly backup the data directory
 - Keep dependencies updated
-- Run container as non-root user in production
+- Docker container runs as non-root user (UID 1001) for security
+- Request logging enabled for monitoring and audit trails
 
 ## License
 

@@ -6,13 +6,14 @@ FROM oven/bun:1 AS frontend-builder
 WORKDIR /app
 
 # Copy package files
-COPY package.json bun.lockb ./
+COPY package.json bun.lock ./
 
 # Install dependencies
 RUN bun install --frozen-lockfile
 
 # Copy source code
 COPY src ./src
+COPY scripts ./scripts
 COPY tsconfig.json ./
 
 # Build frontend
@@ -24,7 +25,7 @@ FROM oven/bun:1-slim
 WORKDIR /app
 
 # Copy package files
-COPY package.json bun.lockb ./
+COPY package.json bun.lock ./
 
 # Install production dependencies only
 RUN bun install --frozen-lockfile --production
@@ -36,8 +37,16 @@ COPY tsconfig.json ./
 # Copy built frontend from builder stage
 COPY --from=frontend-builder /app/public ./public
 
-# Create data directory
-RUN mkdir -p /data
+# Create non-root user
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 --ingroup nodejs bunuser
+
+# Create data directory with proper permissions
+RUN mkdir -p /data && \
+    chown -R bunuser:nodejs /app /data
+
+# Switch to non-root user
+USER bunuser
 
 # Expose port
 EXPOSE 5000
