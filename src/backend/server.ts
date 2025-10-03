@@ -64,8 +64,17 @@ const server = Bun.serve({
       const file = Bun.file(publicDir + filePath);
       
       if (await file.exists()) {
+        // Set proper MIME type for service worker
+        const headers: Record<string, string> = {};
+        if (url.pathname === '/sw.js') {
+          headers['Content-Type'] = 'application/javascript';
+          headers['Service-Worker-Allowed'] = '/';
+        } else if (url.pathname === '/manifest.json') {
+          headers['Content-Type'] = 'application/manifest+json';
+        }
+        
         logRequest(200);
-        return new Response(file);
+        return new Response(file, { headers });
       }
       
       // Fallback to index.html for client-side routing

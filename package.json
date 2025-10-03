@@ -8,7 +8,8 @@
     "dev:backend": "bun --watch src/backend/server.ts",
     "dev:frontend": "bun scripts/watch-frontend.ts",
     "build": "bun run build:frontend",
-    "build:frontend": "bun build src/frontend/App.tsx --outdir=public --target=browser --minify --splitting --format=esm --entry-naming=[dir]/[name].[hash].[ext] --chunk-naming=[name].[hash].[ext] && bun run build:html && bun run build:css",
+    "build:frontend": "bun run build:icons && bun build src/frontend/App.tsx --outdir=public --target=browser --minify --splitting --format=esm --entry-naming=[dir]/[name].[hash].[ext] --chunk-naming=[name].[hash].[ext] && bun run build:html && bun run build:css",
+    "build:icons": "node scripts/generate-icons.cjs",
     "build:html": "node scripts/build-html.cjs",
     "build:css": "echo 'CSS already bundled'",
     "start": "NODE_ENV=production bun src/backend/server.ts",
@@ -28,6 +29,7 @@
     "@types/bun": "latest",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
+    "canvas": "^3.2.0",
     "typescript": "^5.6.3"
   }
 }
