@@ -17,7 +17,8 @@ A complete full-stack TypeScript monolithic article management system designed f
 ## Architecture
 
 ### Monolithic Structure
-```
+
+```text
 /src
   /backend
     /routes      - REST API endpoints
@@ -33,6 +34,7 @@ A complete full-stack TypeScript monolithic article management system designed f
 ```
 
 ### Technology Stack
+
 - **Runtime**: Bun (fast TypeScript execution)
 - **Backend**: TypeScript, @modelcontextprotocol/sdk
 - **Frontend**: React, react-markdown
@@ -42,39 +44,51 @@ A complete full-stack TypeScript monolithic article management system designed f
 ## Quick Start
 
 ### Prerequisites
+
 - [Bun](https://bun.sh) installed (v1.0+)
 - Docker and Docker Compose (for containerized deployment)
 
 ### Development Setup
 
-1. **Clone and install dependencies**
+#### 1. Clone and install dependencies
+
 ```bash
 cd article_manager
 bun install
 ```
 
-2. **Configure environment**
+#### 2. Configure environment
+
 ```bash
 cp .env.example .env
 # Edit .env and set your AUTH_TOKEN
 ```
 
-3. **Run development servers**
+#### 3. Run development servers
 
 Terminal 1 (Backend):
+
 ```bash
 bun run dev:backend
 ```
 
 Terminal 2 (Frontend):
+
 ```bash
 bun run dev:frontend
 ```
 
-4. **Access the application**
+#### 4. Access the application
+
 - Web UI: http://localhost:5000
 - API: http://localhost:5000/api/*
 - MCP: http://localhost:5000/mcp
+
+To test the MCP Server you can use the MCP inspector
+
+```bash
+npx @modelcontextprotocol/inspector
+```
 
 ### Production Build
 
@@ -90,23 +104,27 @@ bun run start
 
 ### Using Docker Compose (Recommended)
 
-1. **Configure environment**
+#### 1. Configure environment
+
 ```bash
 cp .env.example .env
 # Edit .env and set AUTH_TOKEN
 ```
 
-2. **Start the container**
+#### 2. Start the container
+
 ```bash
 docker-compose up -d
 ```
 
-3. **View logs**
+#### 3. View logs
+
 ```bash
 docker-compose logs -f
 ```
 
-4. **Stop the container**
+#### 4. Stop the container
+
 ```bash
 docker-compose down
 ```
@@ -153,19 +171,23 @@ docker push ghcr.io/YOUR_USERNAME/article-manager:latest
 ## REST API Documentation
 
 All API endpoints require Bearer token authentication via the `Authorization` header:
-```
+
+```html
 Authorization: Bearer YOUR_AUTH_TOKEN
 ```
 
 ### Endpoints
 
 #### Health Check
+
 ```http
 GET /health
 ```
+
 Returns server health status (no auth required).
 
 **Response:**
+
 ```json
 {
   "status": "ok"
@@ -173,12 +195,15 @@ Returns server health status (no auth required).
 ```
 
 #### List Articles
+
 ```http
 GET /api/articles
 ```
+
 Returns all articles with metadata, sorted by creation date (newest first).
 
 **Response:**
+
 ```json
 [
   {
@@ -190,15 +215,19 @@ Returns all articles with metadata, sorted by creation date (newest first).
 ```
 
 #### Search Articles
+
 ```http
 GET /api/articles?q=search+term
 ```
+
 Search articles by title (partial match, case-insensitive).
 
 **Query Parameters:**
+
 - `q` - Search query string
 
 **Response:**
+
 ```json
 [
   {
@@ -210,12 +239,15 @@ Search articles by title (partial match, case-insensitive).
 ```
 
 #### Read Article
+
 ```http
 GET /api/articles/:filename
 ```
+
 Read a single article by filename.
 
 **Response:**
+
 ```json
 {
   "filename": "my-article.md",
@@ -226,6 +258,7 @@ Read a single article by filename.
 ```
 
 **Error Response (404):**
+
 ```json
 {
   "error": "Article not found"
@@ -233,6 +266,7 @@ Read a single article by filename.
 ```
 
 #### Create Article
+
 ```http
 POST /api/articles
 Content-Type: application/json
@@ -242,9 +276,11 @@ Content-Type: application/json
   "content": "Article content in markdown..."
 }
 ```
+
 Creates a new article. Filename is auto-generated from title (e.g., "My New Article" → "my-new-article.md").
 
 **Response (201):**
+
 ```json
 {
   "filename": "my-new-article.md",
@@ -255,6 +291,7 @@ Creates a new article. Filename is auto-generated from title (e.g., "My New Arti
 ```
 
 **Error Response (400):**
+
 ```json
 {
   "error": "Title and content are required"
@@ -262,6 +299,7 @@ Creates a new article. Filename is auto-generated from title (e.g., "My New Arti
 ```
 
 #### Update Article
+
 ```http
 PUT /api/articles/:filename
 Content-Type: application/json
@@ -271,9 +309,11 @@ Content-Type: application/json
   "content": "Updated content..."
 }
 ```
+
 Updates an existing article. Preserves original creation date.
 
 **Response:**
+
 ```json
 {
   "filename": "my-article.md",
@@ -284,12 +324,15 @@ Updates an existing article. Preserves original creation date.
 ```
 
 #### Delete Article
+
 ```http
 DELETE /api/articles/:filename
 ```
+
 Deletes an article.
 
 **Response:**
+
 ```json
 {
   "success": true
@@ -299,6 +342,7 @@ Deletes an article.
 ### Authentication Errors
 
 All authenticated endpoints return 401 for invalid/missing tokens:
+
 ```json
 {
   "error": "Unauthorized"
@@ -310,6 +354,7 @@ All authenticated endpoints return 401 for invalid/missing tokens:
 The MCP (Model Context Protocol) server provides AI agents with tools to manage articles.
 
 ### Endpoint
+
 ```http
 POST /mcp
 Authorization: Bearer YOUR_AUTH_TOKEN
@@ -319,9 +364,11 @@ Content-Type: application/json
 ### Available Tools
 
 #### listArticles
+
 List all articles with metadata.
 
 **Input Schema:**
+
 ```json
 {
   "method": "tools/call",
@@ -333,6 +380,7 @@ List all articles with metadata.
 ```
 
 **Response:**
+
 ```json
 {
   "content": [
@@ -345,9 +393,11 @@ List all articles with metadata.
 ```
 
 #### searchArticles
+
 Search articles by title.
 
 **Input Schema:**
+
 ```json
 {
   "method": "tools/call",
@@ -361,9 +411,11 @@ Search articles by title.
 ```
 
 #### readArticle
+
 Read a single article.
 
 **Input Schema:**
+
 ```json
 {
   "method": "tools/call",
@@ -377,9 +429,11 @@ Read a single article.
 ```
 
 #### createArticle
+
 Create a new article.
 
 **Input Schema:**
+
 ```json
 {
   "method": "tools/call",
@@ -394,9 +448,11 @@ Create a new article.
 ```
 
 #### updateArticle
+
 Update an existing article.
 
 **Input Schema:**
+
 ```json
 {
   "method": "tools/call",
@@ -412,9 +468,11 @@ Update an existing article.
 ```
 
 #### deleteArticle
+
 Delete an article.
 
 **Input Schema:**
+
 ```json
 {
   "method": "tools/call",
@@ -428,6 +486,7 @@ Delete an article.
 ```
 
 ### List Available Tools
+
 ```json
 {
   "method": "tools/list"
@@ -454,12 +513,14 @@ More content...
 ```
 
 ### Filename Generation
+
 - User provides title when creating articles
 - Filename is auto-generated: "My Article Name" → "my-article-name.md"
 - Title is extracted from first `#` heading in markdown for display
 - Filename may differ from displayed title
 
 ### Frontmatter Fields
+
 - `title`: Article title (string)
 - `created`: ISO 8601 timestamp (string)
 
@@ -468,28 +529,33 @@ If frontmatter is missing, the system falls back to file system timestamps.
 ## Web UI Usage
 
 ### Login
+
 1. Navigate to http://localhost:5000
 2. Enter your AUTH_TOKEN
 3. Click "Login"
 
 ### Home Page
+
 - View last 10 articles (newest first)
 - Search articles by title
 - Click "New Article" to create
 - Click any article to view
 
 ### Article View
+
 - Read rendered markdown
 - See creation date
 - Click "Edit" to modify
 - Click "Delete" to remove
 
 ### Article Edit
+
 - Edit title and content
 - Live preview pane (desktop)
 - Save or cancel changes
 
 ### Theme Toggle
+
 - Click sun/moon icon in header
 - Switches between dark and light themes
 - Preference saved in browser
@@ -520,7 +586,7 @@ bun run typecheck
 
 ### File Structure
 
-```
+```text
 article_manager/
 ├── src/
 │   ├── backend/
@@ -559,6 +625,7 @@ article_manager/
 ## Troubleshooting
 
 ### Port already in use
+
 ```bash
 # Find process using port 5000
 lsof -i :5000
@@ -568,12 +635,14 @@ kill -9 <PID>
 ```
 
 ### Permission denied on data directory
+
 ```bash
 # Fix permissions
 chmod -R 755 ./data
 ```
 
 ### Docker build fails
+
 ```bash
 # Clean build cache
 docker builder prune -a
@@ -583,6 +652,7 @@ docker-compose build --no-cache
 ```
 
 ### Frontend not loading
+
 ```bash
 # Rebuild frontend
 bun run build
@@ -618,6 +688,7 @@ MIT License - feel free to use and modify as needed.
 ## Contributing
 
 This is a POC project. For production use, consider:
+
 - Adding database support for better scalability
 - Implementing full-text search (e.g., Elasticsearch)
 - Adding user management and roles
