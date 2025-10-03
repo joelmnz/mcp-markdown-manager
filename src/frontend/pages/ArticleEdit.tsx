@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { lint } from 'markdownlint/sync';
+import { applyFixes } from 'markdownlint';
 
 interface ArticleEditProps {
   filename?: string;
@@ -12,6 +15,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [linting, setLinting] = useState(false);
   const [error, setError] = useState('');
   const isNew = !filename;
 
@@ -80,6 +84,60 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
     }
   };
 
+  const handleLint = () => {
+    try {
+      setLinting(true);
+      setError('');
+
+      // Lint the markdown content
+      const results = lint({
+        strings: {
+          content: content
+        },
+        config: {
+          default: true
+        }
+      });
+
+      // Check if there are any errors
+      const errors = results.content;
+      if (errors && errors.length > 0) {
+        // Try to apply fixes to the content
+        const fixed = applyFixes(content, errors);
+        
+        // Lint again to check if there are remaining errors
+        const recheck = lint({
+          strings: {
+            content: fixed
+          },
+          config: {
+            default: true
+          }
+        });
+        
+        const remainingErrors = recheck.content;
+        if (remainingErrors && remainingErrors.length > 0) {
+          // Show remaining errors - don't update content
+          const errorMessages = remainingErrors.map((err: any) => 
+            `Line ${err.lineNumber}: ${err.ruleDescription} (${err.ruleNames.join('/')})`
+          ).join('\n');
+          setError(`Linting errors found (cannot auto-fix):\n${errorMessages}`);
+        } else {
+          // All errors were fixed - update content
+          setContent(fixed);
+          setError('');
+        }
+      } else {
+        // No errors found
+        setError('');
+      }
+    } catch (err) {
+      setError('Failed to lint markdown: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setLinting(false);
+    }
+  };
+
   if (loading) {
     return <div className="page"><div className="loading">Loading...</div></div>;
   }
@@ -93,13 +151,22 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         >
           ← Cancel
         </button>
-        <button 
-          className="button button-primary"
-          onClick={handleSave}
-          disabled={saving}
-        >
-          {saving ? 'Saving...' : 'Save'}
-        </button>
+        <div className="article-actions">
+          <button 
+            className="button"
+            onClick={handleLint}
+            disabled={linting || !content.trim()}
+          >
+            {linting ? 'Linting...' : 'Lint'}
+          </button>
+          <button 
+            className="button button-primary"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? 'Saving...' : 'Save'}
+          </button>
+        </div>
       </div>
 
       {error && <div className="error-message">{error}</div>}
@@ -129,7 +196,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
           <div className="preview-content">
             <h1>{title || 'Untitled'}</h1>
             <div className="markdown-content">
-              <ReactMarkdown>{content || '*No content yet*'}</ReactMarkdown>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || '*No content yet*'}</ReactMarkdown>
             </div>
           </div>
         </div>

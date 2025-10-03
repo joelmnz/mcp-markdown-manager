@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Article {
   filename: string;
@@ -123,7 +124,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
         <h1>{article.title}</h1>
         <p className="article-date">{formatDate(article.created)}</p>
         <div className="markdown-content">
-          <ReactMarkdown>{article.content}</ReactMarkdown>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{article.content}</ReactMarkdown>
         </div>
       </article>
     </div>
