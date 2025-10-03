@@ -1,0 +1,28 @@
+{
+  "name": "article-manager",
+  "version": "1.0.0",
+  "description": "Full-stack TypeScript article management system for AI agents",
+  "type": "module",
+  "scripts": {
+    "dev:backend": "bun --watch src/backend/server.ts",
+    "dev:frontend": "bun --watch src/frontend/dev-server.ts",
+    "build": "bun run build:frontend",
+    "build:frontend": "bun build src/frontend/App.tsx --outdir=public --target=browser --minify --splitting --format=esm --entry-naming=[dir]/[name].[hash].[ext] --chunk-naming=[name].[hash].[ext] && bun run build:html && bun run build:css",
+    "build:html": "node -e \"const fs=require('fs');const files=fs.readdirSync('public').filter(f=>f.startsWith('App.')&&f.endsWith('.js'));const cssFiles=fs.readdirSync('public').filter(f=>f.startsWith('App.')&&f.endsWith('.css'));const html='<!DOCTYPE html><html><head><meta charset=\\\"UTF-8\\\"><meta name=\\\"viewport\\\" content=\\\"width=device-width,initial-scale=1.0\\\"><title>Article Manager</title><link rel=\\\"stylesheet\\\" href=\\\"/'+cssFiles[0]+'\\\"></head><body><div id=\\\"root\\\"></div><script type=\\\"module\\\" src=\\\"/'+files[0]+'\\\"></script></body></html>';fs.writeFileSync('public/index.html',html);\"",
+    "build:css": "echo 'CSS already bundled'",
+    "start": "NODE_ENV=production bun src/backend/server.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "typescript": "^5.6.3"
+  }
+}

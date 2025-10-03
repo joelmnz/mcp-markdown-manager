@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  article-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/YOUR_USERNAME/article-manager:latest
+    container_name: article-manager
+    ports:
+      - "5000:5000"
+    environment:
+      - AUTH_TOKEN=${AUTH_TOKEN}
+      - DATA_DIR=/data
+      - PORT=5000
+      - NODE_ENV=production
+    volumes:
+      - ./data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  data:
+    driver: local
