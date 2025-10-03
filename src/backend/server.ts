@@ -1,5 +1,5 @@
 import { handleApiRequest } from './routes/api';
-import { handleMCPRequest } from './mcp/server';
+import { handleMCPPostRequest, handleMCPGetRequest, handleMCPDeleteRequest } from './mcp/server';
 import { existsSync, mkdirSync } from 'fs';
 
 const PORT = parseInt(process.env.PORT || '5000');
@@ -25,12 +25,23 @@ const server = Bun.serve({
     };
     
     // Handle MCP endpoint
-    if (url.pathname === '/mcp' && request.method === 'POST') {
+    if (url.pathname === '/mcp') {
       if (!MCP_SERVER_ENABLED) {
         logRequest(404);
         return new Response('MCP server disabled', { status: 404 });
       }
-      const response = await handleMCPRequest(request);
+      
+      let response: Response;
+      if (request.method === 'POST') {
+        response = await handleMCPPostRequest(request);
+      } else if (request.method === 'GET') {
+        response = await handleMCPGetRequest(request);
+      } else if (request.method === 'DELETE') {
+        response = await handleMCPDeleteRequest(request);
+      } else {
+        response = new Response('Method not allowed', { status: 405 });
+      }
+      
       logRequest(response.status);
       return response;
     }
