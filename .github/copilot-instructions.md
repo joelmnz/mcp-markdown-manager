@@ -3,6 +3,40 @@
 ## Project Overview
 This is a **monolithic TypeScript full-stack application** for AI-powered article management with three interfaces: Web UI, REST API, and MCP server. Built with Bun runtime for fast TypeScript execution.
 
+## Quick Start Commands
+
+### Essential Commands
+```bash
+# Install dependencies
+bun install
+
+# Development (requires two terminals)
+bun run dev:backend    # Terminal 1 - Backend with auto-reload
+bun run dev:frontend   # Terminal 2 - Frontend dev server
+
+# Build
+bun run build          # Builds frontend with hashed assets
+
+# Production
+bun run start          # Run production server
+
+# Type checking
+bun run typecheck      # TypeScript validation
+```
+
+### Environment Setup
+Required environment variables (see `.env.example`):
+- `AUTH_TOKEN` - Authentication token for all interfaces (required)
+- `DATA_DIR` - Directory where markdown articles are stored (default: `./data`)
+- `PORT` - Server port (default: `5000`)
+- `MCP_SERVER_ENABLED` - Enable/disable MCP server (default: `true`)
+
+### Testing
+No formal test suite (POC project). When adding features, manually test:
+1. Web UI at `http://localhost:5000`
+2. REST API at `http://localhost:5000/api/*`
+3. MCP endpoint at `http://localhost:5000/mcp`
+
 ## Architecture Patterns
 
 ### Monolithic Structure with Clear Boundaries
@@ -122,9 +156,74 @@ Articles stored in configurable `DATA_DIR` (default `/data`):
 - **Single User**: No multi-tenancy - designed for personal/AI agent use
 - **Mobile-First**: Responsive design starts with mobile styles
 
+## Code Style and Conventions
+
+### TypeScript Standards
+- Strict mode enabled (`strict: true` in tsconfig.json)
+- Explicit interfaces for data structures (e.g., `Article`, `ArticleMetadata`)
+- ESM imports only - `.ts` extensions allowed in imports
+- Node built-ins from `fs/promises`, `path`
+
+### Naming Conventions
+- `camelCase` for functions and variables
+- `PascalCase` for React components and TypeScript interfaces
+- Descriptive names that reflect purpose
+
+### Import Organization
+```typescript
+// 1. Node built-ins
+import { readFile } from 'fs/promises';
+import path from 'path';
+
+// 2. External dependencies
+import { Server } from '@modelcontextprotocol/sdk';
+
+// 3. Internal modules
+import { validateAuth } from './middleware/auth';
+```
+
+### Error Handling
+- Services throw errors with descriptive messages
+- HTTP handlers catch and return appropriate status codes (400, 401, 404, 500)
+- MCP handlers catch and return `{ isError: true, content: [...] }` responses
+- Frontend shows user-friendly error messages via alert/notification
+
 ## Testing Philosophy
 This is a POC with no formal tests. When adding tests:
 - Test business logic in `services/articles.ts`
 - Mock file system operations
 - Test MCP tool schemas and responses
 - Test frontend component rendering and interactions
+
+## Common Development Tasks
+
+### Adding a New REST API Endpoint
+1. Define route handler in `src/backend/routes/api.ts`
+2. Add authentication check using `validateAuth()` from middleware
+3. Use service functions from `services/articles.ts` for business logic
+4. Return appropriate HTTP status codes and JSON responses
+
+### Adding a New MCP Tool
+1. Add tool definition to `mcp/server.ts` in the tools list
+2. Implement handler in the switch statement
+3. Use same service functions from `services/articles.ts`
+4. Return MCP-formatted responses with `content` array
+
+### Modifying the Frontend
+1. React components in `src/frontend/components/`
+2. Page components in `src/frontend/pages/`
+3. All styles in `src/frontend/styles/main.css`
+4. Update `App.tsx` for routing changes
+5. Use `localStorage.getItem('auth-token')` for authentication
+
+### Working with Articles
+- All article operations go through `services/articles.ts`
+- Articles are markdown files with YAML frontmatter
+- Title extraction: frontmatter `title` → first `#` heading → "Untitled"
+- Filenames auto-generated via `generateFilename()` - no manual naming
+
+## Deployment
+- Docker multi-stage build via `Dockerfile`
+- Production uses `bun run start`
+- See `DEPLOYMENT.md` for detailed deployment instructions
+- All interfaces (Web, API, MCP) use same `AUTH_TOKEN` for security
