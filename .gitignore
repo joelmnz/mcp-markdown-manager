@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+public/*.js
+public/*.css
+public/*.map
+public/index.html
+
+# Environment variables
+.env
+.env.local
+
+# Data directory (articles)
+/data/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+
+# Bun
+.bun/
