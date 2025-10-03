@@ -10,18 +10,15 @@ export function Header({ theme, onThemeToggle, onLogout }: HeaderProps) {
   const [showInfo, setShowInfo] = useState(false);
   const apiBaseUrl = window.location.origin;
   
-  const mcpConfig = {
-    "mcpServers": {
-      "mcp-markdown-manager": {
-        "url": `${apiBaseUrl}/mcp`,
-        "transport": {
-          "type": "http",
-          "headers": {
-            "Authorization": "Bearer YOUR_AUTH_TOKEN_HERE"
-          }
-        }
-      }
-    }
+  const mcpConfigAgentZero = {
+    "name": "mcp-markdown-manager",
+    "description": "Markdown article manager for research and notes",
+    "type": "streaming-http",
+    "url": `${apiBaseUrl}/mcp`,
+    "headers": {
+      "Authorization": "Bearer YOUR_AUTH_TOKEN_HERE"
+    },
+    "disabled": false
   };
 
   return (
@@ -54,14 +51,16 @@ export function Header({ theme, onThemeToggle, onLogout }: HeaderProps) {
               {/* MCP Server Configuration */}
               <section className="info-section">
                 <h3>🤖 MCP Server Configuration</h3>
-                <p>Connect AI agents using the Model Context Protocol (HTTP streaming):</p>
+                <p>Connect AI agents using the Model Context Protocol (Streamable HTTP):</p>
+                <p><strong>For Agent Zero:</strong> Add to <code>tmp/settings.json</code> → <code>mcp_servers</code>:</p>
                 <div className="info-code">
-                  <pre>{JSON.stringify(mcpConfig, null, 2)}</pre>
+                  <pre>{JSON.stringify(mcpConfigAgentZero, null, 2)}</pre>
                 </div>
                 <div className="info-detail">
                   <strong>Endpoint:</strong> <code>{apiBaseUrl}/mcp</code><br/>
-                  <strong>Method:</strong> POST<br/>
-                  <strong>Auth:</strong> Bearer Token (required)
+                  <strong>Transport:</strong> MCP Streamable HTTP (POST/GET/DELETE)<br/>
+                  <strong>Auth:</strong> Bearer Token (required in headers)<br/>
+                  <strong>Session Management:</strong> Automatic via <code>mcp-session-id</code> header
                 </div>
               </section>
 
