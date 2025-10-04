@@ -19,6 +19,6 @@ if (!jsFiles.length || !cssFiles.length) {
   process.exit(1);
 }
 
-const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>Article Manager</title><link rel="stylesheet" href="/${cssFiles[0]}"></head><body><div id="root"></div><script type="module" src="/${jsFiles[0]}"></script></body></html>`;
+const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>MCP Markdown Manager</title><link rel="stylesheet" href="/${cssFiles[0]}"></head><body><div id="root"></div><script type="module" src="/${jsFiles[0]}"></script></body></html>`;
 fs.writeFileSync(path.join(publicDir, 'index.html'), html);
 console.log('public/index.html written ->', jsFiles[0], cssFiles[0]);

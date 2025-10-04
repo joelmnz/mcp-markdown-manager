@@ -64,8 +64,17 @@ const server = Bun.serve({
       const file = Bun.file(publicDir + filePath);
       
       if (await file.exists()) {
+        // Set proper MIME type for service worker
+        const headers: Record<string, string> = {};
+        if (url.pathname === '/sw.js') {
+          headers['Content-Type'] = 'application/javascript';
+          headers['Service-Worker-Allowed'] = '/';
+        } else if (url.pathname === '/manifest.json') {
+          headers['Content-Type'] = 'application/manifest+json';
+        }
+        
         logRequest(200);
-        return new Response(file);
+        return new Response(file, { headers });
       }
       
       // Fallback to index.html for client-side routing
@@ -84,7 +93,7 @@ const server = Bun.serve({
   },
 });
 
-console.log(`🚀 Article Manager server running on http://localhost:${PORT}`);
+console.log(`🚀 MCP Markdown Manager server running on http://localhost:${PORT}`);
 console.log(`📁 Data directory: ${DATA_DIR}`);
 console.log(`🔒 Authentication: ${process.env.AUTH_TOKEN ? 'Enabled' : 'MISSING - Set AUTH_TOKEN!'}`);
 console.log(`🤖 MCP Server: ${MCP_SERVER_ENABLED ? 'Enabled' : 'Disabled'}`);

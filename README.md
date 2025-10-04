@@ -1,6 +1,6 @@
-# Article Manager
+# MCP Markdown Manager
 
-A complete full-stack TypeScript monolithic article management system designed for AI agents to save and manage research content. This self-hosted single-user POC system handles hundreds of markdown articles with multiple interfaces: Web UI, REST API, and MCP server.
+A complete full-stack TypeScript monolithic markdown article management system designed for AI agents to save and manage research content. This self-hosted single-user POC system handles hundreds of markdown articles with multiple interfaces: Web UI, REST API, and MCP server.
 
 ## Features
 
@@ -8,6 +8,7 @@ A complete full-stack TypeScript monolithic article management system designed f
 - 🔍 **Search functionality** with partial title matching
 - 🎨 **Dark/Light theme** toggle
 - 📱 **Mobile-first responsive design**
+- 📲 **Progressive Web App (PWA)** support for offline access
 - 🔐 **Bearer token authentication** for all interfaces
 - 🌐 **REST API** for programmatic access
 - 🤖 **MCP server** integration for AI agent access
@@ -100,6 +101,40 @@ bun run build
 # Start production server
 bun run start
 ```
+
+## Progressive Web App (PWA)
+
+The MCP Markdown Manager includes full PWA support, allowing you to:
+
+- **Install** the app on your device (mobile or desktop)
+- **Work offline** with cached articles and assets
+- **Access** the app from your home screen like a native app
+
+### Installation
+
+When you visit the web app in a supported browser, you'll see an install prompt. Click "Install" to add it to your home screen or desktop.
+
+Alternatively, you can manually install:
+
+- **Chrome/Edge**: Click the install icon in the address bar
+- **Safari (iOS)**: Tap the Share button → "Add to Home Screen"
+- **Firefox**: Look for the install banner at the bottom of the page
+
+### PWA Features
+
+- **Offline Mode**: Service worker caches static assets and API responses
+- **App-like Experience**: Runs in standalone mode without browser UI
+- **Custom Icons**: Optimized icons for different screen sizes (192x192, 512x512)
+- **Theme Integration**: Matches your selected dark/light theme preference
+
+### Technical Details
+
+The PWA implementation includes:
+
+- `manifest.json` - Web app manifest with metadata and icons
+- `sw.js` - Service worker for offline caching and asset management
+- PWA meta tags in HTML for proper installation behavior
+- Automatic service worker registration on app load
 
 ## Docker Deployment
 
@@ -666,6 +701,17 @@ article_manager/
 │       │   └── main.css         # All styles
 │       └── App.tsx              # Main app component
 ├── public/                      # Built frontend (generated)
+│   ├── manifest.json            # PWA manifest
+│   ├── sw.js                    # Service worker
+│   ├── icon-192.png             # PWA icon (192x192)
+│   ├── icon-512.png             # PWA icon (512x512)
+│   ├── index.html               # Main HTML (generated)
+│   ├── App.[hash].js            # Bundled JS (generated)
+│   └── App.[hash].css           # Bundled CSS (generated)
+├── scripts/
+│   ├── build-html.cjs           # Generate index.html
+│   ├── generate-icons.cjs       # Generate PWA icons
+│   └── watch-frontend.ts        # Frontend dev watcher
 ├── data/                        # Article storage (gitignored)
 ├── Dockerfile                   # Multi-stage Docker build
 ├── docker-compose.yml           # Docker Compose config

@@ -1,7 +1,7 @@
-# Article Manager - AI Coding Instructions
+# MCP Markdown Manager - AI Coding Instructions
 
 ## Project Overview
-This is a **monolithic TypeScript full-stack application** for AI-powered article management with three interfaces: Web UI, REST API, and MCP server. Built with Bun runtime for fast TypeScript execution.
+This is a **monolithic TypeScript full-stack application** for AI-powered markdown article management with three interfaces: Web UI, REST API, and MCP server. Built with Bun runtime for fast TypeScript execution.
 
 ## Quick Start Commands
 

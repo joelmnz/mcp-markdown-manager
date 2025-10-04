@@ -1,11 +1,17 @@
 # Dependencies
 node_modules/
+package-lock.json
 
 # Build outputs
 public/*.js
 public/*.css
 public/*.map
 public/index.html
+
+# But keep PWA files
+!public/manifest.json
+!public/sw.js
+!public/icon-*.png
 
 # Environment variables
 .env
