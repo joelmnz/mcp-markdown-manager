@@ -12,10 +12,10 @@ function createIcon(size, outputPath) {
 
   // Text
   ctx.fillStyle = '#ffffff';
-  ctx.font = `bold ${size * 0.5}px Arial`;
+  ctx.font = `bold ${size * 0.35}px Arial`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('A', size / 2, size / 2);
+  ctx.fillText('Md', size / 2, size / 2);
 
   // Save as PNG
   const buffer = canvas.toBuffer('image/png');
