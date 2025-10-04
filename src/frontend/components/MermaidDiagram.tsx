@@ -21,7 +21,7 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
     });
 
     // Generate unique ID for this diagram
-    const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
+    const id = `mermaid-${Math.random().toString(36).substring(2, 11)}`;
 
     // Render the diagram
     mermaid.render(id, chart)
