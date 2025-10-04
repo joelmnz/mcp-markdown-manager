@@ -3,6 +3,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { lint } from 'markdownlint/sync';
 import { applyFixes } from 'markdownlint';
+import TurndownService from 'turndown';
+import { gfm } from 'turndown-plugin-gfm';
 
 interface ArticleEditProps {
   filename?: string;
@@ -16,6 +18,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [linting, setLinting] = useState(false);
+  const [converting, setConverting] = useState(false);
   const [error, setError] = useState('');
   const isNew = !filename;
 
@@ -138,6 +141,34 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
     }
   };
 
+  const handleConvertHtml = () => {
+    try {
+      setConverting(true);
+      setError('');
+
+      // Create a new TurndownService instance with GFM plugin for table support
+      const turndownService = new TurndownService({
+        headingStyle: 'atx',
+        codeBlockStyle: 'fenced',
+        bulletListMarker: '-'
+      });
+      
+      // Add GFM plugin for table support
+      turndownService.use(gfm);
+
+      // Convert HTML to Markdown
+      const markdown = turndownService.turndown(content);
+      
+      // Update content with converted markdown
+      setContent(markdown);
+      setError('');
+    } catch (err) {
+      setError('Failed to convert HTML: ' + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setConverting(false);
+    }
+  };
+
   if (loading) {
     return <div className="page"><div className="loading">Loading...</div></div>;
   }
@@ -152,6 +183,13 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
           ← Cancel
         </button>
         <div className="article-actions">
+          <button 
+            className="button"
+            onClick={handleConvertHtml}
+            disabled={converting || !content.trim()}
+          >
+            {converting ? 'Converting...' : 'Convert Html'}
+          </button>
           <button 
             className="button"
             onClick={handleLint}
