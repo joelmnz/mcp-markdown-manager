@@ -10,8 +10,20 @@ function newestFiles(dir, prefix, ext) {
     .map((x) => x.f);
 }
 
+function largestJsFile(dir, prefix, ext) {
+  // For JS files, we want the largest file which is the main entry point
+  const files = fs
+    .readdirSync(dir)
+    .filter((f) => f.startsWith(prefix) && f.endsWith(ext))
+    .map((f) => ({ f, size: fs.statSync(path.join(dir, f)).size }))
+    .sort((a, b) => b.size - a.size);
+  
+  return files.length > 0 ? [files[0].f] : [];
+}
+
 const publicDir = path.join(__dirname, '..', 'public');
-const jsFiles = newestFiles(publicDir, 'App.', '.js');
+// Use largest file for JS (main entry point) and newest for CSS
+const jsFiles = largestJsFile(publicDir, 'App.', '.js');
 const cssFiles = newestFiles(publicDir, 'App.', '.css');
 
 if (!jsFiles.length || !cssFiles.length) {
