@@ -1,6 +1,6 @@
-# Article Manager
+# MCP Markdown Manager
 
-A complete full-stack TypeScript monolithic article management system designed for AI agents to save and manage research content. This self-hosted single-user POC system handles hundreds of markdown articles with multiple interfaces: Web UI, REST API, and MCP server.
+A complete full-stack TypeScript monolithic markdown article management system designed for AI agents to save and manage research content. This self-hosted single-user POC system handles hundreds of markdown articles with multiple interfaces: Web UI, REST API, and MCP server.
 
 ## Features
 
@@ -104,7 +104,7 @@ bun run start
 
 ## Progressive Web App (PWA)
 
-The Article Manager includes full PWA support, allowing you to:
+The MCP Markdown Manager includes full PWA support, allowing you to:
 
 - **Install** the app on your device (mobile or desktop)
 - **Work offline** with cached articles and assets

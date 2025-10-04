@@ -1,7 +1,7 @@
-// Service Worker for Article Manager PWA
-const CACHE_NAME = 'article-manager-v1';
-const STATIC_CACHE = 'article-manager-static-v1';
-const DYNAMIC_CACHE = 'article-manager-dynamic-v1';
+// Service Worker for MCP Markdown Manager PWA
+const CACHE_NAME = 'mcp-markdown-manager-v1';
+const STATIC_CACHE = 'mcp-markdown-manager-static-v1';
+const DYNAMIC_CACHE = 'mcp-markdown-manager-dynamic-v1';
 
 // Static assets to cache on install
 const STATIC_ASSETS = [

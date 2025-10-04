@@ -93,7 +93,7 @@ const server = Bun.serve({
   },
 });
 
-console.log(`🚀 Article Manager server running on http://localhost:${PORT}`);
+console.log(`🚀 MCP Markdown Manager server running on http://localhost:${PORT}`);
 console.log(`📁 Data directory: ${DATA_DIR}`);
 console.log(`🔒 Authentication: ${process.env.AUTH_TOKEN ? 'Enabled' : 'MISSING - Set AUTH_TOKEN!'}`);
 console.log(`🤖 MCP Server: ${MCP_SERVER_ENABLED ? 'Enabled' : 'Disabled'}`);
