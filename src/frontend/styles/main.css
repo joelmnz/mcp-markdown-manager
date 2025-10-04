@@ -832,3 +832,163 @@ body {
   .markdown-content h2 { font-size: 1.5rem; }
   .markdown-content h3 { font-size: 1.25rem; }
 }
+
+/* Mermaid diagram styles */
+.mermaid-container {
+  position: relative;
+  margin: 1.5rem 0;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--bg-secondary);
+  padding: 1rem;
+}
+
+.mermaid-controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  justify-content: flex-end;
+}
+
+.mermaid-button {
+  padding: 0.5rem 1rem;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background-color 0.2s;
+}
+
+.mermaid-button:hover {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.mermaid-diagram {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow-x: auto;
+  padding: 1rem;
+  background-color: var(--bg-primary);
+  border-radius: 4px;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.mermaid-error {
+  background-color: var(--danger-color);
+  color: white;
+  padding: 1rem;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+
+.mermaid-error pre {
+  background-color: rgba(0, 0, 0, 0.2);
+  padding: 0.5rem;
+  border-radius: 4px;
+  margin-top: 0.5rem;
+  overflow-x: auto;
+}
+
+/* Mermaid expanded/popout overlay */
+.mermaid-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+}
+
+.mermaid-expanded {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px var(--shadow);
+}
+
+.mermaid-expanded-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  border-radius: 8px 8px 0 0;
+}
+
+.mermaid-expanded-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: var(--text-primary);
+}
+
+.mermaid-expanded-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mermaid-expanded-content {
+  padding: 2rem;
+  overflow: auto;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.mermaid-expanded-content svg {
+  max-width: 100%;
+  height: auto;
+  cursor: move;
+}
+
+/* Responsive Mermaid styles */
+@media (max-width: 768px) {
+  .mermaid-overlay {
+    padding: 1rem;
+  }
+
+  .mermaid-expanded {
+    max-width: 100%;
+    max-height: 95vh;
+  }
+
+  .mermaid-expanded-header {
+    padding: 0.75rem;
+  }
+
+  .mermaid-expanded-header h3 {
+    font-size: 1rem;
+  }
+
+  .mermaid-expanded-content {
+    padding: 1rem;
+  }
+
+  .mermaid-controls {
+    flex-wrap: wrap;
+  }
+
+  .mermaid-button {
+    font-size: 0.75rem;
+    padding: 0.4rem 0.8rem;
+  }
+}
+

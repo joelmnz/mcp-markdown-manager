@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { lint } from 'markdownlint/sync';
 import { applyFixes } from 'markdownlint';
+import { MermaidDiagram } from '../components/MermaidDiagram';
 
 interface ArticleEditProps {
   filename?: string;
@@ -196,7 +197,28 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
           <div className="preview-content">
             <h1>{title || 'Untitled'}</h1>
             <div className="markdown-content">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || '*No content yet*'}</ReactMarkdown>
+              <ReactMarkdown 
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  code({ className, children, ...props }) {
+                    const match = /language-(\w+)/.exec(className || '');
+                    const language = match ? match[1] : '';
+                    const isInline = !className;
+                    
+                    if (!isInline && language === 'mermaid') {
+                      return <MermaidDiagram chart={String(children).trim()} />;
+                    }
+                    
+                    return (
+                      <code className={className} {...props}>
+                        {children}
+                      </code>
+                    );
+                  }
+                }}
+              >
+                {content || '*No content yet*'}
+              </ReactMarkdown>
             </div>
           </div>
         </div>

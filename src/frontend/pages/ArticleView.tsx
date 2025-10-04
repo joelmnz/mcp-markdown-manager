@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MermaidDiagram } from '../components/MermaidDiagram';
 
 interface Article {
   filename: string;
@@ -124,7 +125,28 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
         <h1>{article.title}</h1>
         <p className="article-date">{formatDate(article.created)}</p>
         <div className="markdown-content">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{article.content}</ReactMarkdown>
+          <ReactMarkdown 
+            remarkPlugins={[remarkGfm]}
+            components={{
+              code({ className, children, ...props }) {
+                const match = /language-(\w+)/.exec(className || '');
+                const language = match ? match[1] : '';
+                const isInline = !className;
+                
+                if (!isInline && language === 'mermaid') {
+                  return <MermaidDiagram chart={String(children).trim()} />;
+                }
+                
+                return (
+                  <code className={className} {...props}>
+                    {children}
+                  </code>
+                );
+              }
+            }}
+          >
+            {article.content}
+          </ReactMarkdown>
         </div>
       </article>
     </div>
