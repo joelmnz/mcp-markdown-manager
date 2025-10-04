@@ -19,6 +19,20 @@ export interface ArticleMetadata {
 
 const DATA_DIR = process.env.DATA_DIR || '/data';
 
+// Clean markdown content by trimming leading newlines and whitespace
+// Returns cleaned content or throws error if empty
+function cleanMarkdownContent(content: string): string {
+  // Trim leading newlines and carriage returns
+  const cleaned = content.replace(/^[\n\r]+/, '');
+  
+  // Check if content is empty after cleaning
+  if (!cleaned.trim()) {
+    throw new Error('Content cannot be empty');
+  }
+  
+  return cleaned;
+}
+
 // Parse frontmatter from markdown content
 function parseFrontmatter(content: string): { title?: string; created?: string; body: string } {
   const frontmatterRegex = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/;
@@ -29,7 +43,8 @@ function parseFrontmatter(content: string): { title?: string; created?: string; 
   }
   
   const frontmatter = match[1];
-  const body = match[2];
+  // Remove leading newlines from body to prevent accumulation
+  const body = match[2].replace(/^[\n\r]+/, '');
   const result: { title?: string; created?: string; body: string } = { body };
   
   frontmatter.split('\n').forEach(line => {
@@ -148,6 +163,9 @@ export async function readArticle(filename: string): Promise<Article | null> {
 
 // Create a new article
 export async function createArticle(title: string, content: string): Promise<Article> {
+  // Clean content and validate it's not empty
+  const cleanedContent = cleanMarkdownContent(content);
+  
   const filename = generateFilename(title);
   const filepath = join(DATA_DIR, filename);
   
@@ -156,20 +174,23 @@ export async function createArticle(title: string, content: string): Promise<Art
   }
   
   const created = new Date().toISOString();
-  const fullContent = createFrontmatter(title, created) + content;
+  const fullContent = createFrontmatter(title, created) + cleanedContent;
   
   await writeFile(filepath, fullContent, 'utf-8');
   
   return {
     filename,
     title,
-    content,
+    content: cleanedContent,
     created
   };
 }
 
 // Update an existing article
 export async function updateArticle(filename: string, title: string, content: string): Promise<Article> {
+  // Clean content and validate it's not empty
+  const cleanedContent = cleanMarkdownContent(content);
+  
   const filepath = join(DATA_DIR, filename);
   
   if (!existsSync(filepath)) {
@@ -182,13 +203,13 @@ export async function updateArticle(filename: string, title: string, content: st
     throw new Error(`Article ${filename} not found`);
   }
   
-  const fullContent = createFrontmatter(title, existing.created) + content;
+  const fullContent = createFrontmatter(title, existing.created) + cleanedContent;
   await writeFile(filepath, fullContent, 'utf-8');
   
   return {
     filename,
     title,
-    content,
+    content: cleanedContent,
     created: existing.created
   };
 }
