@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { lint } from 'markdownlint/sync';
 import { applyFixes } from 'markdownlint';
-import { MermaidDiagram } from '../components/MermaidDiagram';
+import { MarkdownView } from '../components/MarkdownView';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 
@@ -235,28 +233,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
           <div className="preview-content">
             <h1>{title || 'Untitled'}</h1>
             <div className="markdown-content">
-              <ReactMarkdown 
-                remarkPlugins={[remarkGfm]}
-                components={{
-                  code({ className, children, ...props }) {
-                    const match = /language-(\w+)/.exec(className || '');
-                    const language = match ? match[1] : '';
-                    const isInline = !className;
-                    
-                    if (!isInline && language === 'mermaid') {
-                      return <MermaidDiagram chart={String(children).trim()} />;
-                    }
-                    
-                    return (
-                      <code className={className} {...props}>
-                        {children}
-                      </code>
-                    );
-                  }
-                }}
-              >
-                {content || '*No content yet*'}
-              </ReactMarkdown>
+              <MarkdownView content={content || '*No content yet*'} />
             </div>
           </div>
         </div>

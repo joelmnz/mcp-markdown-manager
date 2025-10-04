@@ -1,22 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
+import { useTheme } from '../hooks/useTheme';
 
 interface MermaidDiagramProps {
   chart: string;
 }
 
 export function MermaidDiagram({ chart }: MermaidDiagramProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [svg, setSvg] = useState<string>('');
+  const diagramRef = useRef<HTMLDivElement>(null);
+  const expandedDiagramRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string>('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const theme = useTheme();
 
   useEffect(() => {
     // Initialize mermaid
     mermaid.initialize({ 
       startOnLoad: false,
-      theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default',
+      theme: theme === 'dark' ? 'dark' : 'default',
       securityLevel: 'loose'
     });
 
@@ -26,14 +28,20 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
     // Render the diagram
     mermaid.render(id, chart)
       .then(({ svg }) => {
-        setSvg(svg);
+        // Insert SVG into the DOM directly
+        if (diagramRef.current) {
+          diagramRef.current.innerHTML = svg;
+        }
+        if (expandedDiagramRef.current) {
+          expandedDiagramRef.current.innerHTML = svg;
+        }
         setError('');
       })
       .catch((err) => {
         setError(err.message || 'Failed to render diagram');
         console.error('Mermaid rendering error:', err);
       });
-  }, [chart]);
+  }, [chart, theme]);
 
   const handleCopy = async () => {
     try {
@@ -64,7 +72,7 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
 
   return (
     <>
-      <div className="mermaid-container" ref={containerRef}>
+      <div className="mermaid-container">
         <div className="mermaid-controls">
           <button 
             className="mermaid-button" 
@@ -83,7 +91,7 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
         </div>
         <div 
           className="mermaid-diagram"
-          dangerouslySetInnerHTML={{ __html: svg }}
+          ref={diagramRef}
         />
       </div>
 
@@ -111,7 +119,7 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
             </div>
             <div 
               className="mermaid-expanded-content"
-              dangerouslySetInnerHTML={{ __html: svg }}
+              ref={expandedDiagramRef}
             />
           </div>
         </div>
