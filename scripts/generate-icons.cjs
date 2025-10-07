@@ -25,6 +25,11 @@ function createIcon(size, outputPath) {
 
 const publicDir = path.join(__dirname, '..', 'public');
 
+// Ensure public directory exists
+if (!fs.existsSync(publicDir)) {
+  fs.mkdirSync(publicDir, { recursive: true });
+}
+
 // Create icons
 createIcon(192, path.join(publicDir, 'icon-192.png'));
 createIcon(512, path.join(publicDir, 'icon-512.png'));
