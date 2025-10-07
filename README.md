@@ -779,7 +779,7 @@ ls -la public/
 - Use HTTPS in production (reverse proxy recommended)
 - Regularly backup the data directory
 - Keep dependencies updated
-- Docker container runs as non-root user (UID 1001) for security
+- Docker container runs as non-root user (UID 99, GID 100 - UNRAID compatible) for security
 - Request logging enabled for monitoring and audit trails
 
 ## License
