@@ -32,7 +32,8 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
         if (diagramRef.current) {
           diagramRef.current.innerHTML = svg;
         }
-        if (expandedDiagramRef.current) {
+        // Only render to expanded ref if it exists (when expanded view is open)
+        if (isExpanded && expandedDiagramRef.current) {
           expandedDiagramRef.current.innerHTML = svg;
         }
         setError('');
@@ -41,7 +42,7 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
         setError(err.message || 'Failed to render diagram');
         console.error('Mermaid rendering error:', err);
       });
-  }, [chart, theme]);
+  }, [chart, theme, isExpanded]);
 
   const handleCopy = async () => {
     try {
