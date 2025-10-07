@@ -9,7 +9,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 
 # Install dependencies
-RUN bun install --frozen-lockfile
+RUN NODE_TLS_REJECT_UNAUTHORIZED=0 bun install --frozen-lockfile
 
 # Copy source code
 COPY src ./src
@@ -28,7 +28,7 @@ WORKDIR /app
 COPY package.json bun.lock ./
 
 # Install production dependencies only
-RUN bun install --frozen-lockfile --production
+RUN NODE_TLS_REJECT_UNAUTHORIZED=0 bun install --frozen-lockfile --production
 
 # Copy backend source
 COPY src/backend ./src/backend
