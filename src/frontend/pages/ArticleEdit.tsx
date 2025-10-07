@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { lint } from 'markdownlint/sync';
 import { applyFixes } from 'markdownlint';
+import { MarkdownView } from '../components/MarkdownView';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 
@@ -234,7 +233,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
           <div className="preview-content">
             <h1>{title || 'Untitled'}</h1>
             <div className="markdown-content">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content || '*No content yet*'}</ReactMarkdown>
+              <MarkdownView content={content || '*No content yet*'} />
             </div>
           </div>
         </div>
