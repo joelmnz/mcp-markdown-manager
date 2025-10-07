@@ -37,13 +37,12 @@ COPY tsconfig.json ./
 # Copy built frontend from builder stage
 COPY --from=frontend-builder /app/public ./public
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 --ingroup nodejs bunuser
+# Create non-root user with UNRAID compatible IDs (GID 100 already exists as 'users')
+RUN adduser --system --uid 99 --ingroup users bunuser
 
 # Create data directory with proper permissions
 RUN mkdir -p /data && \
-    chown -R bunuser:nodejs /app /data
+    chown -R bunuser:users /app /data
 
 # Switch to non-root user
 USER bunuser
