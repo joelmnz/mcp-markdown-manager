@@ -5,13 +5,15 @@ import { Header } from './components/Header';
 import { Home } from './pages/Home';
 import { ArticleView } from './pages/ArticleView';
 import { ArticleEdit } from './pages/ArticleEdit';
+import { RAGStatus } from './pages/RAGStatus';
 import './styles/main.css';
 
 type Route = 
   | { type: 'home' }
   | { type: 'article'; filename: string }
   | { type: 'edit'; filename: string }
-  | { type: 'new' };
+  | { type: 'new' }
+  | { type: 'rag-status' };
 
 function App() {
   const [token, setToken] = useState<string | null>(null);
@@ -67,6 +69,10 @@ function App() {
   const parseRoute = (path: string): Route => {
     if (path === '/' || path === '') {
       return { type: 'home' };
+    }
+    
+    if (path === '/rag-status') {
+      return { type: 'rag-status' };
     }
     
     if (path.startsWith('/article/')) {
@@ -126,6 +132,9 @@ function App() {
       <main className="main">
         {route.type === 'home' && (
           <Home token={token} onNavigate={navigate} />
+        )}
+        {route.type === 'rag-status' && (
+          <RAGStatus token={token} onNavigate={navigate} />
         )}
         {route.type === 'article' && (
           <ArticleView filename={route.filename} token={token} onNavigate={navigate} />

@@ -122,6 +122,40 @@ export async function semanticSearch(query: string, k: number = 5): Promise<Sear
   return results.slice(0, k);
 }
 
+// Hybrid search combining title and semantic search
+export async function hybridSearch(query: string, k: number = 5): Promise<SearchResult[]> {
+  const { searchArticles } = await import('./articles');
+  
+  // Get semantic search results
+  const semanticResults = await semanticSearch(query, k * 2);
+  
+  // Get title search results
+  const titleMatches = await searchArticles(query);
+  
+  // Create a map to track boosted filenames from title matches
+  const titleMatchBoost = new Map<string, number>();
+  titleMatches.forEach((article, index) => {
+    // Higher boost for earlier title matches
+    const boost = 0.3 * (1 - index / titleMatches.length);
+    titleMatchBoost.set(article.filename, boost);
+  });
+  
+  // Boost semantic results that also match titles
+  const boostedResults = semanticResults.map(result => {
+    const boost = titleMatchBoost.get(result.chunk.filename) || 0;
+    return {
+      ...result,
+      score: Math.min(1.0, result.score + boost), // Cap at 1.0
+    };
+  });
+  
+  // Re-sort by boosted scores
+  boostedResults.sort((a, b) => b.score - a.score);
+  
+  // Return top k results
+  return boostedResults.slice(0, k);
+}
+
 // Generate a snippet from text
 function generateSnippet(text: string, maxLength: number): string {
   if (text.length <= maxLength) {
@@ -194,4 +228,95 @@ export async function getIndexStats(): Promise<{ totalChunks: number; totalArtic
     totalChunks: allChunks.length,
     totalArticles: uniqueFiles.size,
   };
+}
+
+// Get detailed index status including unindexed files
+export async function getDetailedIndexStats(): Promise<{
+  totalChunks: number;
+  indexedArticles: number;
+  totalArticles: number;
+  unindexedFiles: string[];
+  indexedFiles: Array<{ filename: string; chunks: number }>;
+}> {
+  const { listArticles } = await import('./articles');
+  
+  const allChunks = await loadIndex();
+  const allArticles = await listArticles();
+  
+  // Group chunks by filename
+  const chunksByFile = new Map<string, number>();
+  allChunks.forEach(chunk => {
+    chunksByFile.set(chunk.filename, (chunksByFile.get(chunk.filename) || 0) + 1);
+  });
+  
+  // Identify indexed and unindexed files
+  const indexedFiles: Array<{ filename: string; chunks: number }> = [];
+  const unindexedFiles: string[] = [];
+  
+  allArticles.forEach(article => {
+    const chunkCount = chunksByFile.get(article.filename) || 0;
+    if (chunkCount > 0) {
+      indexedFiles.push({ filename: article.filename, chunks: chunkCount });
+    } else {
+      unindexedFiles.push(article.filename);
+    }
+  });
+  
+  return {
+    totalChunks: allChunks.length,
+    indexedArticles: indexedFiles.length,
+    totalArticles: allArticles.length,
+    unindexedFiles,
+    indexedFiles,
+  };
+}
+
+// Index only unindexed articles
+export async function indexUnindexedArticles(): Promise<{ indexed: number; failed: string[] }> {
+  const { listArticles, readArticle } = await import('./articles');
+  const { chunkMarkdown } = await import('./chunking');
+  
+  console.log('Indexing unindexed articles...');
+  
+  const stats = await getDetailedIndexStats();
+  const failed: string[] = [];
+  let indexed = 0;
+  
+  for (const filename of stats.unindexedFiles) {
+    try {
+      console.log(`Indexing ${filename}...`);
+      
+      const allArticles = await listArticles();
+      const article = allArticles.find(a => a.filename === filename);
+      if (!article) {
+        console.log(`Article ${filename} not found in list`);
+        failed.push(filename);
+        continue;
+      }
+      
+      const fullArticle = await readArticle(filename);
+      if (!fullArticle) {
+        console.log(`Could not read ${filename}`);
+        failed.push(filename);
+        continue;
+      }
+      
+      const chunks = chunkMarkdown(
+        article.filename,
+        article.title,
+        fullArticle.content,
+        article.created,
+        article.modified
+      );
+      
+      await upsertArticleChunks(filename, chunks);
+      indexed++;
+    } catch (error) {
+      console.error(`Error indexing ${filename}:`, error);
+      failed.push(filename);
+    }
+  }
+  
+  console.log(`Indexed ${indexed} articles, ${failed.length} failed`);
+  return { indexed, failed };
 }

@@ -7,7 +7,7 @@ import {
   updateArticle,
   deleteArticle
 } from '../services/articles';
-import { semanticSearch } from '../services/vectorIndex';
+import { semanticSearch, hybridSearch, getDetailedIndexStats, rebuildIndex, indexUnindexedArticles } from '../services/vectorIndex';
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 
@@ -27,7 +27,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
   if (authError) return authError;
   
   try {
-    // GET /api/search - Semantic search
+    // GET /api/search - Semantic or Hybrid search
     if (path === '/api/search' && request.method === 'GET') {
       if (!SEMANTIC_SEARCH_ENABLED) {
         return new Response(JSON.stringify({ error: 'Semantic search is not enabled' }), {
@@ -38,6 +38,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       
       const query = url.searchParams.get('query');
       const k = parseInt(url.searchParams.get('k') || '5', 10);
+      const mode = url.searchParams.get('mode') || 'hybrid'; // 'semantic' or 'hybrid'
       
       if (!query) {
         return new Response(JSON.stringify({ error: 'Query parameter is required' }), {
@@ -46,10 +47,94 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       }
       
-      const results = await semanticSearch(query, k);
+      const results = mode === 'semantic' 
+        ? await semanticSearch(query, k)
+        : await hybridSearch(query, k);
+      
       return new Response(JSON.stringify(results), {
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+    
+    // GET /api/rag/status - Get RAG index status
+    if (path === '/api/rag/status' && request.method === 'GET') {
+      if (!SEMANTIC_SEARCH_ENABLED) {
+        return new Response(JSON.stringify({ 
+          enabled: false,
+          message: 'Semantic search is not enabled'
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      const stats = await getDetailedIndexStats();
+      return new Response(JSON.stringify({
+        enabled: true,
+        ...stats
+      }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // POST /api/rag/reindex - Rebuild entire index
+    if (path === '/api/rag/reindex' && request.method === 'POST') {
+      if (!SEMANTIC_SEARCH_ENABLED) {
+        return new Response(JSON.stringify({ error: 'Semantic search is not enabled' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      try {
+        await rebuildIndex();
+        const stats = await getDetailedIndexStats();
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Index rebuilt successfully',
+          ...stats
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to rebuild index'
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+    
+    // POST /api/rag/index-unindexed - Index only unindexed articles
+    if (path === '/api/rag/index-unindexed' && request.method === 'POST') {
+      if (!SEMANTIC_SEARCH_ENABLED) {
+        return new Response(JSON.stringify({ error: 'Semantic search is not enabled' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      try {
+        const result = await indexUnindexedArticles();
+        const stats = await getDetailedIndexStats();
+        return new Response(JSON.stringify({
+          success: true,
+          indexed: result.indexed,
+          failed: result.failed,
+          ...stats
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: error instanceof Error ? error.message : 'Failed to index articles'
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
     }
     
     // GET /api/articles - List all articles

@@ -69,8 +69,8 @@ export function Home({ token, onNavigate }: HomeProps) {
       setLoading(true);
       
       if (searchMode === 'semantic') {
-        // Semantic search
-        const response = await fetch(`/api/search?query=${encodeURIComponent(searchQuery)}&k=10`, {
+        // Hybrid search (semantic + title boost)
+        const response = await fetch(`/api/search?query=${encodeURIComponent(searchQuery)}&k=10&mode=hybrid`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }
@@ -115,12 +115,21 @@ export function Home({ token, onNavigate }: HomeProps) {
     <div className="page">
       <div className="page-header">
         <h1>Articles</h1>
-        <button 
-          className="button button-primary"
-          onClick={() => onNavigate('/new')}
-        >
-          + New Article
-        </button>
+        <div className="page-header-actions">
+          <button 
+            className="button"
+            onClick={() => onNavigate('/rag-status')}
+            title="View RAG index status"
+          >
+            🔍 RAG Status
+          </button>
+          <button 
+            className="button button-primary"
+            onClick={() => onNavigate('/new')}
+          >
+            + New Article
+          </button>
+        </div>
       </div>
 
       <form onSubmit={handleSearch} className="search-form">
