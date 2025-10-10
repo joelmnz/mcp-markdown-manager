@@ -30,6 +30,8 @@ export function Home({ token, onNavigate }: HomeProps) {
   const [searchMode, setSearchMode] = useState<'title' | 'semantic'>('semantic');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   useEffect(() => {
     loadArticles();
@@ -47,7 +49,8 @@ export function Home({ token, onNavigate }: HomeProps) {
 
       if (response.ok) {
         const data = await response.json();
-        setArticles(data.slice(0, 10)); // Last 10 articles
+        setArticles(data);
+        setCurrentPage(1); // Reset to first page when loading all articles
       } else {
         setError('Failed to load articles');
       }
@@ -80,6 +83,7 @@ export function Home({ token, onNavigate }: HomeProps) {
           const data = await response.json();
           setSearchResults(data);
           setArticles([]);
+          setCurrentPage(1); // Reset to first page on search
         } else {
           const errorData = await response.json();
           setError(errorData.error || 'Semantic search failed');
@@ -96,6 +100,7 @@ export function Home({ token, onNavigate }: HomeProps) {
           const data = await response.json();
           setArticles(data);
           setSearchResults([]);
+          setCurrentPage(1); // Reset to first page on search
         } else {
           setError('Search failed');
         }
@@ -109,6 +114,22 @@ export function Home({ token, onNavigate }: HomeProps) {
 
   const handleArticleClick = (filename: string) => {
     onNavigate(`/article/${filename.replace('.md', '')}`);
+  };
+
+  // Calculate pagination for articles
+  const totalPages = Math.ceil(articles.length / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = startIndex + pageSize;
+  const paginatedArticles = articles.slice(startIndex, endIndex);
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setCurrentPage(1); // Reset to first page when changing page size
   };
 
   return (
@@ -197,7 +218,81 @@ export function Home({ token, onNavigate }: HomeProps) {
           ))}
         </div>
       ) : (
-        <ArticleList articles={articles} onArticleClick={handleArticleClick} />
+        <>
+          <ArticleList articles={paginatedArticles} onArticleClick={handleArticleClick} />
+          {articles.length > 0 && (
+            <div className="pagination-controls">
+              <div className="pagination-info">
+                Showing {startIndex + 1}-{Math.min(endIndex, articles.length)} of {articles.length} articles
+              </div>
+              
+              <div className="pagination-size-selector">
+                <label>Items per page:</label>
+                <select 
+                  value={pageSize} 
+                  onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                  className="page-size-select"
+                >
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="pagination-buttons">
+                  <button
+                    className="button button-secondary"
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </button>
+                  
+                  <div className="page-numbers">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                      // Show first page, last page, current page, and pages around current
+                      const showPage = 
+                        page === 1 || 
+                        page === totalPages || 
+                        (page >= currentPage - 1 && page <= currentPage + 1);
+                      
+                      const showEllipsis = 
+                        (page === currentPage - 2 && currentPage > 3) ||
+                        (page === currentPage + 2 && currentPage < totalPages - 2);
+
+                      if (showEllipsis) {
+                        return <span key={page} className="page-ellipsis">...</span>;
+                      }
+
+                      if (!showPage) {
+                        return null;
+                      }
+
+                      return (
+                        <button
+                          key={page}
+                          className={`button page-number ${page === currentPage ? 'active' : ''}`}
+                          onClick={() => handlePageChange(page)}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <button
+                    className="button button-secondary"
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
