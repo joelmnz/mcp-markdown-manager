@@ -27,7 +27,7 @@ export function Home({ token, onNavigate }: HomeProps) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<'title' | 'semantic'>('title');
+  const [searchMode, setSearchMode] = useState<'title' | 'semantic'>('semantic');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
