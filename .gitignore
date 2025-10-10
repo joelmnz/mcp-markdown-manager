@@ -19,6 +19,8 @@ public/index.html
 
 # Data directory (articles)
 /data/
+test-data/
+scripts/test-*.ts
 
 # OS files
 .DS_Store

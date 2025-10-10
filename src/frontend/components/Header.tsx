@@ -94,6 +94,7 @@ export function Header({ theme, onThemeToggle, onLogout }: HeaderProps) {
                 <ul className="info-list">
                   <li><code>listArticles</code> - List all articles</li>
                   <li><code>searchArticles</code> - Search by title (query param)</li>
+                  <li><code>semanticSearch</code> - Semantic search with embeddings (query, k params)</li>
                   <li><code>readArticle</code> - Read article (filename param)</li>
                   <li><code>createArticle</code> - Create article (title, content params)</li>
                   <li><code>updateArticle</code> - Update article (filename, title, content params)</li>
@@ -112,7 +113,12 @@ export function Header({ theme, onThemeToggle, onLogout }: HeaderProps) {
                 <div className="api-endpoint">
                   <div className="api-method get">GET</div>
                   <code>{apiBaseUrl}/api/articles?q=search</code>
-                  <span className="api-desc">Search articles</span>
+                  <span className="api-desc">Search articles by title</span>
+                </div>
+                <div className="api-endpoint">
+                  <div className="api-method get">GET</div>
+                  <code>{apiBaseUrl}/api/search?query=...&k=5</code>
+                  <span className="api-desc">Semantic search (RAG)</span>
                 </div>
                 <div className="api-endpoint">
                   <div className="api-method get">GET</div>

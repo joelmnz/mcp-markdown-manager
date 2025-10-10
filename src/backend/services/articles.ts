@@ -1,6 +1,8 @@
 import { readdir, readFile, writeFile, unlink, stat } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { chunkMarkdown } from './chunking';
+import { upsertArticleChunks, deleteArticleChunks } from './vectorIndex';
 
 export interface Article {
   filename: string;
@@ -18,6 +20,7 @@ export interface ArticleMetadata {
 }
 
 const DATA_DIR = process.env.DATA_DIR || '/data';
+const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 
 // Clean markdown content by trimming leading newlines and whitespace
 // Returns cleaned content or throws error if empty
@@ -178,6 +181,19 @@ export async function createArticle(title: string, content: string): Promise<Art
   
   await writeFile(filepath, fullContent, 'utf-8');
   
+  // Index the article for semantic search if enabled
+  if (SEMANTIC_SEARCH_ENABLED) {
+    try {
+      const stats = await stat(filepath);
+      const modified = stats.mtime.toISOString();
+      const chunks = chunkMarkdown(filename, title, cleanedContent, created, modified);
+      await upsertArticleChunks(filename, chunks);
+    } catch (error) {
+      console.error('Error indexing article:', error);
+      // Don't fail the article creation if indexing fails
+    }
+  }
+  
   return {
     filename,
     title,
@@ -206,6 +222,19 @@ export async function updateArticle(filename: string, title: string, content: st
   const fullContent = createFrontmatter(title, existing.created) + cleanedContent;
   await writeFile(filepath, fullContent, 'utf-8');
   
+  // Re-index the article for semantic search if enabled
+  if (SEMANTIC_SEARCH_ENABLED) {
+    try {
+      const stats = await stat(filepath);
+      const modified = stats.mtime.toISOString();
+      const chunks = chunkMarkdown(filename, title, cleanedContent, existing.created, modified);
+      await upsertArticleChunks(filename, chunks);
+    } catch (error) {
+      console.error('Error re-indexing article:', error);
+      // Don't fail the article update if indexing fails
+    }
+  }
+  
   return {
     filename,
     title,
@@ -223,4 +252,14 @@ export async function deleteArticle(filename: string): Promise<void> {
   }
   
   await unlink(filepath);
+  
+  // Remove from vector index if semantic search is enabled
+  if (SEMANTIC_SEARCH_ENABLED) {
+    try {
+      await deleteArticleChunks(filename);
+    } catch (error) {
+      console.error('Error removing article from index:', error);
+      // Don't fail the deletion if index removal fails
+    }
+  }
 }
