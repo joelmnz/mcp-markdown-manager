@@ -13,9 +13,11 @@ import {
   updateArticle,
   deleteArticle
 } from '../services/articles';
+import { semanticSearch } from '../services/vectorIndex';
 import { randomUUID } from 'crypto';
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
+const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 
 // Session management for HTTP transport
 const transports: Record<string, StreamableHTTPServerTransport> = {};
@@ -36,100 +38,122 @@ function createConfiguredMCPServer() {
 
   // List available tools
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    return {
-      tools: [
-        {
-          name: 'listArticles',
-          description: 'List all articles with metadata (title, filename, creation date)',
-          inputSchema: {
-            type: 'object',
-            properties: {},
-          },
+    const tools: any[] = [
+      {
+        name: 'listArticles',
+        description: 'List all articles with metadata (title, filename, creation date)',
+        inputSchema: {
+          type: 'object',
+          properties: {},
         },
-        {
-          name: 'searchArticles',
-          description: 'Search articles by title (partial match)',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              query: {
-                type: 'string',
-                description: 'Search query to match against article titles',
-              },
+      },
+      {
+        name: 'searchArticles',
+        description: 'Search articles by title (partial match)',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Search query to match against article titles',
             },
-            required: ['query'],
           },
+          required: ['query'],
         },
-        {
-          name: 'readArticle',
-          description: 'Read a single article by filename',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              filename: {
-                type: 'string',
-                description: 'Filename of the article (e.g., my-article.md)',
-              },
+      },
+      {
+        name: 'readArticle',
+        description: 'Read a single article by filename',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            filename: {
+              type: 'string',
+              description: 'Filename of the article (e.g., my-article.md)',
             },
-            required: ['filename'],
           },
+          required: ['filename'],
         },
-        {
-          name: 'createArticle',
-          description: 'Create a new article with title and content',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              title: {
-                type: 'string',
-                description: 'Title of the article',
-              },
-              content: {
-                type: 'string',
-                description: 'Markdown content of the article',
-              },
+      },
+      {
+        name: 'createArticle',
+        description: 'Create a new article with title and content',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            title: {
+              type: 'string',
+              description: 'Title of the article',
             },
-            required: ['title', 'content'],
-          },
-        },
-        {
-          name: 'updateArticle',
-          description: 'Update an existing article',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              filename: {
-                type: 'string',
-                description: 'Filename of the article to update',
-              },
-              title: {
-                type: 'string',
-                description: 'New title of the article',
-              },
-              content: {
-                type: 'string',
-                description: 'New markdown content of the article',
-              },
+            content: {
+              type: 'string',
+              description: 'Markdown content of the article',
             },
-            required: ['filename', 'title', 'content'],
           },
+          required: ['title', 'content'],
         },
-        {
-          name: 'deleteArticle',
-          description: 'Delete an article by filename',
-          inputSchema: {
-            type: 'object',
-            properties: {
-              filename: {
-                type: 'string',
-                description: 'Filename of the article to delete',
-              },
+      },
+      {
+        name: 'updateArticle',
+        description: 'Update an existing article',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            filename: {
+              type: 'string',
+              description: 'Filename of the article to update',
             },
-            required: ['filename'],
+            title: {
+              type: 'string',
+              description: 'New title of the article',
+            },
+            content: {
+              type: 'string',
+              description: 'New markdown content of the article',
+            },
           },
+          required: ['filename', 'title', 'content'],
         },
-      ],
-    };
+      },
+      {
+        name: 'deleteArticle',
+        description: 'Delete an article by filename',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            filename: {
+              type: 'string',
+              description: 'Filename of the article to delete',
+            },
+          },
+          required: ['filename'],
+        },
+      },
+    ];
+    
+    // Add semantic search tool if enabled
+    if (SEMANTIC_SEARCH_ENABLED) {
+      tools.push({
+        name: 'semanticSearch',
+        description: 'Perform semantic search across article content using vector embeddings',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Search query to find semantically similar content',
+            },
+            k: {
+              type: 'number',
+              description: 'Number of results to return (default: 5)',
+            },
+          },
+          required: ['query'],
+        },
+      });
+    }
+    
+    return { tools };
   });
 
   // Handle tool calls
@@ -151,6 +175,22 @@ function createConfiguredMCPServer() {
         case 'searchArticles': {
           const { query } = request.params.arguments as { query: string };
           const results = await searchArticles(query);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(results, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'semanticSearch': {
+          if (!SEMANTIC_SEARCH_ENABLED) {
+            throw new Error('Semantic search is not enabled');
+          }
+          const { query, k } = request.params.arguments as { query: string; k?: number };
+          const results = await semanticSearch(query, k || 5);
           return {
             content: [
               {

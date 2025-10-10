@@ -14,6 +14,7 @@
     "build:css": "echo 'CSS already bundled'",
     "clean:build": "rm -f public/App.*.js public/App.*.css",
     "start": "NODE_ENV=production bun src/backend/server.ts",
+    "reindex": "bun scripts/reindex.ts",
     "typecheck": "tsc --noEmit",
     "prepare": "bun run setup-hooks",
     "setup-hooks": "test -d .git && echo '#!/bin/sh\nbun run typecheck' > .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit || exit 0"
@@ -22,6 +23,8 @@
     "@modelcontextprotocol/sdk": "^1.0.4",
     "markdownlint": "^0.38.0",
     "mermaid": "^11.12.0",
+    "ollama": "^0.6.0",
+    "openai": "^6.3.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-markdown": "^9.0.1",

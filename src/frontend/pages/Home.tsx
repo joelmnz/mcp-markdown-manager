@@ -7,6 +7,17 @@ interface Article {
   created: string;
 }
 
+interface SearchResult {
+  chunk: {
+    filename: string;
+    title: string;
+    headingPath: string[];
+    text: string;
+  };
+  score: number;
+  snippet: string;
+}
+
 interface HomeProps {
   token: string;
   onNavigate: (path: string) => void;
@@ -14,7 +25,9 @@ interface HomeProps {
 
 export function Home({ token, onNavigate }: HomeProps) {
   const [articles, setArticles] = useState<Article[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchMode, setSearchMode] = useState<'title' | 'semantic'>('title');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -25,6 +38,7 @@ export function Home({ token, onNavigate }: HomeProps) {
   const loadArticles = async () => {
     try {
       setLoading(true);
+      setSearchResults([]);
       const response = await fetch('/api/articles', {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -53,17 +67,38 @@ export function Home({ token, onNavigate }: HomeProps) {
 
     try {
       setLoading(true);
-      const response = await fetch(`/api/articles?q=${encodeURIComponent(searchQuery)}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      
+      if (searchMode === 'semantic') {
+        // Semantic search
+        const response = await fetch(`/api/search?query=${encodeURIComponent(searchQuery)}&k=10`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        setArticles(data);
+        if (response.ok) {
+          const data = await response.json();
+          setSearchResults(data);
+          setArticles([]);
+        } else {
+          const errorData = await response.json();
+          setError(errorData.error || 'Semantic search failed');
+        }
       } else {
-        setError('Search failed');
+        // Title search
+        const response = await fetch(`/api/articles?q=${encodeURIComponent(searchQuery)}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          setArticles(data);
+          setSearchResults([]);
+        } else {
+          setError('Search failed');
+        }
       }
     } catch (err) {
       setError('Search failed');
@@ -89,11 +124,31 @@ export function Home({ token, onNavigate }: HomeProps) {
       </div>
 
       <form onSubmit={handleSearch} className="search-form">
+        <div className="search-mode-toggle">
+          <label>
+            <input
+              type="radio"
+              value="title"
+              checked={searchMode === 'title'}
+              onChange={(e) => setSearchMode('title')}
+            />
+            Title Search
+          </label>
+          <label>
+            <input
+              type="radio"
+              value="semantic"
+              checked={searchMode === 'semantic'}
+              onChange={(e) => setSearchMode('semantic')}
+            />
+            Semantic Search
+          </label>
+        </div>
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search articles..."
+          placeholder={searchMode === 'semantic' ? 'Search by meaning...' : 'Search articles...'}
           className="search-input"
         />
         <button type="submit" className="button">Search</button>
@@ -115,6 +170,23 @@ export function Home({ token, onNavigate }: HomeProps) {
       
       {loading ? (
         <div className="loading">Loading...</div>
+      ) : searchResults.length > 0 ? (
+        <div className="search-results">
+          {searchResults.map((result, index) => (
+            <div key={index} className="search-result-item" onClick={() => handleArticleClick(result.chunk.filename)}>
+              <div className="search-result-header">
+                <h3>{result.chunk.title}</h3>
+                <span className="search-result-score">{(result.score * 100).toFixed(1)}%</span>
+              </div>
+              {result.chunk.headingPath.length > 0 && (
+                <div className="search-result-path">
+                  {result.chunk.headingPath.join(' > ')}
+                </div>
+              )}
+              <p className="search-result-snippet">{result.snippet}</p>
+            </div>
+          ))}
+        </div>
       ) : (
         <ArticleList articles={articles} onArticleClick={handleArticleClick} />
       )}

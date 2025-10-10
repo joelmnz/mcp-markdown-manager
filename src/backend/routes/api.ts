@@ -7,6 +7,9 @@ import {
   updateArticle,
   deleteArticle
 } from '../services/articles';
+import { semanticSearch } from '../services/vectorIndex';
+
+const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 
 export async function handleApiRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -24,6 +27,31 @@ export async function handleApiRequest(request: Request): Promise<Response> {
   if (authError) return authError;
   
   try {
+    // GET /api/search - Semantic search
+    if (path === '/api/search' && request.method === 'GET') {
+      if (!SEMANTIC_SEARCH_ENABLED) {
+        return new Response(JSON.stringify({ error: 'Semantic search is not enabled' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      const query = url.searchParams.get('query');
+      const k = parseInt(url.searchParams.get('k') || '5', 10);
+      
+      if (!query) {
+        return new Response(JSON.stringify({ error: 'Query parameter is required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      const results = await semanticSearch(query, k);
+      return new Response(JSON.stringify(results), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
     // GET /api/articles - List all articles
     if (path === '/api/articles' && request.method === 'GET') {
       const query = url.searchParams.get('q');

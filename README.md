@@ -6,6 +6,7 @@ A complete full-stack TypeScript monolithic markdown article management system d
 
 - 📝 **Markdown-based articles** with frontmatter support
 - 🔍 **Search functionality** with partial title matching
+- 🧠 **Semantic search** with RAG-style vector embeddings (optional)
 - 🎨 **Dark/Light theme** toggle
 - 📱 **Mobile-first responsive design**
 - 📲 **Progressive Web App (PWA)** support for offline access
@@ -203,6 +204,96 @@ docker push ghcr.io/YOUR_USERNAME/article-manager:latest
 | `DATA_DIR` | No | `/data` | Directory where markdown articles are stored |
 | `PORT` | No | `5000` | Server port |
 | `NODE_ENV` | No | `development` | Environment mode |
+| `SEMANTIC_SEARCH_ENABLED` | No | `false` | Enable semantic search with vector embeddings |
+| `EMBEDDING_PROVIDER` | No | `ollama` | Embedding provider: `ollama` or `openai` |
+| `EMBEDDING_MODEL` | No | `nomic-embed-text` | Model to use for embeddings |
+| `OLLAMA_BASE_URL` | No | `http://localhost:11434` | Ollama server URL |
+| `OPENAI_API_KEY` | No | - | OpenAI API key (required if using OpenAI provider) |
+| `CHUNK_SIZE` | No | `500` | Number of words per chunk for semantic search |
+| `CHUNK_OVERLAP` | No | `50` | Number of overlapping words between chunks |
+
+## Semantic Search (RAG)
+
+The system supports optional semantic search using vector embeddings for more intelligent content discovery. When enabled, articles are automatically chunked and embedded, allowing similarity-based search across content.
+
+### Setup
+
+1. **Enable semantic search** in your `.env`:
+   ```bash
+   SEMANTIC_SEARCH_ENABLED=true
+   ```
+
+2. **Choose an embedding provider**:
+   
+   **Option A: Ollama (Local, Recommended)**
+   ```bash
+   EMBEDDING_PROVIDER=ollama
+   EMBEDDING_MODEL=nomic-embed-text
+   OLLAMA_BASE_URL=http://localhost:11434
+   ```
+   
+   First, install and start Ollama:
+   ```bash
+   # Install Ollama (see https://ollama.ai)
+   curl -fsSL https://ollama.ai/install.sh | sh
+   
+   # Pull the embedding model
+   ollama pull nomic-embed-text
+   ```
+   
+   **Option B: OpenAI**
+   ```bash
+   EMBEDDING_PROVIDER=openai
+   EMBEDDING_MODEL=text-embedding-3-small
+   OPENAI_API_KEY=your-api-key-here
+   ```
+
+3. **Build the initial index**:
+   ```bash
+   bun run reindex
+   ```
+   
+   This will process all existing articles and create the vector index at `DATA_DIR/index.vectors.jsonl`.
+
+### How It Works
+
+- **Automatic indexing**: New articles are automatically chunked and embedded on creation/update
+- **Chunk-based**: Articles are split by headings and then into smaller chunks with overlap
+- **Vector storage**: Embeddings stored in JSONL format (`index.vectors.jsonl`) in data directory
+- **Cosine similarity**: Search uses cosine similarity to find relevant chunks
+- **Heading context**: Results include the heading path for better context
+
+### Using Semantic Search
+
+**Web UI**: Toggle between "Title Search" and "Semantic Search" in the search form
+
+**REST API**:
+```bash
+GET /api/search?query=your+search&k=5
+Authorization: Bearer YOUR_TOKEN
+```
+
+**MCP Tool**:
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "semanticSearch",
+    "arguments": {
+      "query": "your search query",
+      "k": 5
+    }
+  }
+}
+```
+
+### Reindexing
+
+If you change embedding models or need to rebuild the index:
+
+```bash
+bun run reindex
+```
 
 ## REST API Documentation
 
@@ -273,6 +364,38 @@ Search articles by title (partial match, case-insensitive).
   }
 ]
 ```
+
+#### Semantic Search
+
+```http
+GET /api/search?query=search+query&k=5
+```
+
+Perform semantic search across article content using vector embeddings. Returns chunks of content ranked by similarity.
+
+**Query Parameters:**
+
+- `query` - Search query string (required)
+- `k` - Number of results to return (default: 5)
+
+**Response:**
+
+```json
+[
+  {
+    "chunk": {
+      "filename": "article.md",
+      "title": "Article Title",
+      "headingPath": ["# Main Heading", "## Subheading"],
+      "text": "Full chunk text..."
+    },
+    "score": 0.85,
+    "snippet": "Truncated preview of the chunk..."
+  }
+]
+```
+
+**Note:** Requires `SEMANTIC_SEARCH_ENABLED=true` in environment.
 
 #### Read Article
 
@@ -443,6 +566,38 @@ Search articles by title.
       "query": "search term"
     }
   }
+}
+```
+
+#### semanticSearch
+
+Perform semantic search across article content using vector embeddings. Available when `SEMANTIC_SEARCH_ENABLED=true`.
+
+**Input Schema:**
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "semanticSearch",
+    "arguments": {
+      "query": "search query",
+      "k": 5
+    }
+  }
+}
+```
+
+**Response:**
+
+```json
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "[{\"chunk\":{\"filename\":\"article.md\",\"title\":\"Article\",\"headingPath\":[\"# Heading\"],\"text\":\"...\"},\"score\":0.85,\"snippet\":\"...\"}]"
+    }
+  ]
 }
 ```
 
