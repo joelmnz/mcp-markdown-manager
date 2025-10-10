@@ -11,14 +11,31 @@ export function Header({ theme, onThemeToggle, onLogout }: HeaderProps) {
   const apiBaseUrl = window.location.origin;
   
   const mcpConfigAgentZero = {
-    "name": "mcp-markdown-manager",
-    "description": "Markdown article manager for research and notes",
-    "type": "streaming-http",
-    "url": `${apiBaseUrl}/mcp`,
-    "headers": {
-      "Authorization": "Bearer YOUR_AUTH_TOKEN_HERE"
-    },
-    "disabled": false
+    "mcpServers": {
+      "mcp-markdown-manager": {
+        "url": `${apiBaseUrl}/mcp`,
+        "description": "Markdown article manager for research and notes",
+        "type": "streaming-http",
+        "headers": {
+          "Authorization": "Bearer YOUR_AUTH_TOKEN_HERE",
+          "X-Custom-Header": "agent-zero"
+        },
+        "disabled": false
+      }
+    }
+  };
+
+  const mcpConfigVSCode = {
+    "servers": {
+      "mcp-markdown-manager": {
+        "url": `${apiBaseUrl}/mcp`,
+        "description": "Markdown article manager for research and notes",
+        "type": "http",
+        "headers": {
+          "Authorization": "Bearer YOUR_AUTH_TOKEN_HERE"
+        }
+      }
+    }
   };
 
   return (
@@ -52,10 +69,17 @@ export function Header({ theme, onThemeToggle, onLogout }: HeaderProps) {
               <section className="info-section">
                 <h3>🤖 MCP Server Configuration</h3>
                 <p>Connect AI agents using the Model Context Protocol (Streamable HTTP):</p>
-                <p><strong>For Agent Zero:</strong> Add to <code>tmp/settings.json</code> → <code>mcp_servers</code>:</p>
+                
+                <p><strong>For <a href="https://github.com/agent0ai/agent-zero">Agent Zero</a>:</strong></p>
                 <div className="info-code">
                   <pre>{JSON.stringify(mcpConfigAgentZero, null, 2)}</pre>
                 </div>
+                
+                <p><strong>For <a href="https://code.visualstudio.com/docs/copilot/customization/mcp-servers">VS Code</a>:</strong></p>
+                <div className="info-code">
+                  <pre>{JSON.stringify(mcpConfigVSCode, null, 2)}</pre>
+                </div>
+                
                 <div className="info-detail">
                   <strong>Endpoint:</strong> <code>{apiBaseUrl}/mcp</code><br/>
                   <strong>Transport:</strong> MCP Streamable HTTP (POST/GET/DELETE)<br/>
