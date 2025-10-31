@@ -118,8 +118,17 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
     }
   };
   
+  // Generate slug from filename or title
+  const getArticleSlug = (): string => {
+    if (filename) {
+      return filename;
+    }
+    // Generate slug from title for new articles
+    return title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim();
+  };
+  
   const handleCopyPublicLink = () => {
-    const slug = filename || title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim();
+    const slug = getArticleSlug();
     const publicUrl = `${window.location.origin}/public-article/${slug}`;
     
     navigator.clipboard.writeText(publicUrl).then(() => {
@@ -131,7 +140,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
   };
   
   const navigateToPublicView = () => {
-    const slug = filename || title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim();
+    const slug = getArticleSlug();
     onNavigate(`/public-article/${slug}`);
   };
 

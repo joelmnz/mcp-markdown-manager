@@ -109,8 +109,15 @@ export async function setArticlePublic(filename: string, isPublic: boolean): Pro
 
 // Get article by slug (for public access)
 export async function getArticleBySlug(slug: string): Promise<Article | null> {
-  // Try to find an article with a matching filename
+  // Slug is the filename without .md extension
   const filename = `${slug}.md`;
+  
+  // Check if file exists first
+  const filepath = join(DATA_DIR, filename);
+  if (!existsSync(filepath)) {
+    return null;
+  }
+  
   const article = await readArticle(filename);
   
   if (!article) {
