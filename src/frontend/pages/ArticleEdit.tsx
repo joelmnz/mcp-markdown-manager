@@ -124,7 +124,9 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       return filename;
     }
     // Generate slug from title for new articles
-    return title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim();
+    const slug = title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim();
+    // Fallback to 'untitled' if slug is empty
+    return slug || 'untitled';
   };
   
   const handleCopyPublicLink = () => {
