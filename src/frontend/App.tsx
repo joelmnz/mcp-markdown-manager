@@ -40,7 +40,8 @@ function App() {
     const path = window.location.pathname;
     const parsedRoute = parseRoute(path);
     
-    if (!savedToken && parsedRoute.type !== 'home') {
+    // Allow public article routes without authentication
+    if (!savedToken && parsedRoute.type !== 'home' && parsedRoute.type !== 'public-article') {
       setIntendedRoute(parsedRoute);
     } else {
       setRoute(parsedRoute);
