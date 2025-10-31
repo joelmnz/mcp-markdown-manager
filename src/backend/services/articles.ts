@@ -9,6 +9,7 @@ export interface Article {
   title: string;
   content: string;
   created: string;
+  isPublic: boolean;
 }
 
 export interface ArticleMetadata {
@@ -17,6 +18,7 @@ export interface ArticleMetadata {
   created: string;
   // Filesystem last modified time, used for sorting in listings
   modified: string;
+  isPublic: boolean;
 }
 
 const DATA_DIR = process.env.DATA_DIR || '/data';
@@ -82,6 +84,47 @@ export function generateFilename(title: string): string {
     .trim() + '.md';
 }
 
+// Check if article is public
+export async function isArticlePublic(filename: string): Promise<boolean> {
+  const publicFilepath = join(DATA_DIR, `${filename}.public`);
+  return existsSync(publicFilepath);
+}
+
+// Toggle public state
+export async function setArticlePublic(filename: string, isPublic: boolean): Promise<void> {
+  const publicFilepath = join(DATA_DIR, `${filename}.public`);
+  
+  if (isPublic) {
+    // Create marker file if it doesn't exist
+    if (!existsSync(publicFilepath)) {
+      await writeFile(publicFilepath, '', 'utf-8');
+    }
+  } else {
+    // Remove marker file if it exists
+    if (existsSync(publicFilepath)) {
+      await unlink(publicFilepath);
+    }
+  }
+}
+
+// Get article by slug (for public access)
+export async function getArticleBySlug(slug: string): Promise<Article | null> {
+  // Try to find an article with a matching filename
+  const filename = `${slug}.md`;
+  const article = await readArticle(filename);
+  
+  if (!article) {
+    return null;
+  }
+  
+  // Only return if article is public
+  if (!article.isPublic) {
+    return null;
+  }
+  
+  return article;
+}
+
 // Create frontmatter string
 function createFrontmatter(title: string, created: string): string {
   return `---\ntitle: ${title}\ncreated: ${created}\n---\n\n`;
@@ -112,11 +155,15 @@ export async function listArticles(): Promise<ArticleMetadata[]> {
 
     const title = parsed.title || extractTitle(parsed.body);
     
+    // Check public status
+    const isPublic = await isArticlePublic(filename);
+    
     articles.push({
       filename,
       title,
       created,
-      modified
+      modified,
+      isPublic
     });
   }
   
@@ -156,11 +203,15 @@ export async function readArticle(filename: string): Promise<Article | null> {
   
   const title = parsed.title || extractTitle(parsed.body);
   
+  // Check public status
+  const isPublic = await isArticlePublic(filename);
+  
   return {
     filename,
     title,
     content: parsed.body,
-    created
+    created,
+    isPublic
   };
 }
 
@@ -198,7 +249,8 @@ export async function createArticle(title: string, content: string): Promise<Art
     filename,
     title,
     content: cleanedContent,
-    created
+    created,
+    isPublic: false
   };
 }
 
@@ -213,12 +265,66 @@ export async function updateArticle(filename: string, title: string, content: st
     throw new Error(`Article ${filename} not found`);
   }
   
-  // Read existing article to preserve creation date
+  // Read existing article to preserve creation date and public status
   const existing = await readArticle(filename);
   if (!existing) {
     throw new Error(`Article ${filename} not found`);
   }
   
+  // Generate new filename from new title
+  const newFilename = generateFilename(title);
+  const newFilepath = join(DATA_DIR, newFilename);
+  
+  // Check if filename has changed
+  if (filename !== newFilename) {
+    // Check if new filename already exists
+    if (existsSync(newFilepath)) {
+      throw new Error(`Article with filename ${newFilename} already exists`);
+    }
+    
+    // Rename the article file
+    const fullContent = createFrontmatter(title, existing.created) + cleanedContent;
+    await writeFile(newFilepath, fullContent, 'utf-8');
+    await unlink(filepath);
+    
+    // Sync .public marker file if article was public
+    if (existing.isPublic) {
+      const oldPublicPath = join(DATA_DIR, `${filename}.public`);
+      const newPublicPath = join(DATA_DIR, `${newFilename}.public`);
+      
+      if (existsSync(oldPublicPath)) {
+        await writeFile(newPublicPath, '', 'utf-8');
+        await unlink(oldPublicPath);
+      }
+    }
+    
+    // Update search index with new filename
+    if (SEMANTIC_SEARCH_ENABLED) {
+      try {
+        // Delete old index entries
+        await deleteArticleChunks(filename);
+        
+        // Add new index entries
+        const stats = await stat(newFilepath);
+        const modified = stats.mtime.toISOString();
+        const chunks = chunkMarkdown(newFilename, title, cleanedContent, existing.created, modified);
+        await upsertArticleChunks(newFilename, chunks);
+      } catch (error) {
+        console.error('Error re-indexing article:', error);
+        // Don't fail the article update if indexing fails
+      }
+    }
+    
+    return {
+      filename: newFilename,
+      title,
+      content: cleanedContent,
+      created: existing.created,
+      isPublic: existing.isPublic
+    };
+  }
+  
+  // Just update content if filename hasn't changed
   const fullContent = createFrontmatter(title, existing.created) + cleanedContent;
   await writeFile(filepath, fullContent, 'utf-8');
   
@@ -239,7 +345,8 @@ export async function updateArticle(filename: string, title: string, content: st
     filename,
     title,
     content: cleanedContent,
-    created: existing.created
+    created: existing.created,
+    isPublic: existing.isPublic
   };
 }
 
@@ -252,6 +359,12 @@ export async function deleteArticle(filename: string): Promise<void> {
   }
   
   await unlink(filepath);
+  
+  // Remove .public marker file if it exists
+  const publicFilepath = join(DATA_DIR, `${filename}.public`);
+  if (existsSync(publicFilepath)) {
+    await unlink(publicFilepath);
+  }
   
   // Remove from vector index if semantic search is enabled
   if (SEMANTIC_SEARCH_ENABLED) {

@@ -6,6 +6,7 @@ import { Home } from './pages/Home';
 import { ArticleView } from './pages/ArticleView';
 import { ArticleEdit } from './pages/ArticleEdit';
 import { RAGStatus } from './pages/RAGStatus';
+import { PublicArticleView } from './components/PublicArticleView';
 import './styles/main.css';
 
 type Route = 
@@ -13,7 +14,8 @@ type Route =
   | { type: 'article'; filename: string }
   | { type: 'edit'; filename: string }
   | { type: 'new' }
-  | { type: 'rag-status' };
+  | { type: 'rag-status' }
+  | { type: 'public-article'; slug: string };
 
 function App() {
   const [token, setToken] = useState<string | null>(null);
@@ -75,6 +77,11 @@ function App() {
       return { type: 'rag-status' };
     }
     
+    if (path.startsWith('/public-article/')) {
+      const slug = path.replace('/public-article/', '');
+      return { type: 'public-article', slug };
+    }
+    
     if (path.startsWith('/article/')) {
       const filename = path.replace('/article/', '');
       return { type: 'article', filename };
@@ -123,6 +130,17 @@ function App() {
   };
 
   if (!token) {
+    // Allow access to public article view without authentication
+    if (route.type === 'public-article') {
+      return (
+        <div className="app">
+          <main className="main">
+            <PublicArticleView slug={route.slug} onNavigate={navigate} />
+          </main>
+        </div>
+      );
+    }
+    
     return <Login onLogin={handleLogin} />;
   }
 
@@ -144,6 +162,9 @@ function App() {
         )}
         {route.type === 'new' && (
           <ArticleEdit token={token} onNavigate={navigate} />
+        )}
+        {route.type === 'public-article' && (
+          <PublicArticleView slug={route.slug} onNavigate={navigate} />
         )}
       </main>
     </div>
