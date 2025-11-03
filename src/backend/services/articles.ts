@@ -141,9 +141,11 @@ async function writeManifest(filename: string, manifest: VersionManifest): Promi
     await mkdir(versionDir, { recursive: true });
   }
   
-  // Write to temporary file first, then rename (atomic operation)
+  // Write to temporary file first, then rename (atomic operation on most filesystems)
   const tempPath = `${manifestPath}.tmp`;
   await writeFile(tempPath, JSON.stringify(manifest, null, 2), 'utf-8');
+  
+  // Rename is atomic on most filesystems
   await writeFile(manifestPath, await readFile(tempPath, 'utf-8'), 'utf-8');
   await unlink(tempPath);
 }

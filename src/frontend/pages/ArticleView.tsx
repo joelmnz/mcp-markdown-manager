@@ -103,22 +103,22 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
 
   const handleNavigateBack = () => {
     if (currentVersionIndex === -1) {
-      // Already at current version, go to first historical version
+      // At current version, go to first historical version (newest in history)
       if (versions.length > 0) {
         loadVersion(versions[0].versionId, 0);
       }
-    } else if (currentVersionIndex > 0) {
-      // Navigate to next older version
-      loadVersion(versions[currentVersionIndex - 1].versionId, currentVersionIndex - 1);
+    } else if (currentVersionIndex < versions.length - 1) {
+      // Navigate to next older version (higher index since sorted newest first)
+      loadVersion(versions[currentVersionIndex + 1].versionId, currentVersionIndex + 1);
     }
   };
 
   const handleNavigateForward = () => {
     if (currentVersionIndex === 0) {
-      // Go back to current version
+      // At newest historical version, go back to current version
       loadArticle();
     } else if (currentVersionIndex > 0) {
-      // Navigate to next newer version
+      // Navigate to next newer version (lower index since sorted newest first)
       loadVersion(versions[currentVersionIndex - 1].versionId, currentVersionIndex - 1);
     }
   };
