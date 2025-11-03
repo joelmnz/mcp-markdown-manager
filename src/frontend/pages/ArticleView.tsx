@@ -307,7 +307,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <h1 className="article-item-title">{article.title}</h1>
             {isViewingHistory && currentVersion && (
-              <span className="version-pill" title={currentVersion.message || 'No message'}>
+              <span className="version-pill" title={currentVersion.message || ''}>
                 {currentVersion.versionId}
               </span>
             )}

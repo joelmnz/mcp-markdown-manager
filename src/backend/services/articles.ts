@@ -1,4 +1,4 @@
-import { readdir, readFile, writeFile, unlink, stat, mkdir, copyFile, rm } from 'fs/promises';
+import { readdir, readFile, writeFile, unlink, stat, mkdir, copyFile, rm, rename } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { createHash } from 'crypto';
@@ -145,9 +145,8 @@ async function writeManifest(filename: string, manifest: VersionManifest): Promi
   const tempPath = `${manifestPath}.tmp`;
   await writeFile(tempPath, JSON.stringify(manifest, null, 2), 'utf-8');
   
-  // Rename is atomic on most filesystems
-  await writeFile(manifestPath, await readFile(tempPath, 'utf-8'), 'utf-8');
-  await unlink(tempPath);
+  // Use rename for atomic operation (replaces target file atomically)
+  await rename(tempPath, manifestPath);
 }
 
 // Create a version snapshot of the current article
@@ -158,8 +157,15 @@ async function createVersionSnapshot(
 ): Promise<void> {
   const manifest = await readManifest(filename);
   
-  // Determine next version number
-  const versionNumber = manifest.versions.length + 1;
+  // Determine next version number based on highest existing version
+  let versionNumber = 1;
+  if (manifest.versions.length > 0) {
+    const highestVersion = Math.max(
+      ...manifest.versions.map(v => parseInt(v.versionId.replace('v', ''), 10))
+    );
+    versionNumber = highestVersion + 1;
+  }
+  
   const versionId = `v${versionNumber}`;
   const versionFilename = `${versionId}.md`;
   
