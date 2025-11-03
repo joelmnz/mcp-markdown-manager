@@ -164,13 +164,15 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     if (path.startsWith('/api/articles/') && request.method === 'GET') {
       const fullPath = path.replace('/api/articles/', '');
       
-      // Check if this is a versions list endpoint
-      if (fullPath.includes('/versions')) {
-        const parts = fullPath.split('/versions');
-        const filename = parts[0];
-        const versionPath = parts[1];
+      // Check if this is a versions endpoint using regex to avoid path parsing vulnerabilities
+      // Matches: <filename>/versions or <filename>/versions/<versionId>
+      const versionMatch = fullPath.match(/^(.+?)\/versions(?:\/([^\/]+))?$/);
+      
+      if (versionMatch) {
+        const filename = versionMatch[1];
+        const versionId = versionMatch[2];
         
-        if (!versionPath || versionPath === '') {
+        if (!versionId) {
           // List all versions
           const versions = await listArticleVersions(filename);
           return new Response(JSON.stringify(versions), {
@@ -178,7 +180,6 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           });
         } else {
           // Get specific version
-          const versionId = versionPath.replace('/', '');
           const version = await getArticleVersion(filename, versionId);
           
           if (!version) {
@@ -233,12 +234,13 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     if (path.startsWith('/api/articles/') && request.method === 'PUT') {
       const filename = path.replace('/api/articles/', '');
       
-      // Check if this is a version restore endpoint
-      if (filename.includes('/versions/') && filename.endsWith('/restore')) {
-        // Extract actual filename and version ID
-        const parts = filename.split('/versions/');
-        const articleFilename = parts[0];
-        const versionId = parts[1].replace('/restore', '');
+      // Check if this is a version restore endpoint using regex to avoid path parsing vulnerabilities
+      // Matches: <filename>/versions/<versionId>/restore
+      const restoreMatch = filename.match(/^(.+?)\/versions\/([^\/]+)\/restore$/);
+      
+      if (restoreMatch) {
+        const articleFilename = restoreMatch[1];
+        const versionId = restoreMatch[2];
         
         const body = await request.json();
         const { message } = body;
@@ -270,18 +272,19 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     if (path.startsWith('/api/articles/') && request.method === 'DELETE') {
       const fullPath = path.replace('/api/articles/', '');
       
-      // Check if this is a versions delete endpoint
-      if (fullPath.includes('/versions')) {
-        const parts = fullPath.split('/versions');
-        const filename = parts[0];
-        const versionPath = parts[1];
+      // Check if this is a versions delete endpoint using regex to avoid path parsing vulnerabilities
+      // Matches: <filename>/versions or <filename>/versions/<versionId>
+      const versionMatch = fullPath.match(/^(.+?)\/versions(?:\/([^\/]+))?$/);
+      
+      if (versionMatch) {
+        const filename = versionMatch[1];
+        const versionId = versionMatch[2];
         
-        if (!versionPath || versionPath === '') {
+        if (!versionId) {
           // Delete all versions
           await deleteArticleVersions(filename);
         } else {
           // Delete specific version
-          const versionId = versionPath.replace('/', '');
           await deleteArticleVersions(filename, [versionId]);
         }
         

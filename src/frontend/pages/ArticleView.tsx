@@ -33,11 +33,6 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
   const [loadingVersion, setLoadingVersion] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
-  useEffect(() => {
-    loadArticle();
-    loadVersions();
-  }, [filename]);
-
   const loadArticle = async () => {
     try {
       setLoading(true);
@@ -77,6 +72,11 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
       console.error('Failed to load versions:', err);
     }
   };
+
+  useEffect(() => {
+    loadArticle();
+    loadVersions();
+  }, [filename]);
 
   const loadVersion = async (versionId: string, index: number) => {
     try {
@@ -304,7 +304,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
 
       <article className="article-content">
         <div className="article-item-header">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div className="article-header-with-version">
             <h1 className="article-item-title">{article.title}</h1>
             {isViewingHistory && currentVersion && (
               <span className="version-pill" title={currentVersion.message || ''}>

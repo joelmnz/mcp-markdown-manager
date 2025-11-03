@@ -1374,3 +1374,9 @@ body {
   color: var(--text-secondary);
 }
 
+.article-header-with-version {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
