@@ -8,7 +8,7 @@
     "dev:backend": "bun --watch src/backend/server.ts",
     "dev:frontend": "bun scripts/watch-frontend.ts",
     "build": "bun run build:frontend",
-    "build:frontend": "bun run clean:build && bun run build:icons && bun build src/frontend/App.tsx --outdir=public --target=browser --minify --splitting --format=esm --entry-naming=[dir]/[name].[hash].[ext] --chunk-naming=[name].[hash].[ext] && bun run build:html && bun run build:css",
+    "build:frontend": "bun run clean:build && bun build src/frontend/App.tsx --outdir=public --target=browser --minify --splitting --format=esm --entry-naming=[dir]/[name].[hash].[ext] --chunk-naming=[name].[hash].[ext] && bun run build:html && bun run build:css",
     "build:icons": "node scripts/generate-icons.cjs",
     "build:html": "node scripts/build-html.cjs",
     "build:css": "echo 'CSS already bundled'",

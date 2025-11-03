@@ -1351,4 +1351,32 @@ body {
   }
 }
 
+/* Version UI Styles */
+.version-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  background-color: var(--accent-color);
+  color: white;
+  border-radius: 12px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.version-message {
+  padding: 0.75rem 1rem;
+  background-color: var(--bg-secondary);
+  border-left: 3px solid var(--accent-color);
+  border-radius: 4px;
+  margin-bottom: 1rem;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.article-header-with-version {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
 
