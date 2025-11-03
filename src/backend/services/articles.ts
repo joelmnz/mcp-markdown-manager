@@ -571,7 +571,8 @@ export async function getArticleVersion(filename: string, versionId: string): Pr
     filename,
     title,
     content: parsed.body,
-    created
+    created,
+    isPublic: false // Version snapshots are not marked as public
   };
 }
 
@@ -620,7 +621,8 @@ export async function restoreArticleVersion(filename: string, versionId: string,
     filename,
     title: versionArticle.title,
     content: versionArticle.content,
-    created: existing.created
+    created: existing.created,
+    isPublic: existing.isPublic
   };
 }
 
