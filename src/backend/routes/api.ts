@@ -8,7 +8,11 @@ import {
   deleteArticle,
   isArticlePublic,
   setArticlePublic,
-  getArticleBySlug
+  getArticleBySlug,
+  listArticleVersions,
+  getArticleVersion,
+  restoreArticleVersion,
+  deleteArticleVersions
 } from '../services/articles';
 import { semanticSearch, hybridSearch, getDetailedIndexStats, rebuildIndex, indexUnindexedArticles } from '../services/vectorIndex';
 
@@ -186,9 +190,43 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
     }
     
-    // GET /api/articles/:filename - Read single article
+    // GET /api/articles/:filename - Read single article or list versions
     if (path.startsWith('/api/articles/') && request.method === 'GET') {
-      const filename = path.replace('/api/articles/', '');
+      const fullPath = path.replace('/api/articles/', '');
+      
+      // Check if this is a versions endpoint using regex to avoid path parsing vulnerabilities
+      // Matches: <filename>/versions or <filename>/versions/<versionId>
+      const versionMatch = fullPath.match(/^(.+?)\/versions(?:\/([^\/]+))?$/);
+      
+      if (versionMatch) {
+        const filename = versionMatch[1];
+        const versionId = versionMatch[2];
+        
+        if (!versionId) {
+          // List all versions
+          const versions = await listArticleVersions(filename);
+          return new Response(JSON.stringify(versions), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } else {
+          // Get specific version
+          const version = await getArticleVersion(filename, versionId);
+          
+          if (!version) {
+            return new Response(JSON.stringify({ error: 'Version not found' }), {
+              status: 404,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          
+          return new Response(JSON.stringify(version), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      }
+      
+      // Regular article read
+      const filename = fullPath;
       const article = await readArticle(filename);
       
       if (!article) {
@@ -206,7 +244,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // POST /api/articles - Create new article
     if (path === '/api/articles' && request.method === 'POST') {
       const body = await request.json();
-      const { title, content } = body;
+      const { title, content, message } = body;
       
       if (!title || !content) {
         return new Response(JSON.stringify({ error: 'Title and content are required' }), {
@@ -215,7 +253,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       }
       
-      const article = await createArticle(title, content);
+      const article = await createArticle(title, content, message);
       return new Response(JSON.stringify(article), {
         status: 201,
         headers: { 'Content-Type': 'application/json' }
@@ -225,8 +263,27 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // PUT /api/articles/:filename - Update article
     if (path.startsWith('/api/articles/') && request.method === 'PUT') {
       const filename = path.replace('/api/articles/', '');
+      
+      // Check if this is a version restore endpoint using regex to avoid path parsing vulnerabilities
+      // Matches: <filename>/versions/<versionId>/restore
+      const restoreMatch = filename.match(/^(.+?)\/versions\/([^\/]+)\/restore$/);
+      
+      if (restoreMatch) {
+        const articleFilename = restoreMatch[1];
+        const versionId = restoreMatch[2];
+        
+        const body = await request.json();
+        const { message } = body;
+        
+        const article = await restoreArticleVersion(articleFilename, versionId, message);
+        return new Response(JSON.stringify(article), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      // Regular article update
       const body = await request.json();
-      const { title, content } = body;
+      const { title, content, message } = body;
       
       if (!title || !content) {
         return new Response(JSON.stringify({ error: 'Title and content are required' }), {
@@ -235,15 +292,39 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       }
       
-      const article = await updateArticle(filename, title, content);
+      const article = await updateArticle(filename, title, content, message);
       return new Response(JSON.stringify(article), {
         headers: { 'Content-Type': 'application/json' }
       });
     }
     
-    // DELETE /api/articles/:filename - Delete article
+    // DELETE /api/articles/:filename - Delete article or versions
     if (path.startsWith('/api/articles/') && request.method === 'DELETE') {
-      const filename = path.replace('/api/articles/', '');
+      const fullPath = path.replace('/api/articles/', '');
+      
+      // Check if this is a versions delete endpoint using regex to avoid path parsing vulnerabilities
+      // Matches: <filename>/versions or <filename>/versions/<versionId>
+      const versionMatch = fullPath.match(/^(.+?)\/versions(?:\/([^\/]+))?$/);
+      
+      if (versionMatch) {
+        const filename = versionMatch[1];
+        const versionId = versionMatch[2];
+        
+        if (!versionId) {
+          // Delete all versions
+          await deleteArticleVersions(filename);
+        } else {
+          // Delete specific version
+          await deleteArticleVersions(filename, [versionId]);
+        }
+        
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      // Regular article deletion
+      const filename = fullPath;
       await deleteArticle(filename);
       
       return new Response(JSON.stringify({ success: true }), {
