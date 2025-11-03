@@ -1,6 +1,7 @@
-import { readdir, readFile, writeFile, unlink, stat } from 'fs/promises';
+import { readdir, readFile, writeFile, unlink, stat, mkdir, copyFile, rm } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { createHash } from 'crypto';
 import { chunkMarkdown } from './chunking';
 import { upsertArticleChunks, deleteArticleChunks } from './vectorIndex';
 
@@ -19,7 +20,21 @@ export interface ArticleMetadata {
   modified: string;
 }
 
+export interface VersionMetadata {
+  versionId: string;
+  createdAt: string;
+  message?: string;
+  hash: string;
+  size: number;
+  filename: string;
+}
+
+export interface VersionManifest {
+  versions: VersionMetadata[];
+}
+
 const DATA_DIR = process.env.DATA_DIR || '/data';
+const VERSIONS_DIR = join(DATA_DIR, '.versions');
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 
 // Clean markdown content by trimming leading newlines and whitespace
@@ -80,6 +95,100 @@ export function generateFilename(title: string): string {
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .trim() + '.md';
+}
+
+// Calculate SHA256 hash of content
+function calculateFileHash(content: string): string {
+  return createHash('sha256').update(content, 'utf-8').digest('hex');
+}
+
+// Get version directory for a specific article
+function getVersionDir(filename: string): string {
+  // Remove .md extension for directory name
+  const baseName = filename.replace(/\.md$/, '');
+  return join(VERSIONS_DIR, baseName);
+}
+
+// Get manifest file path for a specific article
+function getManifestPath(filename: string): string {
+  return join(getVersionDir(filename), 'manifest.json');
+}
+
+// Read version manifest for an article
+async function readManifest(filename: string): Promise<VersionManifest> {
+  const manifestPath = getManifestPath(filename);
+  
+  if (!existsSync(manifestPath)) {
+    return { versions: [] };
+  }
+  
+  try {
+    const content = await readFile(manifestPath, 'utf-8');
+    return JSON.parse(content);
+  } catch (error) {
+    console.error('Error reading manifest:', error);
+    return { versions: [] };
+  }
+}
+
+// Write version manifest atomically
+async function writeManifest(filename: string, manifest: VersionManifest): Promise<void> {
+  const manifestPath = getManifestPath(filename);
+  const versionDir = getVersionDir(filename);
+  
+  // Ensure version directory exists
+  if (!existsSync(versionDir)) {
+    await mkdir(versionDir, { recursive: true });
+  }
+  
+  // Write to temporary file first, then rename (atomic operation)
+  const tempPath = `${manifestPath}.tmp`;
+  await writeFile(tempPath, JSON.stringify(manifest, null, 2), 'utf-8');
+  await writeFile(manifestPath, await readFile(tempPath, 'utf-8'), 'utf-8');
+  await unlink(tempPath);
+}
+
+// Create a version snapshot of the current article
+async function createVersionSnapshot(
+  filename: string,
+  content: string,
+  message?: string
+): Promise<void> {
+  const manifest = await readManifest(filename);
+  
+  // Determine next version number
+  const versionNumber = manifest.versions.length + 1;
+  const versionId = `v${versionNumber}`;
+  const versionFilename = `${versionId}.md`;
+  
+  // Calculate hash and size
+  const hash = calculateFileHash(content);
+  const size = Buffer.byteLength(content, 'utf-8');
+  
+  // Create version metadata
+  const versionMetadata: VersionMetadata = {
+    versionId,
+    createdAt: new Date().toISOString(),
+    message,
+    hash,
+    size,
+    filename: versionFilename
+  };
+  
+  // Save snapshot file
+  const versionDir = getVersionDir(filename);
+  if (!existsSync(versionDir)) {
+    await mkdir(versionDir, { recursive: true });
+  }
+  
+  const snapshotPath = join(versionDir, versionFilename);
+  await writeFile(snapshotPath, content, 'utf-8');
+  
+  // Update manifest
+  manifest.versions.push(versionMetadata);
+  await writeManifest(filename, manifest);
+  
+  console.log(`Created version ${versionId} for ${filename}`);
 }
 
 // Create frontmatter string
@@ -165,7 +274,7 @@ export async function readArticle(filename: string): Promise<Article | null> {
 }
 
 // Create a new article
-export async function createArticle(title: string, content: string): Promise<Article> {
+export async function createArticle(title: string, content: string, message?: string): Promise<Article> {
   // Clean content and validate it's not empty
   const cleanedContent = cleanMarkdownContent(content);
   
@@ -180,6 +289,9 @@ export async function createArticle(title: string, content: string): Promise<Art
   const fullContent = createFrontmatter(title, created) + cleanedContent;
   
   await writeFile(filepath, fullContent, 'utf-8');
+  
+  // Create initial version snapshot
+  await createVersionSnapshot(filename, fullContent, message || 'Initial version');
   
   // Index the article for semantic search if enabled
   if (SEMANTIC_SEARCH_ENABLED) {
@@ -203,7 +315,7 @@ export async function createArticle(title: string, content: string): Promise<Art
 }
 
 // Update an existing article
-export async function updateArticle(filename: string, title: string, content: string): Promise<Article> {
+export async function updateArticle(filename: string, title: string, content: string, message?: string): Promise<Article> {
   // Clean content and validate it's not empty
   const cleanedContent = cleanMarkdownContent(content);
   
@@ -218,6 +330,10 @@ export async function updateArticle(filename: string, title: string, content: st
   if (!existing) {
     throw new Error(`Article ${filename} not found`);
   }
+  
+  // Create snapshot of current version before updating
+  const currentContent = await readFile(filepath, 'utf-8');
+  await createVersionSnapshot(filename, currentContent, message);
   
   const fullContent = createFrontmatter(title, existing.created) + cleanedContent;
   await writeFile(filepath, fullContent, 'utf-8');
@@ -261,5 +377,150 @@ export async function deleteArticle(filename: string): Promise<void> {
       console.error('Error removing article from index:', error);
       // Don't fail the deletion if index removal fails
     }
+  }
+  
+  // Clean up version history
+  const versionDir = getVersionDir(filename);
+  if (existsSync(versionDir)) {
+    await rm(versionDir, { recursive: true, force: true });
+  }
+}
+
+// List all versions of an article
+export async function listArticleVersions(filename: string): Promise<VersionMetadata[]> {
+  const filepath = join(DATA_DIR, filename);
+  
+  if (!existsSync(filepath)) {
+    throw new Error(`Article ${filename} not found`);
+  }
+  
+  const manifest = await readManifest(filename);
+  // Return versions in descending order (newest first)
+  return [...manifest.versions].reverse();
+}
+
+// Get a specific version of an article
+export async function getArticleVersion(filename: string, versionId: string): Promise<Article | null> {
+  const filepath = join(DATA_DIR, filename);
+  
+  if (!existsSync(filepath)) {
+    throw new Error(`Article ${filename} not found`);
+  }
+  
+  const manifest = await readManifest(filename);
+  const version = manifest.versions.find(v => v.versionId === versionId);
+  
+  if (!version) {
+    return null;
+  }
+  
+  const versionPath = join(getVersionDir(filename), version.filename);
+  
+  if (!existsSync(versionPath)) {
+    return null;
+  }
+  
+  const content = await readFile(versionPath, 'utf-8');
+  const parsed = parseFrontmatter(content);
+  const title = parsed.title || extractTitle(parsed.body);
+  const created = parsed.created || version.createdAt;
+  
+  return {
+    filename,
+    title,
+    content: parsed.body,
+    created
+  };
+}
+
+// Restore an article to a specific version
+export async function restoreArticleVersion(filename: string, versionId: string, message?: string): Promise<Article> {
+  const filepath = join(DATA_DIR, filename);
+  
+  if (!existsSync(filepath)) {
+    throw new Error(`Article ${filename} not found`);
+  }
+  
+  // Get the version to restore
+  const versionArticle = await getArticleVersion(filename, versionId);
+  if (!versionArticle) {
+    throw new Error(`Version ${versionId} not found for article ${filename}`);
+  }
+  
+  // Create snapshot of current state before restoring
+  const currentContent = await readFile(filepath, 'utf-8');
+  await createVersionSnapshot(filename, currentContent, message || `Restore to ${versionId}`);
+  
+  // Read existing article to preserve creation date
+  const existing = await readArticle(filename);
+  if (!existing) {
+    throw new Error(`Article ${filename} not found`);
+  }
+  
+  // Restore the version
+  const fullContent = createFrontmatter(versionArticle.title, existing.created) + versionArticle.content;
+  await writeFile(filepath, fullContent, 'utf-8');
+  
+  // Re-index the article for semantic search if enabled
+  if (SEMANTIC_SEARCH_ENABLED) {
+    try {
+      const stats = await stat(filepath);
+      const modified = stats.mtime.toISOString();
+      const chunks = chunkMarkdown(filename, versionArticle.title, versionArticle.content, existing.created, modified);
+      await upsertArticleChunks(filename, chunks);
+    } catch (error) {
+      console.error('Error re-indexing article after restore:', error);
+      // Don't fail the restore if indexing fails
+    }
+  }
+  
+  return {
+    filename,
+    title: versionArticle.title,
+    content: versionArticle.content,
+    created: existing.created
+  };
+}
+
+// Delete specific versions or all versions of an article
+export async function deleteArticleVersions(filename: string, versionIds?: string[]): Promise<void> {
+  const filepath = join(DATA_DIR, filename);
+  
+  if (!existsSync(filepath)) {
+    throw new Error(`Article ${filename} not found`);
+  }
+  
+  const manifest = await readManifest(filename);
+  const versionDir = getVersionDir(filename);
+  
+  if (!versionIds || versionIds.length === 0) {
+    // Delete all versions
+    if (existsSync(versionDir)) {
+      await rm(versionDir, { recursive: true, force: true });
+    }
+    return;
+  }
+  
+  // Delete specific versions
+  const versionsToKeep = manifest.versions.filter(v => !versionIds.includes(v.versionId));
+  const versionsToDelete = manifest.versions.filter(v => versionIds.includes(v.versionId));
+  
+  // Delete snapshot files
+  for (const version of versionsToDelete) {
+    const versionPath = join(versionDir, version.filename);
+    if (existsSync(versionPath)) {
+      await unlink(versionPath);
+    }
+  }
+  
+  // Update manifest
+  if (versionsToKeep.length === 0) {
+    // No versions left, delete the directory
+    if (existsSync(versionDir)) {
+      await rm(versionDir, { recursive: true, force: true });
+    }
+  } else {
+    // Update manifest with remaining versions
+    await writeManifest(filename, { versions: versionsToKeep });
   }
 }
