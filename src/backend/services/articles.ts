@@ -160,9 +160,14 @@ async function createVersionSnapshot(
   // Determine next version number based on highest existing version
   let versionNumber = 1;
   if (manifest.versions.length > 0) {
-    const highestVersion = Math.max(
-      ...manifest.versions.map(v => parseInt(v.versionId.replace('v', ''), 10))
-    );
+    // Only consider well-formed versionIds (e.g., 'v1', 'v2', ...)
+    const versionNumbers = manifest.versions
+      .map(v => {
+        const match = /^v(\d+)$/.exec(v.versionId);
+        return match ? parseInt(match[1], 10) : null;
+      })
+      .filter((n): n is number => n !== null);
+    const highestVersion = versionNumbers.length > 0 ? Math.max(...versionNumbers) : 0;
     versionNumber = highestVersion + 1;
   }
   
