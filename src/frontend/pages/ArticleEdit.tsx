@@ -19,6 +19,8 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
   const [linting, setLinting] = useState(false);
   const [converting, setConverting] = useState(false);
   const [error, setError] = useState('');
+  const [isPublic, setIsPublic] = useState(false);
+  const [copySuccess, setCopySuccess] = useState(false);
   const isNew = !filename;
 
   useEffect(() => {
@@ -40,6 +42,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         const data = await response.json();
         setTitle(data.title);
         setContent(data.content);
+        setIsPublic(data.isPublic || false);
       } else {
         setError('Article not found');
       }
@@ -74,6 +77,12 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
 
       if (response.ok) {
         const data = await response.json();
+        
+        // If public status has changed, update it
+        if (!isNew && isPublic !== undefined) {
+          await handlePublicToggle(isPublic, data.filename);
+        }
+        
         onNavigate(`/article/${data.filename.replace('.md', '')}`);
       } else {
         const errorData = await response.json();
@@ -84,6 +93,57 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
     } finally {
       setSaving(false);
     }
+  };
+  
+  const handlePublicToggle = async (newIsPublic: boolean, articleFilename?: string) => {
+    const targetFilename = articleFilename || `${filename}.md`;
+    
+    try {
+      const response = await fetch(`/api/articles/${targetFilename}/public`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ isPublic: newIsPublic })
+      });
+
+      if (response.ok) {
+        setIsPublic(newIsPublic);
+      } else {
+        setError('Failed to update public status');
+      }
+    } catch (err) {
+      setError('Failed to update public status');
+    }
+  };
+  
+  // Generate slug from filename or title
+  const getArticleSlug = (): string => {
+    if (filename) {
+      return filename;
+    }
+    // Generate slug from title for new articles
+    const slug = title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').trim();
+    // Fallback to 'untitled' if slug is empty
+    return slug || 'untitled';
+  };
+  
+  const handleCopyPublicLink = () => {
+    const slug = getArticleSlug();
+    const publicUrl = `${window.location.origin}/public-article/${slug}`;
+    
+    navigator.clipboard.writeText(publicUrl).then(() => {
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    }).catch(() => {
+      setError('Failed to copy link');
+    });
+  };
+  
+  const navigateToPublicView = () => {
+    const slug = getArticleSlug();
+    onNavigate(`/public-article/${slug}`);
   };
 
   const handleLint = () => {
@@ -207,6 +267,39 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       </div>
 
       {error && <div className="error-message">{error}</div>}
+      
+      {!isNew && (
+        <div className="public-sharing-section">
+          <label className="public-toggle-label">
+            <input
+              type="checkbox"
+              checked={isPublic}
+              onChange={(e) => handlePublicToggle(e.target.checked)}
+              className="public-toggle-checkbox"
+            />
+            <span className="public-toggle-text">Allow Public Sharing</span>
+          </label>
+          
+          {isPublic && (
+            <div className="share-link-pill">
+              <button 
+                className="share-link-button"
+                onClick={navigateToPublicView}
+                title="View public page"
+              >
+                🔗 Public Link
+              </button>
+              <button 
+                className="copy-link-button"
+                onClick={handleCopyPublicLink}
+                title="Copy link to clipboard"
+              >
+                {copySuccess ? '✓' : '📋'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="edit-container">
         <div className="edit-section">

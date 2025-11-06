@@ -6,6 +6,7 @@ interface Article {
   title: string;
   content: string;
   created: string;
+  isPublic: boolean;
 }
 
 interface VersionMetadata {

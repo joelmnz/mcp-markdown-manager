@@ -10,6 +10,7 @@ export interface Article {
   title: string;
   content: string;
   created: string;
+  isPublic: boolean;
 }
 
 export interface ArticleMetadata {
@@ -18,6 +19,20 @@ export interface ArticleMetadata {
   created: string;
   // Filesystem last modified time, used for sorting in listings
   modified: string;
+  isPublic: boolean;
+}
+
+export interface VersionMetadata {
+  versionId: string;
+  createdAt: string;
+  message?: string;
+  hash: string;
+  size: number;
+  filename: string;
+}
+
+export interface VersionManifest {
+  versions: VersionMetadata[];
 }
 
 export interface VersionMetadata {
@@ -95,6 +110,54 @@ export function generateFilename(title: string): string {
     .replace(/\s+/g, '-')
     .replace(/-+/g, '-')
     .trim() + '.md';
+}
+
+// Check if article is public
+export async function isArticlePublic(filename: string): Promise<boolean> {
+  const publicFilepath = join(DATA_DIR, `${filename}.public`);
+  return existsSync(publicFilepath);
+}
+
+// Toggle public state
+export async function setArticlePublic(filename: string, isPublic: boolean): Promise<void> {
+  const publicFilepath = join(DATA_DIR, `${filename}.public`);
+  
+  if (isPublic) {
+    // Create marker file if it doesn't exist
+    if (!existsSync(publicFilepath)) {
+      await writeFile(publicFilepath, '', 'utf-8');
+    }
+  } else {
+    // Remove marker file if it exists
+    if (existsSync(publicFilepath)) {
+      await unlink(publicFilepath);
+    }
+  }
+}
+
+// Get article by slug (for public access)
+export async function getArticleBySlug(slug: string): Promise<Article | null> {
+  // Slug is the filename without .md extension
+  const filename = `${slug}.md`;
+  
+  // Check if file exists first
+  const filepath = join(DATA_DIR, filename);
+  if (!existsSync(filepath)) {
+    return null;
+  }
+  
+  const article = await readArticle(filename);
+  
+  if (!article) {
+    return null;
+  }
+  
+  // Only return if article is public
+  if (!article.isPublic) {
+    return null;
+  }
+  
+  return article;
 }
 
 // Calculate SHA256 hash of content
@@ -234,11 +297,15 @@ export async function listArticles(): Promise<ArticleMetadata[]> {
 
     const title = parsed.title || extractTitle(parsed.body);
     
+    // Check public status
+    const isPublic = await isArticlePublic(filename);
+    
     articles.push({
       filename,
       title,
       created,
-      modified
+      modified,
+      isPublic
     });
   }
   
@@ -278,11 +345,15 @@ export async function readArticle(filename: string): Promise<Article | null> {
   
   const title = parsed.title || extractTitle(parsed.body);
   
+  // Check public status
+  const isPublic = await isArticlePublic(filename);
+  
   return {
     filename,
     title,
     content: parsed.body,
-    created
+    created,
+    isPublic
   };
 }
 
@@ -323,7 +394,8 @@ export async function createArticle(title: string, content: string, message?: st
     filename,
     title,
     content: cleanedContent,
-    created
+    created,
+    isPublic: false
   };
 }
 
@@ -338,18 +410,100 @@ export async function updateArticle(filename: string, title: string, content: st
     throw new Error(`Article ${filename} not found`);
   }
   
-  // Read existing article to preserve creation date
+  // Read existing article to preserve creation date and public status
   const existing = await readArticle(filename);
   if (!existing) {
     throw new Error(`Article ${filename} not found`);
   }
   
-  // Create snapshot of current version before updating
-  const currentContent = await readFile(filepath, 'utf-8');
-  await createVersionSnapshot(filename, currentContent, message);
+  // Generate new filename from new title
+  const newFilename = generateFilename(title);
+  const newFilepath = join(DATA_DIR, newFilename);
   
+  // Check if filename has changed
+  if (filename !== newFilename) {
+    // Check if new filename already exists
+    if (existsSync(newFilepath)) {
+      throw new Error(`Article with filename ${newFilename} already exists`);
+    }
+    
+    // Rename the article file
+    const fullContent = createFrontmatter(title, existing.created) + cleanedContent;
+    await writeFile(newFilepath, fullContent, 'utf-8');
+    await unlink(filepath);
+
+    // If there is an existing versions directory for the old filename, migrate it to the new filename
+    try {
+      const oldVersionDir = getVersionDir(filename);
+      const newVersionDir = getVersionDir(newFilename);
+      if (existsSync(oldVersionDir)) {
+        // Ensure parent versions directory exists
+        if (!existsSync(VERSIONS_DIR)) {
+          await mkdir(VERSIONS_DIR, { recursive: true });
+        }
+        await rename(oldVersionDir, newVersionDir);
+      }
+    } catch (error) {
+      console.error('Error migrating versions directory during rename:', error);
+      // Don't fail the update if migration fails
+    }
+
+    // Create a version snapshot for the renamed article (new filename)
+    try {
+      await createVersionSnapshot(newFilename, fullContent, message || 'Updated article');
+    } catch (error) {
+      console.error('Error creating version snapshot after rename:', error);
+      // Don't fail the update if snapshot creation fails
+    }
+    
+    // Sync .public marker file if article was public
+    if (existing.isPublic) {
+      const oldPublicPath = join(DATA_DIR, `${filename}.public`);
+      const newPublicPath = join(DATA_DIR, `${newFilename}.public`);
+      
+      if (existsSync(oldPublicPath)) {
+        await writeFile(newPublicPath, '', 'utf-8');
+        await unlink(oldPublicPath);
+      }
+    }
+    
+    // Update search index with new filename
+    if (SEMANTIC_SEARCH_ENABLED) {
+      try {
+        // Delete old index entries
+        await deleteArticleChunks(filename);
+        
+        // Add new index entries
+        const stats = await stat(newFilepath);
+        const modified = stats.mtime.toISOString();
+        const chunks = chunkMarkdown(newFilename, title, cleanedContent, existing.created, modified);
+        await upsertArticleChunks(newFilename, chunks);
+      } catch (error) {
+        console.error('Error re-indexing article:', error);
+        // Don't fail the article update if indexing fails
+      }
+    }
+    
+    return {
+      filename: newFilename,
+      title,
+      content: cleanedContent,
+      created: existing.created,
+      isPublic: existing.isPublic
+    };
+  }
+  
+  // Just update content if filename hasn't changed
   const fullContent = createFrontmatter(title, existing.created) + cleanedContent;
   await writeFile(filepath, fullContent, 'utf-8');
+
+  // Create a version snapshot for the update
+  try {
+    await createVersionSnapshot(filename, fullContent, message || 'Updated article');
+  } catch (error) {
+    console.error('Error creating version snapshot on update:', error);
+    // Don't fail the update if snapshot creation fails
+  }
   
   // Re-index the article for semantic search if enabled
   if (SEMANTIC_SEARCH_ENABLED) {
@@ -368,7 +522,8 @@ export async function updateArticle(filename: string, title: string, content: st
     filename,
     title,
     content: cleanedContent,
-    created: existing.created
+    created: existing.created,
+    isPublic: existing.isPublic
   };
 }
 
@@ -381,6 +536,12 @@ export async function deleteArticle(filename: string): Promise<void> {
   }
   
   await unlink(filepath);
+  
+  // Remove .public marker file if it exists
+  const publicFilepath = join(DATA_DIR, `${filename}.public`);
+  if (existsSync(publicFilepath)) {
+    await unlink(publicFilepath);
+  }
   
   // Remove from vector index if semantic search is enabled
   if (SEMANTIC_SEARCH_ENABLED) {
@@ -442,7 +603,8 @@ export async function getArticleVersion(filename: string, versionId: string): Pr
     filename,
     title,
     content: parsed.body,
-    created
+    created,
+    isPublic: false // Version snapshots are not marked as public
   };
 }
 
@@ -491,7 +653,8 @@ export async function restoreArticleVersion(filename: string, versionId: string,
     filename,
     title: versionArticle.title,
     content: versionArticle.content,
-    created: existing.created
+    created: existing.created,
+    isPublic: existing.isPublic
   };
 }
 

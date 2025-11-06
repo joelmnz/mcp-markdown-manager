@@ -6,6 +6,9 @@ import {
   createArticle,
   updateArticle,
   deleteArticle,
+  isArticlePublic,
+  setArticlePublic,
+  getArticleBySlug,
   listArticleVersions,
   getArticleVersion,
   restoreArticleVersion,
@@ -24,6 +27,33 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     return new Response(JSON.stringify({ status: 'ok' }), {
       headers: { 'Content-Type': 'application/json' }
     });
+  }
+  
+  // Public article endpoint (no auth required)
+  if (path.startsWith('/api/public-articles/') && request.method === 'GET') {
+    try {
+      const slug = path.replace('/api/public-articles/', '');
+      const article = await getArticleBySlug(slug);
+      
+      if (!article) {
+        return new Response(JSON.stringify({ error: 'Article not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      return new Response(JSON.stringify(article), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Public article error:', error);
+      return new Response(JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'Internal server error' 
+      }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
   
   // All other API endpoints require authentication
@@ -298,6 +328,36 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       await deleteArticle(filename);
       
       return new Response(JSON.stringify({ success: true }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // GET /api/articles/:filename/public-status - Get public status
+    if (path.match(/^\/api\/articles\/[^\/]+\/public-status$/) && request.method === 'GET') {
+      const filename = path.replace('/api/articles/', '').replace('/public-status', '');
+      const isPublic = await isArticlePublic(filename);
+      
+      return new Response(JSON.stringify({ isPublic }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    // POST /api/articles/:filename/public - Set public status
+    if (path.match(/^\/api\/articles\/[^\/]+\/public$/) && request.method === 'POST') {
+      const filename = path.replace('/api/articles/', '').replace('/public', '');
+      const body = await request.json();
+      const { isPublic } = body;
+      
+      if (typeof isPublic !== 'boolean') {
+        return new Response(JSON.stringify({ error: 'isPublic must be a boolean' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      
+      await setArticlePublic(filename, isPublic);
+      
+      return new Response(JSON.stringify({ success: true, isPublic }), {
         headers: { 'Content-Type': 'application/json' }
       });
     }
