@@ -432,6 +432,9 @@ export async function updateArticle(filename: string, title: string, content: st
     await writeFile(newFilepath, fullContent, 'utf-8');
     await unlink(filepath);
     
+    // Create version snapshot with new filename
+    await createVersionSnapshot(newFilename, fullContent, message || 'Article updated');
+    
     // Sync .public marker file if article was public
     if (existing.isPublic) {
       const oldPublicPath = join(DATA_DIR, `${filename}.public`);
@@ -472,6 +475,9 @@ export async function updateArticle(filename: string, title: string, content: st
   // Just update content if filename hasn't changed
   const fullContent = createFrontmatter(title, existing.created) + cleanedContent;
   await writeFile(filepath, fullContent, 'utf-8');
+  
+  // Create version snapshot
+  await createVersionSnapshot(filename, fullContent, message || 'Article updated');
   
   // Re-index the article for semantic search if enabled
   if (SEMANTIC_SEARCH_ENABLED) {
