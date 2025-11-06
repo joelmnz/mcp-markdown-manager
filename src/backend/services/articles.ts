@@ -431,6 +431,30 @@ export async function updateArticle(filename: string, title: string, content: st
     const fullContent = createFrontmatter(title, existing.created) + cleanedContent;
     await writeFile(newFilepath, fullContent, 'utf-8');
     await unlink(filepath);
+
+    // If there is an existing versions directory for the old filename, migrate it to the new filename
+    try {
+      const oldVersionDir = getVersionDir(filename);
+      const newVersionDir = getVersionDir(newFilename);
+      if (existsSync(oldVersionDir)) {
+        // Ensure parent versions directory exists
+        if (!existsSync(VERSIONS_DIR)) {
+          await mkdir(VERSIONS_DIR, { recursive: true });
+        }
+        await rename(oldVersionDir, newVersionDir);
+      }
+    } catch (error) {
+      console.error('Error migrating versions directory during rename:', error);
+      // Don't fail the update if migration fails
+    }
+
+    // Create a version snapshot for the renamed article (new filename)
+    try {
+      await createVersionSnapshot(newFilename, fullContent, message || 'Updated article');
+    } catch (error) {
+      console.error('Error creating version snapshot after rename:', error);
+      // Don't fail the update if snapshot creation fails
+    }
     
     // Sync .public marker file if article was public
     if (existing.isPublic) {
@@ -472,6 +496,14 @@ export async function updateArticle(filename: string, title: string, content: st
   // Just update content if filename hasn't changed
   const fullContent = createFrontmatter(title, existing.created) + cleanedContent;
   await writeFile(filepath, fullContent, 'utf-8');
+
+  // Create a version snapshot for the update
+  try {
+    await createVersionSnapshot(filename, fullContent, message || 'Updated article');
+  } catch (error) {
+    console.error('Error creating version snapshot on update:', error);
+    // Don't fail the update if snapshot creation fails
+  }
   
   // Re-index the article for semantic search if enabled
   if (SEMANTIC_SEARCH_ENABLED) {
