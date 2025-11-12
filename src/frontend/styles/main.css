@@ -1499,3 +1499,88 @@ body {
   gap: 0.75rem;
 }
 
+/* Article Meta Controls - contains fullscreen button and date */
+.article-meta-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+/* Fullscreen Button */
+.fullscreen-button {
+  font-size: 1rem;
+  padding: 0.25rem 0.5rem;
+  line-height: 1;
+}
+
+/* Public Article Header - for title and fullscreen button */
+.public-article-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+/* Fullscreen Mode Styles */
+.article-content:fullscreen,
+.public-article-content:fullscreen {
+  background-color: var(--bg-primary);
+  padding: 3rem;
+  overflow-y: auto;
+}
+
+.article-content:fullscreen .article-item-header,
+.public-article-content:fullscreen .public-article-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+}
+
+.article-content:fullscreen .article-header-with-version,
+.public-article-content:fullscreen .public-article-header {
+  width: 100%;
+}
+
+/* Hide elements in fullscreen */
+.article-content:fullscreen .article-meta-controls,
+.article-content:fullscreen .version-message,
+.public-article-content:fullscreen .fullscreen-button {
+  display: none;
+}
+
+/* Ensure title is visible in fullscreen */
+.article-content:fullscreen .article-item-title,
+.public-article-content:fullscreen .public-article-title {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.article-content:fullscreen .version-pill {
+  display: inline-flex;
+}
+
+/* Fullscreen markdown content */
+.article-content:fullscreen .markdown-content,
+.public-article-content:fullscreen .markdown-content {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+@media (max-width: 768px) {
+  .article-meta-controls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+  
+  .public-article-header {
+    flex-direction: column;
+  }
+  
+  .article-content:fullscreen,
+  .public-article-content:fullscreen {
+    padding: 2rem 1rem;
+  }
+}

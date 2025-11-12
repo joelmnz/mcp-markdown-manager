@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MarkdownView } from '../components/MarkdownView';
+import { useFullscreen } from '../hooks/useFullscreen';
 
 interface Article {
   filename: string;
@@ -33,6 +34,8 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
   const [currentVersionIndex, setCurrentVersionIndex] = useState(-1); // -1 means current version
   const [loadingVersion, setLoadingVersion] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const articleContentRef = useRef<HTMLElement>(null);
+  const { isFullscreen, toggleFullscreen } = useFullscreen();
 
   const loadArticle = async () => {
     try {
@@ -303,7 +306,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
         </div>
       </div>
 
-      <article className="article-content">
+      <article className="article-content" ref={articleContentRef}>
         <div className="article-item-header">
           <div className="article-header-with-version">
             <h1 className="article-item-title">{article.title}</h1>
@@ -313,12 +316,21 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
               </span>
             )}
           </div>
-          <span className="article-item-date">
-            {formatDate(article.created)}
-            {isViewingHistory && currentVersion && (
-              <> • Version from {formatDate(currentVersion.createdAt)}</>
-            )}
-          </span>
+          <div className="article-meta-controls">
+            <button
+              className="icon-button fullscreen-button"
+              onClick={() => articleContentRef.current && toggleFullscreen(articleContentRef.current)}
+              title="Fullscreen"
+            >
+              [ ]
+            </button>
+            <span className="article-item-date">
+              {formatDate(article.created)}
+              {isViewingHistory && currentVersion && (
+                <> • Version from {formatDate(currentVersion.createdAt)}</>
+              )}
+            </span>
+          </div>
         </div>
         {isViewingHistory && currentVersion?.message && (
           <div className="version-message">
