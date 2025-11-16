@@ -3,6 +3,7 @@
   "short_name": "Articles",
   "description": "AI-powered article management system",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#1a1a1a",
   "theme_color": "#4a9eff",
