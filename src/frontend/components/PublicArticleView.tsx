@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MarkdownView } from './MarkdownView';
+import { useFullscreen } from '../hooks/useFullscreen';
 
 interface Article {
   filename: string;
@@ -19,6 +20,8 @@ export function PublicArticleView({ slug, onNavigate }: PublicArticleViewProps) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const articleContentRef = useRef<HTMLElement>(null);
+  const { isFullscreen, toggleFullscreen } = useFullscreen();
 
   useEffect(() => {
     // Check if user is authenticated
@@ -75,8 +78,17 @@ export function PublicArticleView({ slug, onNavigate }: PublicArticleViewProps) 
         </div>
       )}
       
-      <article className="public-article-content">
-        <h1 className="public-article-title">{article.title}</h1>
+      <article className="public-article-content" ref={articleContentRef}>
+        <div className="public-article-header">
+          <h1 className="public-article-title">{article.title}</h1>
+          <button
+            className="icon-button fullscreen-button"
+            onClick={() => articleContentRef.current && toggleFullscreen(articleContentRef.current)}
+            title="Fullscreen"
+          >
+            [ ]
+          </button>
+        </div>
         <div className="markdown-content">
           <MarkdownView content={article.content} />
         </div>
