@@ -1363,6 +1363,11 @@ body {
   gap: 1rem;
 }
 
+/* Public Link Section (Article View) */
+.public-link-section {
+  margin: 0.75rem 0;
+}
+
 .public-toggle-label {
   display: flex;
   align-items: center;
