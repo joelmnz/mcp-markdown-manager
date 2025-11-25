@@ -358,6 +358,7 @@ export async function readArticle(filename: string): Promise<Article | null> {
 }
 
 // Create a new article
+// Creates the initial version (v1) of the article
 export async function createArticle(title: string, content: string, message?: string): Promise<Article> {
   // Clean content and validate it's not empty
   const cleanedContent = cleanMarkdownContent(content);
@@ -400,6 +401,7 @@ export async function createArticle(title: string, content: string, message?: st
 }
 
 // Update an existing article
+// Creates exactly ONE new version per update, regardless of whether the title/filename changes
 export async function updateArticle(filename: string, title: string, content: string, message?: string): Promise<Article> {
   // Clean content and validate it's not empty
   const cleanedContent = cleanMarkdownContent(content);
