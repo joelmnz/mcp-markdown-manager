@@ -77,14 +77,8 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
 
       if (response.ok) {
         const data = await response.json();
-        
-        // If filename changed during save (due to title change), sync the public status
-        // to the new filename. This is a safety net since the backend also migrates
-        // the public marker, but ensures consistency.
-        if (!isNew && data.filename !== `${filename}.md`) {
-          await handlePublicToggle(isPublic, data.filename);
-        }
-        
+        // Navigate to the article view (filename may have changed due to title change,
+        // but the backend handles migrating the public status marker automatically)
         onNavigate(`/article/${data.filename.replace('.md', '')}`);
       } else {
         const errorData = await response.json();
