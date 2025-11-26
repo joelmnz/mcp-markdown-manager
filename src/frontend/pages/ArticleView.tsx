@@ -333,6 +333,24 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
             )}
           </div>
           <div className="article-meta-controls">
+            {article.isPublic && !isViewingHistory && (
+              <div className="share-link-pill share-link-pill-compact">
+                <button 
+                  className="share-link-button share-link-button-compact"
+                  onClick={navigateToPublicView}
+                  title="View public page"
+                >
+                  🔗
+                </button>
+                <button 
+                  className="copy-link-button copy-link-button-compact"
+                  onClick={handleCopyPublicLink}
+                  title="Copy public link to clipboard"
+                >
+                  {copySuccess ? '✓' : '📋'}
+                </button>
+              </div>
+            )}
             <button
               className="icon-button fullscreen-button"
               onClick={() => articleContentRef.current && toggleFullscreen(articleContentRef.current)}
@@ -348,26 +366,6 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
             </span>
           </div>
         </div>
-        {article.isPublic && !isViewingHistory && (
-          <div className="public-link-section">
-            <div className="share-link-pill">
-              <button 
-                className="share-link-button"
-                onClick={navigateToPublicView}
-                title="View public page"
-              >
-                🔗 Public Link
-              </button>
-              <button 
-                className="copy-link-button"
-                onClick={handleCopyPublicLink}
-                title="Copy link to clipboard"
-              >
-                {copySuccess ? '✓' : '📋'}
-              </button>
-            </div>
-          </div>
-        )}
         {isViewingHistory && currentVersion?.message && (
           <div className="version-message">
             Version message: {currentVersion.message}
