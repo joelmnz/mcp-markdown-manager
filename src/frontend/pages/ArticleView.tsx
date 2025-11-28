@@ -34,7 +34,6 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
   const [currentVersionIndex, setCurrentVersionIndex] = useState(-1); // -1 means current version
   const [loadingVersion, setLoadingVersion] = useState(false);
   const [restoring, setRestoring] = useState(false);
-  const [copySuccess, setCopySuccess] = useState(false);
   const articleContentRef = useRef<HTMLElement>(null);
   const { isFullscreen, toggleFullscreen } = useFullscreen();
 
@@ -223,21 +222,6 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
     });
   };
 
-  const handleCopyPublicLink = () => {
-    const publicUrl = `${window.location.origin}/public-article/${filename}`;
-    
-    navigator.clipboard.writeText(publicUrl).then(() => {
-      setCopySuccess(true);
-      setTimeout(() => setCopySuccess(false), 2000);
-    }).catch(() => {
-      setError('Failed to copy link');
-    });
-  };
-
-  const navigateToPublicView = () => {
-    onNavigate(`/public-article/${filename}`);
-  };
-
   const isViewingHistory = currentVersionIndex !== -1;
   const canNavigateBack = currentVersionIndex === -1 ? versions.length > 0 : currentVersionIndex < versions.length - 1;
   const canNavigateForward = currentVersionIndex > -1;
@@ -334,22 +318,13 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
           </div>
           <div className="article-meta-controls">
             {article.isPublic && !isViewingHistory && (
-              <div className="share-link-pill share-link-pill-compact">
-                <button 
-                  className="share-link-button share-link-button-compact"
-                  onClick={navigateToPublicView}
-                  title="View public page"
-                >
-                  🔗
-                </button>
-                <button 
-                  className="copy-link-button copy-link-button-compact"
-                  onClick={handleCopyPublicLink}
-                  title="Copy public link to clipboard"
-                >
-                  {copySuccess ? '✓' : '📋'}
-                </button>
-              </div>
+              <a 
+                href={`/public-article/${filename}`}
+                className="public-link"
+                title="View public page"
+              >
+                Public 🔗
+              </a>
             )}
             <button
               className="icon-button fullscreen-button"
