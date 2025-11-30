@@ -251,7 +251,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
         <div className="article-actions">
           {versions.length > 0 && (
             <>
-              <button 
+              <button
                 className="button button-secondary"
                 onClick={handleNavigateBack}
                 disabled={!canNavigateBack || loadingVersion}
@@ -259,7 +259,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
               >
                 ← Older
               </button>
-              <button 
+              <button
                 className="button button-secondary"
                 onClick={handleNavigateForward}
                 disabled={!canNavigateForward || loadingVersion}
@@ -270,7 +270,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
             </>
           )}
           {isViewingHistory && (
-            <button 
+            <button
               className="button button-primary"
               onClick={handleRestore}
               disabled={restoring}
@@ -280,21 +280,21 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
           )}
           {!isViewingHistory && (
             <>
-              <button 
+              <button
                 className="button"
                 onClick={() => onNavigate(`/edit/${filename}`)}
               >
                 Edit
               </button>
               {versions.length > 0 && (
-                <button 
+                <button
                   className="button button-secondary"
                   onClick={handleDeleteVersions}
                 >
                   Clear History
                 </button>
               )}
-              <button 
+              <button
                 className="button button-danger"
                 onClick={handleDelete}
                 disabled={deleting}
@@ -317,12 +317,21 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
             )}
           </div>
           <div className="article-meta-controls">
+            {article.isPublic && !isViewingHistory && (
+              <a
+                href={`/public-article/${filename}`}
+                className="public-link"
+                title="View public page"
+              >
+                Public 🔗
+              </a>
+            )}
             <button
               className="icon-button fullscreen-button"
               onClick={() => articleContentRef.current && toggleFullscreen(articleContentRef.current)}
               title="Fullscreen"
             >
-              [ ]
+              Fullscreen 🖥️
             </button>
             <span className="article-item-date">
               {formatDate(article.created)}
