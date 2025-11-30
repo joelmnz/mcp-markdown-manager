@@ -77,12 +77,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
 
       if (response.ok) {
         const data = await response.json();
-        
-        // If public status has changed, update it
-        if (!isNew && isPublic !== undefined) {
-          await handlePublicToggle(isPublic, data.filename);
-        }
-        
+
         onNavigate(`/article/${data.filename.replace('.md', '')}`);
       } else {
         const errorData = await response.json();
@@ -94,10 +89,10 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       setSaving(false);
     }
   };
-  
+
   const handlePublicToggle = async (newIsPublic: boolean, articleFilename?: string) => {
     const targetFilename = articleFilename || `${filename}.md`;
-    
+
     try {
       const response = await fetch(`/api/articles/${targetFilename}/public`, {
         method: 'POST',
@@ -117,7 +112,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       setError('Failed to update public status');
     }
   };
-  
+
   // Generate slug from filename or title
   const getArticleSlug = (): string => {
     if (filename) {
@@ -128,11 +123,11 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
     // Fallback to 'untitled' if slug is empty
     return slug || 'untitled';
   };
-  
+
   const handleCopyPublicLink = () => {
     const slug = getArticleSlug();
     const publicUrl = `${window.location.origin}/public-article/${slug}`;
-    
+
     navigator.clipboard.writeText(publicUrl).then(() => {
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
@@ -140,7 +135,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       setError('Failed to copy link');
     });
   };
-  
+
   const navigateToPublicView = () => {
     const slug = getArticleSlug();
     onNavigate(`/public-article/${slug}`);
@@ -166,7 +161,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       if (errors && errors.length > 0) {
         // Try to apply fixes to the content
         const fixed = applyFixes(content, errors);
-        
+
         // Lint again to check if there are remaining errors
         const recheck = lint({
           strings: {
@@ -176,11 +171,11 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
             default: true
           }
         });
-        
+
         const remainingErrors = recheck.content;
         if (remainingErrors && remainingErrors.length > 0) {
           // Show remaining errors - don't update content
-          const errorMessages = remainingErrors.map((err: any) => 
+          const errorMessages = remainingErrors.map((err: any) =>
             `Line ${err.lineNumber}: ${err.ruleDescription} (${err.ruleNames.join('/')})`
           ).join('\n');
           setError(`Linting errors found (cannot auto-fix):\n${errorMessages}`);
@@ -211,13 +206,13 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         codeBlockStyle: 'fenced',
         bulletListMarker: '-'
       });
-      
+
       // Add GFM plugin for table support
       turndownService.use(gfm);
 
       // Convert HTML to Markdown
       const markdown = turndownService.turndown(content);
-      
+
       // Update content with converted markdown
       setContent(markdown);
       setError('');
@@ -235,28 +230,28 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
   return (
     <div className="page">
       <div className="article-header">
-        <button 
-          className="button button-secondary" 
+        <button
+          className="button button-secondary"
           onClick={() => onNavigate(isNew ? '/' : `/article/${filename}`)}
         >
           ← Cancel
         </button>
         <div className="article-actions">
-          <button 
+          <button
             className="button"
             onClick={handleConvertHtml}
             disabled={converting || !content.trim()}
           >
             {converting ? 'Converting...' : 'Convert Html'}
           </button>
-          <button 
+          <button
             className="button"
             onClick={handleLint}
             disabled={linting || !content.trim()}
           >
             {linting ? 'Linting...' : 'Lint'}
           </button>
-          <button 
+          <button
             className="button button-primary"
             onClick={handleSave}
             disabled={saving}
@@ -267,7 +262,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       </div>
 
       {error && <div className="error-message">{error}</div>}
-      
+
       {!isNew && (
         <div className="public-sharing-section">
           <label className="public-toggle-label">
@@ -277,19 +272,19 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
               onChange={(e) => handlePublicToggle(e.target.checked)}
               className="public-toggle-checkbox"
             />
-            <span className="public-toggle-text">Allow Public Sharing</span>
+            <span className="public-toggle-text" title="Allow public sharing of this article - No Save necessary">Allow Public Sharing</span>
           </label>
-          
+
           {isPublic && (
             <div className="share-link-pill">
-              <button 
+              <button
                 className="share-link-button"
                 onClick={navigateToPublicView}
                 title="View public page"
               >
                 🔗 Public Link
               </button>
-              <button 
+              <button
                 className="copy-link-button"
                 onClick={handleCopyPublicLink}
                 title="Copy link to clipboard"
