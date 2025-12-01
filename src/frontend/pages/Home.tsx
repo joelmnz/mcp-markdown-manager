@@ -28,8 +28,12 @@ export function Home({ token, onNavigate }: HomeProps) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMode, setSearchMode] = useState<'title' | 'semantic'>(() => {
-    const saved = localStorage.getItem('search_mode');
-    return saved === 'semantic' ? 'semantic' : 'title';
+    try {
+      const saved = localStorage.getItem('search_mode');
+      return saved === 'semantic' ? 'semantic' : 'title';
+    } catch {
+      return 'title';
+    }
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -137,7 +141,11 @@ export function Home({ token, onNavigate }: HomeProps) {
 
   const handleSearchModeChange = (mode: 'title' | 'semantic') => {
     setSearchMode(mode);
-    localStorage.setItem('search_mode', mode);
+    try {
+      localStorage.setItem('search_mode', mode);
+    } catch {
+      // Ignore localStorage errors
+    }
   };
 
   return (
