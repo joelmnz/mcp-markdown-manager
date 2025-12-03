@@ -27,7 +27,14 @@ export function Home({ token, onNavigate }: HomeProps) {
   const [articles, setArticles] = useState<Article[]>([]);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<'title' | 'semantic'>('semantic');
+  const [searchMode, setSearchMode] = useState<'title' | 'semantic'>(() => {
+    try {
+      const saved = localStorage.getItem('search_mode');
+      return saved === 'semantic' ? 'semantic' : 'title';
+    } catch {
+      return 'title';
+    }
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -132,6 +139,15 @@ export function Home({ token, onNavigate }: HomeProps) {
     setCurrentPage(1); // Reset to first page when changing page size
   };
 
+  const handleSearchModeChange = (mode: 'title' | 'semantic') => {
+    setSearchMode(mode);
+    try {
+      localStorage.setItem('search_mode', mode);
+    } catch {
+      // Ignore localStorage errors
+    }
+  };
+
   return (
     <div className="page">
       <div className="page-header">
@@ -160,7 +176,7 @@ export function Home({ token, onNavigate }: HomeProps) {
               type="radio"
               value="title"
               checked={searchMode === 'title'}
-              onChange={(e) => setSearchMode('title')}
+              onChange={() => handleSearchModeChange('title')}
             />
             Title Search
           </label>
@@ -169,7 +185,7 @@ export function Home({ token, onNavigate }: HomeProps) {
               type="radio"
               value="semantic"
               checked={searchMode === 'semantic'}
-              onChange={(e) => setSearchMode('semantic')}
+              onChange={() => handleSearchModeChange('semantic')}
             />
             Semantic Search
           </label>
