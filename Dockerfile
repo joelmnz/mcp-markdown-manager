@@ -38,7 +38,7 @@ COPY tsconfig.json ./
 COPY --from=frontend-builder /app/public ./public
 
 # Create non-root user with UNRAID compatible IDs (GID 100 already exists as 'users')
-RUN adduser --system --uid 99 --ingroup users bunuser
+RUN useradd --system --uid 99 --gid 100 --no-create-home bunuser
 
 # Create data directory with proper permissions
 RUN mkdir -p /data && \
