@@ -2,7 +2,7 @@
   "name": "MCP Markdown Manager",
   "short_name": "Articles",
   "description": "AI-powered article management system",
-  "id": "/",
+  "id": "/pwas/mcp-markdown-manager",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
