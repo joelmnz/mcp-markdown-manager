@@ -85,7 +85,7 @@ export async function deleteArticleChunks(filename: string): Promise<void> {
   console.log(`Deleted chunks for ${filename}`);
 }
 
-// Deduplicate search results by filename, keeping the best-scoring chunk per article
+// Deduplicate search results by article filename, keeping the best-scoring chunk per article
 function deduplicateByArticle(results: SearchResult[]): SearchResult[] {
   const bestByFilename = new Map<string, SearchResult>();
   
@@ -136,8 +136,9 @@ export async function semanticSearch(query: string, k: number = 5): Promise<Sear
   // Sort by score (descending)
   results.sort((a, b) => b.score - a.score);
   
-  // Deduplicate by article, keeping best score per article
-  // Since results are already sorted, deduplication preserves the order
+  // Deduplicate by article, keeping the highest-scoring chunk per article
+  // Since results are pre-sorted by score, the first occurrence of each filename
+  // will be the best match for that article. Map maintains insertion order.
   const uniqueResults = deduplicateByArticle(results);
   
   // Return top k unique articles (already sorted by score)
