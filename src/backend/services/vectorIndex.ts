@@ -137,10 +137,10 @@ export async function semanticSearch(query: string, k: number = 5): Promise<Sear
   results.sort((a, b) => b.score - a.score);
   
   // Deduplicate by article, keeping best score per article
+  // Since results are already sorted, deduplication preserves the order
   const uniqueResults = deduplicateByArticle(results);
   
-  // Sort again and return top k
-  uniqueResults.sort((a, b) => b.score - a.score);
+  // Return top k unique articles (already sorted by score)
   return uniqueResults.slice(0, k);
 }
 
