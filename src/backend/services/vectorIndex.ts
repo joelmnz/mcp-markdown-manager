@@ -85,6 +85,22 @@ export async function deleteArticleChunks(filename: string): Promise<void> {
   console.log(`Deleted chunks for ${filename}`);
 }
 
+// Deduplicate search results by article filename, keeping the best-scoring chunk per article
+function deduplicateByArticle(results: SearchResult[]): SearchResult[] {
+  const bestByFilename = new Map<string, SearchResult>();
+  
+  for (const result of results) {
+    const filename = result.chunk.filename;
+    const existing = bestByFilename.get(filename);
+    
+    if (!existing || result.score > existing.score) {
+      bestByFilename.set(filename, result);
+    }
+  }
+  
+  return Array.from(bestByFilename.values());
+}
+
 // Perform semantic search
 export async function semanticSearch(query: string, k: number = 5): Promise<SearchResult[]> {
   const allChunks = await loadIndex();
@@ -117,16 +133,24 @@ export async function semanticSearch(query: string, k: number = 5): Promise<Sear
     };
   });
   
-  // Sort by score (descending) and return top k
+  // Sort by score (descending)
   results.sort((a, b) => b.score - a.score);
-  return results.slice(0, k);
+  
+  // Deduplicate by article, keeping the highest-scoring chunk per article
+  // Since results are pre-sorted by score, the first occurrence of each filename
+  // will be the best match for that article. Map maintains insertion order.
+  const uniqueResults = deduplicateByArticle(results);
+  
+  // Return top k unique articles (already sorted by score)
+  return uniqueResults.slice(0, k);
 }
 
 // Hybrid search combining title and semantic search
 export async function hybridSearch(query: string, k: number = 5): Promise<SearchResult[]> {
   const { searchArticles } = await import('./articles');
   
-  // Get semantic search results
+  // Get semantic search results (already deduplicated)
+  // Request more results since we'll be boosting and re-ranking
   const semanticResults = await semanticSearch(query, k * 2);
   
   // Get title search results
@@ -152,7 +176,7 @@ export async function hybridSearch(query: string, k: number = 5): Promise<Search
   // Re-sort by boosted scores
   boostedResults.sort((a, b) => b.score - a.score);
   
-  // Return top k results
+  // Return top k results (already unique per article from semanticSearch)
   return boostedResults.slice(0, k);
 }
 
