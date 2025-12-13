@@ -1,30 +1,82 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:pg16}
+    container_name: ${POSTGRES_CONTAINER_NAME:-mcp-markdown-postgres}
+    environment:
+      - POSTGRES_DB=${DB_NAME:-article_manager}
+      - POSTGRES_USER=${DB_USER:-article_user}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=${POSTGRES_INITDB_ARGS:---auth-host=scram-sha-256}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres-init:/docker-entrypoint-initdb.d
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    restart: ${RESTART_POLICY:-unless-stopped}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-article_user} -d ${DB_NAME:-article_manager}"]
+      interval: ${HEALTH_CHECK_INTERVAL:-10s}
+      timeout: ${HEALTH_CHECK_TIMEOUT:-5s}
+      retries: ${HEALTH_CHECK_RETRIES:-5}
+    command: >
+      postgres
+      -c shared_preload_libraries=vector
+      -c max_connections=${DB_MAX_CONNECTIONS:-100}
+      -c shared_buffers=${DB_SHARED_BUFFERS:-256MB}
+      -c effective_cache_size=${DB_EFFECTIVE_CACHE_SIZE:-1GB}
+      -c maintenance_work_mem=${DB_MAINTENANCE_WORK_MEM:-64MB}
+      -c checkpoint_completion_target=${DB_CHECKPOINT_COMPLETION_TARGET:-0.9}
+      -c wal_buffers=${DB_WAL_BUFFERS:-16MB}
+      -c default_statistics_target=${DB_DEFAULT_STATISTICS_TARGET:-100}
+
   article-manager:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/joelmnz/mcp-markdown-manager:latest
-    container_name: mcp-markdown-manager
+    image: ${APP_IMAGE:-ghcr.io/joelmnz/mcp-markdown-manager:latest}
+    container_name: ${APP_CONTAINER_NAME:-mcp-markdown-manager}
     ports:
-      - "5000:5000"
+      - "${PORT:-5000}:${INTERNAL_PORT:-5000}"
     environment:
       - AUTH_TOKEN=${AUTH_TOKEN}
-      - DATA_DIR=/data
-      - PORT=5000
-      - NODE_ENV=production
-      - MCP_SERVER_ENABLED=true
+      - DATA_DIR=${DATA_DIR:-/data}
+      - PORT=${INTERNAL_PORT:-5000}
+      - NODE_ENV=${NODE_ENV:-production}
+      - MCP_SERVER_ENABLED=${MCP_SERVER_ENABLED:-true}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_INTERNAL_PORT:-5432}
+      - DB_NAME=${DB_NAME:-article_manager}
+      - DB_USER=${DB_USER:-article_user}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SSL=${DB_SSL:-false}
+      - DB_MAX_CONNECTIONS=${APP_DB_MAX_CONNECTIONS:-20}
+      - DB_IDLE_TIMEOUT=${DB_IDLE_TIMEOUT:-30000}
+      - DB_CONNECTION_TIMEOUT=${DB_CONNECTION_TIMEOUT:-2000}
+      - DB_HEALTH_CHECK_INTERVAL=${DB_HEALTH_CHECK_INTERVAL:-30000}
+      - DB_CONSTRAINT_REPAIR_ENABLED=${DB_CONSTRAINT_REPAIR_ENABLED:-true}
+      # Optional semantic search configuration
+      - SEMANTIC_SEARCH_ENABLED=${SEMANTIC_SEARCH_ENABLED:-false}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-ollama}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-nomic-embed-text}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     volumes:
-      - ./data:/data
-    restart: unless-stopped
+      - ${HOST_DATA_DIR:-./data}:${DATA_DIR:-/data}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: ${RESTART_POLICY:-unless-stopped}
     healthcheck:
-      test: ["CMD", "bun", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:${INTERNAL_PORT:-5000}/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: ${APP_HEALTH_CHECK_INTERVAL:-30s}
+      timeout: ${APP_HEALTH_CHECK_TIMEOUT:-3s}
+      retries: ${APP_HEALTH_CHECK_RETRIES:-3}
+      start_period: ${APP_HEALTH_CHECK_START_PERIOD:-10s}
 
 volumes:
   data:
+    driver: local
+  postgres_data:
     driver: local

@@ -4,7 +4,7 @@ inclusion: always
 
 # MCP Markdown Manager - Product Overview
 
-A full-stack TypeScript monolithic markdown article management system designed for AI agents to save and manage research content. This self-hosted single-user POC system handles hundreds of markdown articles with multiple interfaces.
+A full-stack TypeScript monolithic markdown article management system designed for AI agents to save and manage research content. This self-hosted single-user system handles hundreds of markdown articles with multiple interfaces.
 
 ## Core Features
 - **Markdown Articles**: File-based storage with YAML frontmatter

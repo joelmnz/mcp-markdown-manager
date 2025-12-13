@@ -1,6 +1,8 @@
 import { handleApiRequest } from './routes/api';
 import { handleMCPPostRequest, handleMCPGetRequest, handleMCPDeleteRequest } from './mcp/server';
 import { existsSync, mkdirSync } from 'fs';
+import { databaseInit } from './services/databaseInit.js';
+import { databaseHealthService } from './services/databaseHealth.js';
 
 const PORT = parseInt(process.env.PORT || '5000');
 const DATA_DIR = process.env.DATA_DIR || '/data';
@@ -11,6 +13,51 @@ if (!existsSync(DATA_DIR)) {
   mkdirSync(DATA_DIR, { recursive: true });
   console.log(`Created data directory: ${DATA_DIR}`);
 }
+
+// Initialize database and perform health checks
+async function initializeDatabase() {
+  try {
+    console.log('🔄 Initializing database connection...');
+    await databaseInit.initialize();
+    console.log('✅ Database connection established');
+    
+    console.log('🔄 Performing database health check...');
+    const healthCheck = await databaseHealthService.performHealthCheck();
+    
+    if (healthCheck.healthy) {
+      console.log('✅ Database health check passed');
+    } else {
+      console.warn('⚠️  Database health check found issues:');
+      healthCheck.details.issues.forEach(issue => {
+        console.warn(`   - ${issue}`);
+      });
+      
+      // Attempt to repair constraints if there are issues
+      if (!healthCheck.details.constraints) {
+        console.log('🔄 Attempting to repair database constraints...');
+        const repairResult = await databaseHealthService.validateAndRepairConstraints();
+        
+        if (repairResult.success) {
+          console.log('✅ Database constraints repaired successfully');
+          repairResult.repaired.forEach(repair => {
+            console.log(`   - ${repair}`);
+          });
+        } else {
+          console.warn('⚠️  Some database constraints could not be repaired:');
+          repairResult.remaining.forEach(issue => {
+            console.warn(`   - ${issue}`);
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error('❌ Database initialization failed:', error);
+    console.error('   The server will continue but database features may not work properly');
+  }
+}
+
+// Initialize database before starting server
+await initializeDatabase();
 
 const server = Bun.serve({
   port: PORT,

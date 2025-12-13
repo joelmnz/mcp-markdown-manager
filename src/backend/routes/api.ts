@@ -15,6 +15,7 @@ import {
   deleteArticleVersions
 } from '../services/articles';
 import { semanticSearch, hybridSearch, getDetailedIndexStats, rebuildIndex, indexUnindexedArticles } from '../services/vectorIndex';
+import { databaseHealthService } from '../services/databaseHealth.js';
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 
@@ -24,9 +25,49 @@ export async function handleApiRequest(request: Request): Promise<Response> {
   
   // Health check endpoint (no auth required)
   if (path === '/health') {
-    return new Response(JSON.stringify({ status: 'ok' }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    try {
+      const healthCheck = await databaseHealthService.performHealthCheck();
+      const stats = await databaseHealthService.getDatabaseStats();
+      
+      return new Response(JSON.stringify({
+        status: healthCheck.healthy ? 'ok' : 'degraded',
+        timestamp: new Date().toISOString(),
+        database: {
+          healthy: healthCheck.healthy,
+          connection: healthCheck.details.connection,
+          schema: healthCheck.details.schema,
+          constraints: healthCheck.details.constraints,
+          performance: healthCheck.details.performance,
+          issues: healthCheck.details.issues
+        },
+        stats: stats,
+        services: {
+          semanticSearch: SEMANTIC_SEARCH_ENABLED,
+          mcpServer: process.env.MCP_SERVER_ENABLED?.toLowerCase() === 'true'
+        }
+      }), {
+        status: healthCheck.healthy ? 200 : 503,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } catch (error) {
+      console.error('Health check error:', error);
+      return new Response(JSON.stringify({
+        status: 'error',
+        timestamp: new Date().toISOString(),
+        error: error instanceof Error ? error.message : 'Health check failed',
+        database: {
+          healthy: false,
+          connection: false,
+          schema: false,
+          constraints: false,
+          performance: false,
+          issues: ['Health check failed']
+        }
+      }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
   }
   
   // Public article endpoint (no auth required)
