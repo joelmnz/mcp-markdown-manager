@@ -1,79 +1,100 @@
 # Article Manager Deployment Guide
 
-This guide covers the complete deployment process for the Article Manager with PostgreSQL database backend, including backup and restore procedures.
+This guide covers the simplified deployment process for the Article Manager with PostgreSQL database backend.
 
 ## Table of Contents
 
-1. [Prerequisites](#prerequisites)
-2. [Environment Configuration](#environment-configuration)
-3. [Development Deployment](#development-deployment)
-4. [Production Deployment](#production-deployment)
-5. [Database Management](#database-management)
-6. [Backup and Restore](#backup-and-restore)
-7. [Monitoring and Maintenance](#monitoring-and-maintenance)
-8. [Troubleshooting](#troubleshooting)
+1. [Quick Start](#quick-start)
+2. [Prerequisites](#prerequisites)
+3. [Environment Configuration](#environment-configuration)
+4. [Development Deployment](#development-deployment)
+5. [Production Deployment](#production-deployment)
+6. [Database Management](#database-management)
+7. [Troubleshooting](#troubleshooting)
+
+## Quick Start
+
+For the fastest setup, you only need two environment variables:
+
+1. **Clone and Setup**:
+   ```bash
+   git clone <repository-url>
+   cd article-manager
+   cp .env.example .env
+   ```
+
+2. **Configure Essential Variables**:
+   ```bash
+   # Edit .env file with only these two required variables:
+   AUTH_TOKEN=your-secure-token-here
+   DB_PASSWORD=your-secure-password-here
+   ```
+
+3. **Start Application**:
+   ```bash
+   docker-compose up -d
+   ```
+
+4. **Access Application**:
+   - Web UI: http://localhost:5000
+   - Health Check: http://localhost:5000/health
+
+That's it! The application will start with sensible defaults for all other settings.
 
 ## Prerequisites
 
 ### Required Software
 
 - **Docker & Docker Compose**: For containerized deployment
-- **Bun**: For local development and build processes
-- **PostgreSQL Client Tools**: For database operations (pg_dump, pg_restore, psql)
+- **Bun**: For local development (optional)
 - **Git**: For source code management
 
 ### System Requirements
 
-**Minimum (Development):**
-- 2 CPU cores
-- 4 GB RAM
+**Minimum:**
+- 1 CPU core
+- 2 GB RAM
 - 10 GB disk space
 
 **Recommended (Production):**
-- 1+ CPU cores
-- 2+ GB RAM
+- 2+ CPU cores
+- 4+ GB RAM
 - 50+ GB disk space (depending on data volume)
-- SSD storage for database
 
 ## Environment Configuration
 
-### Required Environment Variables
+### Essential Variables (Required)
 
-Create a `.env` file in the project root:
+Only two variables are required for basic setup:
 
 ```bash
-# Authentication
+# Authentication token for all interfaces
 AUTH_TOKEN=your-secure-auth-token-here
 
-# Database Configuration
-DB_PASSWORD=your-secure-database-password
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=article_manager
-DB_USER=article_user
-DB_SSL=false
+# Database password
+DB_PASSWORD=your-secure-database-password-here
+```
 
-# Application Configuration
-PORT=5000
-NODE_ENV=production
-MCP_SERVER_ENABLED=true
-DATA_DIR=/data
+### Optional Variables
 
-# Database Pool Settings (Production)
-DB_MAX_CONNECTIONS=50
-DB_IDLE_TIMEOUT=60000
-DB_CONNECTION_TIMEOUT=5000
-DB_HEALTH_CHECK_INTERVAL=60000
-DB_CONSTRAINT_REPAIR_ENABLED=true
+All other settings have sensible defaults. Uncomment and modify in `.env` if needed:
 
-# Backup Configuration
-BACKUP_DIR=./backups
-RETENTION_DAYS=30
-COMPRESS_BACKUPS=true
-BACKUP_PREFIX=article-manager
+```bash
+# Application settings (defaults shown)
+# PORT=5000
+# NODE_ENV=production
+# MCP_SERVER_ENABLED=true
 
-# Optional: Production Data Path
-POSTGRES_DATA_PATH=./postgres-data
+# Database settings (defaults work for Docker setup)
+# DB_HOST=postgres
+# DB_PORT=5432
+# DB_NAME=article_manager
+# DB_USER=article_user
+
+# Semantic search (disabled by default)
+# SEMANTIC_SEARCH_ENABLED=false
+# EMBEDDING_PROVIDER=ollama
+# OLLAMA_BASE_URL=http://host.docker.internal:11434
 ```
 
 ### Security Considerations
@@ -81,40 +102,30 @@ POSTGRES_DATA_PATH=./postgres-data
 - **AUTH_TOKEN**: Use a strong, randomly generated token (minimum 32 characters)
 - **DB_PASSWORD**: Use a complex password with mixed case, numbers, and symbols
 - **File Permissions**: Ensure `.env` file has restricted permissions (600)
-- **Network Security**: In production, avoid exposing database ports externally
 
 ## Development Deployment
 
-### Quick Start
+### Local Development (without Docker)
 
-1. **Clone and Setup**:
+1. **Install Dependencies**:
    ```bash
-   git clone <repository-url>
-   cd article-manager
    bun install
    ```
 
-2. **Configure Environment**:
+2. **Start Database Only**:
    ```bash
-   cp .env.example .env
-   # Edit .env with your configuration
+   docker-compose up -d postgres
    ```
 
-3. **Start Development Environment**:
+3. **Initialize Database**:
    ```bash
-   # Start database only
-   docker-compose up -d postgres
-   
-   # Initialize database
    bun run db:init
-   
-   # Start application in development mode
+   ```
+
+4. **Start Development Servers**:
+   ```bash
    bun run dev
    ```
-
-4. **Access Application**:
-   - Web UI: http://localhost:5000
-   - Health Check: http://localhost:5000/health
 
 ### Development Commands
 
@@ -122,88 +133,53 @@ POSTGRES_DATA_PATH=./postgres-data
 # Database operations
 bun run db:init          # Initialize database schema
 bun run db:health        # Check database health
-bun run db:info          # Show database information
 bun run db:backup        # Create manual backup
-bun run db:restore <file> # Restore from backup
 
 # Application
 bun run dev              # Start development servers
 bun run build            # Build frontend
 bun run typecheck        # Type checking
-
-# Import existing data
-bun run import import ./data
 ```
 
 ## Production Deployment
 
-### Automated Deployment (Recommended)
+### Simple Production Deployment
 
-**Linux/macOS**:
-```bash
-# Set environment variables
-export AUTH_TOKEN="your-secure-token"
-export DB_PASSWORD="your-secure-password"
-
-# Run deployment script
-bun run deploy
-```
-
-**Windows**:
-```powershell
-# Set environment variables
-$env:AUTH_TOKEN = "your-secure-token"
-$env:DB_PASSWORD = "your-secure-password"
-
-# Run deployment script
-bun run deploy:windows
-```
-
-### Manual Production Deployment
-
-1. **Prepare Environment**:
+1. **Set Environment Variables**:
    ```bash
-   # Build application
-   bun install --frozen-lockfile
-   bun run build
-   
-   # Create required directories
-   mkdir -p backups logs postgres-data
+   # Create .env file with essential variables
+   echo "AUTH_TOKEN=your-secure-token-here" > .env
+   echo "DB_PASSWORD=your-secure-password-here" >> .env
    ```
 
-2. **Start Production Services**:
+2. **Start All Services**:
    ```bash
-   # Production deployment with optimized settings
+   docker-compose up -d
+   ```
+
+3. **Verify Deployment**:
+   ```bash
+   # Check service status
+   docker-compose ps
+   
+   # Check application health
+   curl http://localhost:5000/health
+   ```
+
+### Advanced Production Setup
+
+For production environments requiring custom configuration:
+
+1. **Copy and Customize Environment**:
+   ```bash
+   cp .env.example .env
+   # Uncomment and modify advanced settings as needed
+   ```
+
+2. **Use Production Compose File** (if available):
+   ```bash
    docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
    ```
-
-3. **Initialize Database**:
-   ```bash
-   # Wait for database to be ready
-   docker-compose exec postgres pg_isready -U article_user -d article_manager
-   
-   # Initialize schema
-   bun run db:init
-   
-   # Verify health
-   bun run db:health
-   ```
-
-4. **Import Existing Data** (if migrating):
-   ```bash
-   bun run import import ./data
-   ```
-
-### Production Configuration Files
-
-The deployment uses multiple Docker Compose files:
-
-- **docker-compose.yml**: Base configuration
-- **docker-compose.prod.yml**: Production overrides with:
-  - Optimized PostgreSQL settings
-  - Resource limits and security options
-  - Automated backup service
-  - Optional monitoring
 
 ## Database Management
 
