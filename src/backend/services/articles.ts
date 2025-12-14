@@ -2,6 +2,7 @@ import { databaseArticleService } from './databaseArticles.js';
 import { databaseVersionHistoryService } from './databaseVersionHistory.js';
 import { chunkMarkdown } from './chunking.js';
 import { upsertArticleChunks, deleteArticleChunks } from './vectorIndex.js';
+import { embeddingQueueService } from './embeddingQueue.js';
 
 // Maintain backward compatibility with existing interfaces
 export interface Article {
@@ -33,7 +34,48 @@ export interface VersionManifest {
   versions: VersionMetadata[];
 }
 
+// Options interface for article operations
+export interface ArticleServiceOptions {
+  skipEmbedding?: boolean;
+  embeddingPriority?: 'high' | 'normal' | 'low';
+}
+
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
+
+// Helper function to safely handle embedding operations without affecting article CRUD
+async function safelyHandleEmbeddingOperation(
+  operation: () => Promise<void>,
+  operationName: string
+): Promise<void> {
+  try {
+    // Check if embedding queue service is available
+    if (!embeddingQueueService) {
+      console.warn(`Embedding queue service not available for ${operationName}`);
+      return;
+    }
+    
+    await operation();
+  } catch (error) {
+    // Log the error but don't throw it to ensure embedding failures don't affect article operations
+    console.error(`Error in ${operationName}:`, error);
+    
+    // In production, you might want to send this to a monitoring service
+    if (process.env.NODE_ENV === 'production') {
+      // Could integrate with monitoring service here
+      console.error(`Production embedding error in ${operationName}:`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined,
+        timestamp: new Date().toISOString(),
+        operation: operationName
+      });
+    }
+    
+    // Additional safety: if this is a database connection error, we should be extra careful
+    if (error instanceof Error && error.message.includes('database')) {
+      console.warn(`Database-related embedding error in ${operationName}, article operation will continue normally`);
+    }
+  }
+}
 
 // Helper functions for backward compatibility
 
@@ -147,32 +189,46 @@ export async function readArticle(filename: string): Promise<Article | null> {
 }
 
 // Create a new article
-export async function createArticle(title: string, content: string, message?: string): Promise<Article> {
+export async function createArticle(title: string, content: string, message?: string, options?: ArticleServiceOptions): Promise<Article> {
   const cleanedContent = cleanMarkdownContent(content);
   
-  // Create article in database
+  // Create article in database first (ensures article persistence precedes task queuing)
   const dbArticle = await databaseArticleService.createArticle(title, cleanedContent, '', message);
   
   // Create initial version snapshot
   const filename = slugToFilename(dbArticle.slug);
   await createVersionSnapshot(filename, title, cleanedContent, '', message || 'Initial version');
   
-  // Index the article for semantic search if enabled
-  if (SEMANTIC_SEARCH_ENABLED) {
-    try {
-      const chunks = chunkMarkdown(filename, title, cleanedContent, dbArticle.created, dbArticle.created);
-      await upsertArticleChunks(filename, chunks);
-    } catch (error) {
-      console.error('Error indexing article:', error);
-      // Don't fail the article creation if indexing fails
-    }
+  // Handle embedding generation with failure isolation
+  if (SEMANTIC_SEARCH_ENABLED && !options?.skipEmbedding) {
+    await safelyHandleEmbeddingOperation(async () => {
+      // Get article ID for task queuing
+      const articleId = await databaseArticleService.getArticleId(dbArticle.slug);
+      
+      if (articleId) {
+        // Queue embedding task for background processing
+        await embeddingQueueService.enqueueTask({
+          articleId,
+          slug: dbArticle.slug,
+          operation: 'create',
+          priority: options?.embeddingPriority || 'normal',
+          maxAttempts: 3,
+          scheduledAt: new Date(),
+          metadata: {
+            filename,
+            title,
+            contentLength: cleanedContent.length
+          }
+        });
+      }
+    }, 'article creation embedding task queuing');
   }
   
   return convertToLegacyArticle(dbArticle);
 }
 
 // Update an existing article
-export async function updateArticle(filename: string, title: string, content: string, message?: string): Promise<Article> {
+export async function updateArticle(filename: string, title: string, content: string, message?: string, options?: ArticleServiceOptions): Promise<Article> {
   const cleanedContent = cleanMarkdownContent(content);
   const slug = filenameToSlug(filename);
   
@@ -182,48 +238,93 @@ export async function updateArticle(filename: string, title: string, content: st
     throw new Error(`Article ${filename} not found`);
   }
   
-  // Update article in database (this handles slug changes automatically)
+  // Update article in database first (this handles slug changes automatically)
   const updatedArticle = await databaseArticleService.updateArticle(slug, title, cleanedContent, existing.folder, message);
   
   // Create version snapshot
   const newFilename = slugToFilename(updatedArticle.slug);
   await createVersionSnapshot(newFilename, title, cleanedContent, existing.folder, message || 'Updated article');
   
-  // Handle search index updates
-  if (SEMANTIC_SEARCH_ENABLED) {
-    try {
-      // If slug changed, delete old index entries
-      if (filename !== newFilename) {
-        await deleteArticleChunks(filename);
-      }
+  // Handle embedding updates with failure isolation
+  if (SEMANTIC_SEARCH_ENABLED && !options?.skipEmbedding) {
+    await safelyHandleEmbeddingOperation(async () => {
+      // Get article ID for task queuing
+      const articleId = await databaseArticleService.getArticleId(updatedArticle.slug);
       
-      // Add/update index entries with new filename
-      const chunks = chunkMarkdown(newFilename, title, cleanedContent, existing.created, updatedArticle.created);
-      await upsertArticleChunks(newFilename, chunks);
-    } catch (error) {
-      console.error('Error re-indexing article:', error);
-      // Don't fail the article update if indexing fails
-    }
+      if (articleId) {
+        // If slug changed, queue a delete task for the old slug first
+        if (filename !== newFilename) {
+          const oldSlug = filenameToSlug(filename);
+          await embeddingQueueService.enqueueTask({
+            articleId,
+            slug: oldSlug,
+            operation: 'delete',
+            priority: options?.embeddingPriority || 'normal',
+            maxAttempts: 3,
+            scheduledAt: new Date(),
+            metadata: {
+              filename,
+              reason: 'slug_change_cleanup'
+            }
+          });
+        }
+        
+        // Queue embedding update task for background processing
+        await embeddingQueueService.enqueueTask({
+          articleId,
+          slug: updatedArticle.slug,
+          operation: 'update',
+          priority: options?.embeddingPriority || 'normal',
+          maxAttempts: 3,
+          scheduledAt: new Date(),
+          metadata: {
+            filename: newFilename,
+            title,
+            contentLength: cleanedContent.length,
+            slugChanged: filename !== newFilename
+          }
+        });
+      }
+    }, 'article update embedding task queuing');
   }
   
   return convertToLegacyArticle(updatedArticle);
 }
 
 // Delete an article
-export async function deleteArticle(filename: string): Promise<void> {
+export async function deleteArticle(filename: string, options?: ArticleServiceOptions): Promise<void> {
   const slug = filenameToSlug(filename);
   
-  // Delete from database (this will cascade to version history and embeddings)
+  // Get article ID before deletion for embedding cleanup
+  let articleId: number | null = null;
+  if (SEMANTIC_SEARCH_ENABLED && !options?.skipEmbedding) {
+    try {
+      articleId = await databaseArticleService.getArticleId(slug);
+    } catch (error) {
+      console.error('Error getting article ID for embedding cleanup:', error);
+      // Continue with deletion even if we can't get the ID
+    }
+  }
+  
+  // Delete from database first (this will cascade to version history and embeddings)
   await databaseArticleService.deleteArticle(slug);
   
-  // Remove from vector index if semantic search is enabled
-  if (SEMANTIC_SEARCH_ENABLED) {
-    try {
-      await deleteArticleChunks(filename);
-    } catch (error) {
-      console.error('Error removing article from index:', error);
-      // Don't fail the deletion if index removal fails
-    }
+  // Queue embedding cleanup task with failure isolation
+  if (SEMANTIC_SEARCH_ENABLED && !options?.skipEmbedding && articleId) {
+    await safelyHandleEmbeddingOperation(async () => {
+      await embeddingQueueService.enqueueTask({
+        articleId,
+        slug,
+        operation: 'delete',
+        priority: options?.embeddingPriority || 'normal',
+        maxAttempts: 3,
+        scheduledAt: new Date(),
+        metadata: {
+          filename,
+          reason: 'article_deletion'
+        }
+      });
+    }, 'article deletion embedding cleanup task queuing');
   }
 }
 
@@ -280,7 +381,7 @@ export async function getArticleVersion(filename: string, versionId: string): Pr
 }
 
 // Restore an article to a specific version
-export async function restoreArticleVersion(filename: string, versionId: string, message?: string): Promise<Article> {
+export async function restoreArticleVersion(filename: string, versionId: string, message?: string, options?: ArticleServiceOptions): Promise<Article> {
   const slug = filenameToSlug(filename);
   const articleId = await databaseArticleService.getArticleId(slug);
   
@@ -301,15 +402,25 @@ export async function restoreArticleVersion(filename: string, versionId: string,
     message || `Restore to ${versionId}`
   );
   
-  // Re-index the article for semantic search if enabled
-  if (SEMANTIC_SEARCH_ENABLED) {
-    try {
-      const chunks = chunkMarkdown(filename, restoredArticle.title, restoredArticle.content, restoredArticle.created, restoredArticle.created);
-      await upsertArticleChunks(filename, chunks);
-    } catch (error) {
-      console.error('Error re-indexing article after restore:', error);
-      // Don't fail the restore if indexing fails
-    }
+  // Queue embedding update task with failure isolation
+  if (SEMANTIC_SEARCH_ENABLED && !options?.skipEmbedding) {
+    await safelyHandleEmbeddingOperation(async () => {
+      await embeddingQueueService.enqueueTask({
+        articleId,
+        slug: restoredArticle.slug,
+        operation: 'update',
+        priority: options?.embeddingPriority || 'normal',
+        maxAttempts: 3,
+        scheduledAt: new Date(),
+        metadata: {
+          filename,
+          title: restoredArticle.title,
+          contentLength: restoredArticle.content.length,
+          reason: 'version_restore',
+          restoredFromVersion: versionId
+        }
+      });
+    }, 'article version restore embedding task queuing');
   }
   
   return convertToLegacyArticle(restoredArticle);
@@ -337,5 +448,197 @@ export async function deleteArticleVersions(filename: string, versionIds?: strin
   
   if (numericVersionIds.length > 0) {
     await databaseVersionHistoryService.deleteVersions(articleId, numericVersionIds);
+  }
+}
+
+// Get embedding status for an article (for monitoring and debugging)
+export async function getArticleEmbeddingStatus(filename: string): Promise<{
+  hasEmbeddings: boolean;
+  pendingTasks: number;
+  failedTasks: number;
+  lastTaskStatus?: string;
+  lastError?: string;
+} | null> {
+  if (!SEMANTIC_SEARCH_ENABLED) {
+    return null;
+  }
+  
+  try {
+    const slug = filenameToSlug(filename);
+    const articleId = await databaseArticleService.getArticleId(slug);
+    
+    if (!articleId) {
+      return null;
+    }
+    
+    // Get embedding tasks for this article
+    const tasks = await embeddingQueueService.getTasksForArticle(articleId);
+    
+    const pendingTasks = tasks.filter(t => t.status === 'pending').length;
+    const failedTasks = tasks.filter(t => t.status === 'failed').length;
+    const lastTask = tasks[0]; // Most recent task
+    
+    return {
+      hasEmbeddings: tasks.some(t => t.status === 'completed'),
+      pendingTasks,
+      failedTasks,
+      lastTaskStatus: lastTask?.status,
+      lastError: lastTask?.errorMessage
+    };
+  } catch (error) {
+    console.error('Error getting article embedding status:', error);
+    return null;
+  }
+}
+
+// Retry failed embedding tasks for an article
+export async function retryArticleEmbedding(filename: string, priority: 'high' | 'normal' | 'low' = 'high'): Promise<boolean> {
+  if (!SEMANTIC_SEARCH_ENABLED) {
+    return false;
+  }
+  
+  try {
+    const slug = filenameToSlug(filename);
+    const articleId = await databaseArticleService.getArticleId(slug);
+    const article = await databaseArticleService.readArticle(slug);
+    
+    if (!articleId || !article) {
+      return false;
+    }
+    
+    // Queue a new embedding task with high priority
+    await embeddingQueueService.enqueueTask({
+      articleId,
+      slug: article.slug,
+      operation: 'update',
+      priority,
+      maxAttempts: 3,
+      scheduledAt: new Date(),
+      metadata: {
+        filename,
+        title: article.title,
+        contentLength: article.content.length,
+        reason: 'manual_retry'
+      }
+    });
+    
+    return true;
+  } catch (error) {
+    console.error('Error retrying article embedding:', error);
+    return false;
+  }
+}
+
+// Bulk embedding operations
+
+// Get articles that need embedding updates
+export async function getArticlesNeedingEmbedding(): Promise<Array<{
+  filename: string;
+  slug: string;
+  title: string;
+  reason: 'missing_embedding' | 'failed_embedding' | 'no_completed_task';
+  lastTaskStatus?: string;
+  lastError?: string;
+}>> {
+  if (!SEMANTIC_SEARCH_ENABLED) {
+    return [];
+  }
+  
+  try {
+    const articles = await embeddingQueueService.identifyArticlesNeedingEmbedding();
+    return articles.map(article => ({
+      filename: slugToFilename(article.slug),
+      slug: article.slug,
+      title: article.title,
+      reason: article.reason,
+      lastTaskStatus: article.lastTaskStatus,
+      lastError: article.lastError
+    }));
+  } catch (error) {
+    console.error('Error getting articles needing embedding:', error);
+    return [];
+  }
+}
+
+// Queue bulk embedding update for all articles that need it
+export async function queueBulkEmbeddingUpdate(
+  priority: 'high' | 'normal' | 'low' = 'normal',
+  progressCallback?: (progress: {
+    totalArticles: number;
+    processedArticles: number;
+    queuedTasks: number;
+    skippedArticles: number;
+    errors: string[];
+  }) => void
+): Promise<{
+  totalArticles: number;
+  queuedTasks: number;
+  skippedArticles: number;
+  errors: string[];
+  taskIds: string[];
+} | null> {
+  if (!SEMANTIC_SEARCH_ENABLED) {
+    return null;
+  }
+  
+  try {
+    return await embeddingQueueService.queueBulkEmbeddingUpdate(priority, progressCallback);
+  } catch (error) {
+    console.error('Error queuing bulk embedding update:', error);
+    return null;
+  }
+}
+
+// Get bulk operation summary
+export async function getBulkOperationSummary(operationId: string): Promise<{
+  operationId: string;
+  startedAt: Date;
+  completedAt?: Date;
+  status: 'running' | 'completed' | 'failed';
+  totalTasks: number;
+  completedTasks: number;
+  failedTasks: number;
+  pendingTasks: number;
+  processingTasks: number;
+  successRate: number;
+  averageProcessingTime?: number;
+  errors: string[];
+} | null> {
+  if (!SEMANTIC_SEARCH_ENABLED) {
+    return null;
+  }
+  
+  try {
+    return await embeddingQueueService.getBulkOperationSummary(operationId);
+  } catch (error) {
+    console.error('Error getting bulk operation summary:', error);
+    return null;
+  }
+}
+
+// List recent bulk operations
+export async function listRecentBulkOperations(limit: number = 10): Promise<Array<{
+  operationId: string;
+  startedAt: Date;
+  completedAt?: Date;
+  status: 'running' | 'completed' | 'failed';
+  totalTasks: number;
+  completedTasks: number;
+  failedTasks: number;
+  pendingTasks: number;
+  processingTasks: number;
+  successRate: number;
+  averageProcessingTime?: number;
+  errors: string[];
+}>> {
+  if (!SEMANTIC_SEARCH_ENABLED) {
+    return [];
+  }
+  
+  try {
+    return await embeddingQueueService.listRecentBulkOperations(limit);
+  } catch (error) {
+    console.error('Error listing recent bulk operations:', error);
+    return [];
   }
 }

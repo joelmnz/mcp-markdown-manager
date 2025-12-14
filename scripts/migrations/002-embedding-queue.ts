@@ -60,6 +60,66 @@ export const embeddingQueueMigration = {
     await database.query('CREATE INDEX IF NOT EXISTS idx_embedding_tasks_created_at ON embedding_tasks(created_at)');
     await database.query('CREATE INDEX IF NOT EXISTS idx_embedding_tasks_status ON embedding_tasks(status)');
 
+    console.log('  Creating embedding_audit_logs table...');
+    
+    // Create the audit log table for comprehensive logging
+    await database.query(`
+      CREATE TABLE IF NOT EXISTS embedding_audit_logs (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+        level VARCHAR(10) NOT NULL CHECK (level IN ('debug', 'info', 'warn', 'error')),
+        category VARCHAR(50) NOT NULL CHECK (category IN (
+          'task_lifecycle', 'worker_status', 'queue_operations', 
+          'performance', 'error_handling', 'bulk_operations'
+        )),
+        message TEXT NOT NULL,
+        task_id UUID,
+        article_id INTEGER,
+        operation_id VARCHAR(255),
+        metadata JSONB,
+        duration NUMERIC,
+        error TEXT,
+        stack_trace TEXT
+      )
+    `);
+
+    console.log('  Creating indexes for audit log table...');
+    
+    // Create performance indexes for the audit log table
+    await database.query('CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON embedding_audit_logs(timestamp)');
+    await database.query('CREATE INDEX IF NOT EXISTS idx_audit_logs_level ON embedding_audit_logs(level)');
+    await database.query('CREATE INDEX IF NOT EXISTS idx_audit_logs_category ON embedding_audit_logs(category)');
+    await database.query('CREATE INDEX IF NOT EXISTS idx_audit_logs_task_id ON embedding_audit_logs(task_id)');
+    await database.query('CREATE INDEX IF NOT EXISTS idx_audit_logs_article_id ON embedding_audit_logs(article_id)');
+    await database.query('CREATE INDEX IF NOT EXISTS idx_audit_logs_operation_id ON embedding_audit_logs(operation_id)');
+
+    console.log('  Creating performance_metrics table...');
+    
+    // Create the performance metrics table for tracking system performance
+    await database.query(`
+      CREATE TABLE IF NOT EXISTS performance_metrics (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+        metric_type VARCHAR(50) NOT NULL,
+        value NUMERIC NOT NULL,
+        unit VARCHAR(20) NOT NULL,
+        task_id UUID,
+        article_id INTEGER,
+        operation_id VARCHAR(255),
+        metadata JSONB
+      )
+    `);
+
+    console.log('  Creating indexes for performance metrics table...');
+    
+    // Create performance indexes for the metrics table
+    await database.query('CREATE INDEX IF NOT EXISTS idx_performance_metrics_timestamp ON performance_metrics(timestamp)');
+    await database.query('CREATE INDEX IF NOT EXISTS idx_performance_metrics_type ON performance_metrics(metric_type)');
+    await database.query('CREATE INDEX IF NOT EXISTS idx_performance_metrics_task_id ON performance_metrics(task_id)');
+    await database.query('CREATE INDEX IF NOT EXISTS idx_performance_metrics_article_id ON performance_metrics(article_id)');
+    await database.query('CREATE INDEX IF NOT EXISTS idx_performance_metrics_operation_id ON performance_metrics(operation_id)');
+    await database.query('CREATE INDEX IF NOT EXISTS idx_performance_metrics_type_timestamp ON performance_metrics(metric_type, timestamp)');
+
     console.log('  Inserting initial worker status record...');
     
     // Insert the initial worker status record (enforced as single row by constraint)
@@ -78,6 +138,8 @@ export const embeddingQueueMigration = {
     // Drop tables in reverse dependency order
     await database.query('DROP TABLE IF EXISTS embedding_tasks CASCADE');
     await database.query('DROP TABLE IF EXISTS embedding_worker_status CASCADE');
+    await database.query('DROP TABLE IF EXISTS embedding_audit_logs CASCADE');
+    await database.query('DROP TABLE IF EXISTS performance_metrics CASCADE');
     
     console.log('  Embedding queue rollback completed');
   }

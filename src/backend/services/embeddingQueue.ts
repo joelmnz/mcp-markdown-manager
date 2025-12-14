@@ -1,5 +1,7 @@
 import { database } from './database.js';
 import { DatabaseServiceError, DatabaseErrorType } from './databaseErrors.js';
+import { loggingService, LogLevel, LogCategory } from './logging.js';
+import { performanceMetricsService, MetricType } from './performanceMetrics.js';
 
 // EmbeddingTask interface as defined in the design document
 export interface EmbeddingTask {
@@ -38,6 +40,40 @@ export interface QueueHealth {
   issues: string[];
 }
 
+// Bulk operation progress interface
+export interface BulkOperationProgress {
+  totalArticles: number;
+  processedArticles: number;
+  queuedTasks: number;
+  skippedArticles: number;
+  errors: string[];
+}
+
+// Bulk operation result interface
+export interface BulkOperationResult {
+  totalArticles: number;
+  queuedTasks: number;
+  skippedArticles: number;
+  errors: string[];
+  taskIds: string[];
+}
+
+// Bulk operation summary interface
+export interface BulkOperationSummary {
+  operationId: string;
+  startedAt: Date;
+  completedAt?: Date;
+  status: 'running' | 'completed' | 'failed';
+  totalTasks: number;
+  completedTasks: number;
+  failedTasks: number;
+  pendingTasks: number;
+  processingTasks: number;
+  successRate: number;
+  averageProcessingTime?: number;
+  errors: string[];
+}
+
 // Queue Manager Service interface
 export interface QueueManager {
   enqueueTask(task: Omit<EmbeddingTask, 'id' | 'createdAt' | 'status' | 'attempts'>): Promise<string>;
@@ -58,6 +94,35 @@ export interface QueueManager {
       averageProcessingTime: number | null;
     };
   }>;
+  // Bulk operations
+  identifyArticlesNeedingEmbedding(): Promise<Array<{
+    articleId: number;
+    slug: string;
+    title: string;
+    reason: 'missing_embedding' | 'failed_embedding' | 'no_completed_task';
+    lastTaskStatus?: string;
+    lastError?: string;
+  }>>;
+  queueBulkEmbeddingUpdate(
+    priority?: 'high' | 'normal' | 'low',
+    progressCallback?: (progress: BulkOperationProgress) => void
+  ): Promise<BulkOperationResult>;
+  // Bulk operation reporting
+  getBulkOperationSummary(operationId: string): Promise<BulkOperationSummary | null>;
+  listRecentBulkOperations(limit?: number): Promise<BulkOperationSummary[]>;
+  getBulkOperationProgress(taskIds: string[]): Promise<{
+    total: number;
+    completed: number;
+    failed: number;
+    pending: number;
+    processing: number;
+    details: Array<{
+      taskId: string;
+      articleSlug: string;
+      status: string;
+      error?: string;
+    }>;
+  }>;
 }
 
 class EmbeddingQueueService implements QueueManager {
@@ -66,6 +131,8 @@ class EmbeddingQueueService implements QueueManager {
    * Add a new embedding task to the queue
    */
   async enqueueTask(task: Omit<EmbeddingTask, 'id' | 'createdAt' | 'status' | 'attempts'>): Promise<string> {
+    const startTime = Date.now();
+    
     try {
       const result = await database.query(`
         INSERT INTO embedding_tasks (
@@ -91,8 +158,38 @@ class EmbeddingQueueService implements QueueManager {
         );
       }
 
-      return result.rows[0].id;
+      const taskId = result.rows[0].id;
+      const duration = Date.now() - startTime;
+
+      // Log successful task enqueue
+      await loggingService.logQueueOperation('task_enqueued', {
+        taskId,
+        articleId: task.articleId,
+        duration,
+        metadata: {
+          operation: task.operation,
+          priority: task.priority,
+          slug: task.slug,
+          maxAttempts: task.maxAttempts
+        }
+      });
+
+      return taskId;
     } catch (error) {
+      const duration = Date.now() - startTime;
+      
+      // Log failed enqueue operation
+      await loggingService.logQueueOperation('task_enqueue_failed', {
+        articleId: task.articleId,
+        duration,
+        error: error instanceof Error ? error : new Error('Unknown error'),
+        metadata: {
+          operation: task.operation,
+          priority: task.priority,
+          slug: task.slug
+        }
+      });
+
       if (error instanceof DatabaseServiceError) {
         throw error;
       }
@@ -109,6 +206,8 @@ class EmbeddingQueueService implements QueueManager {
    * Get the next pending task from the queue (highest priority first, then FIFO)
    */
   async dequeueTask(): Promise<EmbeddingTask | null> {
+    const startTime = Date.now();
+    
     try {
       return await database.transaction(async (client) => {
         // Get the next task with row-level locking to prevent race conditions
@@ -131,6 +230,7 @@ class EmbeddingQueueService implements QueueManager {
         `);
 
         if (result.rows.length === 0) {
+          // No tasks available - this is normal, don't log
           return null;
         }
 
@@ -143,10 +243,35 @@ class EmbeddingQueueService implements QueueManager {
           WHERE id = $1
         `, [taskRow.id]);
 
+        const task = this.convertRowToTask(taskRow);
+        const duration = Date.now() - startTime;
+
+        // Log successful task dequeue
+        await loggingService.logQueueOperation('task_dequeued', {
+          taskId: task.id,
+          articleId: task.articleId,
+          duration,
+          metadata: {
+            operation: task.operation,
+            priority: task.priority,
+            slug: task.slug,
+            attempt: task.attempts + 1, // +1 because we just incremented it
+            waitTime: Date.now() - task.createdAt.getTime()
+          }
+        });
+
         // Convert database row to EmbeddingTask interface
-        return this.convertRowToTask(taskRow);
+        return task;
       });
     } catch (error) {
+      const duration = Date.now() - startTime;
+      
+      // Log failed dequeue operation
+      await loggingService.logQueueOperation('task_dequeue_failed', {
+        duration,
+        error: error instanceof Error ? error : new Error('Unknown error')
+      });
+
       if (error instanceof DatabaseServiceError) {
         throw error;
       }
@@ -566,6 +691,425 @@ class EmbeddingQueueService implements QueueManager {
         DatabaseErrorType.QUERY_ERROR,
         `Failed to get tasks for article: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'Unable to retrieve article tasks. Please try again.',
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  /**
+   * Identify articles that need embedding updates (missing or failed embeddings)
+   */
+  async identifyArticlesNeedingEmbedding(): Promise<Array<{
+    articleId: number;
+    slug: string;
+    title: string;
+    reason: 'missing_embedding' | 'failed_embedding' | 'no_completed_task';
+    lastTaskStatus?: string;
+    lastError?: string;
+  }>> {
+    try {
+      // Query to find articles that need embedding updates
+      const result = await database.query(`
+        WITH article_task_status AS (
+          SELECT 
+            a.id as article_id,
+            a.slug,
+            a.title,
+            et.status as last_task_status,
+            et.error_message as last_error,
+            et.created_at as last_task_created,
+            ROW_NUMBER() OVER (PARTITION BY a.id ORDER BY et.created_at DESC) as rn
+          FROM articles a
+          LEFT JOIN embedding_tasks et ON a.id = et.article_id
+        ),
+        article_embedding_status AS (
+          SELECT 
+            article_id,
+            slug,
+            title,
+            last_task_status,
+            last_error,
+            CASE 
+              WHEN last_task_status IS NULL THEN 'no_completed_task'
+              WHEN last_task_status = 'failed' THEN 'failed_embedding'
+              WHEN last_task_status IN ('pending', 'processing') THEN 'processing'
+              WHEN last_task_status = 'completed' THEN 'has_embedding'
+              ELSE 'unknown'
+            END as embedding_status
+          FROM article_task_status
+          WHERE rn = 1 OR rn IS NULL
+        )
+        SELECT 
+          article_id,
+          slug,
+          title,
+          embedding_status as reason,
+          last_task_status,
+          last_error
+        FROM article_embedding_status
+        WHERE embedding_status IN ('no_completed_task', 'failed_embedding')
+        ORDER BY article_id
+      `);
+
+      return result.rows.map(row => ({
+        articleId: row.article_id,
+        slug: row.slug,
+        title: row.title,
+        reason: row.reason as 'missing_embedding' | 'failed_embedding' | 'no_completed_task',
+        lastTaskStatus: row.last_task_status || undefined,
+        lastError: row.last_error || undefined
+      }));
+    } catch (error) {
+      throw new DatabaseServiceError(
+        DatabaseErrorType.QUERY_ERROR,
+        `Failed to identify articles needing embedding: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'Unable to identify articles that need embedding updates. Please try again.',
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  /**
+   * Queue bulk embedding update for all articles that need it
+   */
+  async queueBulkEmbeddingUpdate(
+    priority: 'high' | 'normal' | 'low' = 'normal',
+    progressCallback?: (progress: BulkOperationProgress) => void
+  ): Promise<BulkOperationResult> {
+    const startTime = Date.now();
+    const operationId = `bulk_${Date.now()}`;
+    
+    try {
+      // Log bulk operation start
+      await loggingService.logBulkOperation('started', operationId, {
+        metadata: { priority }
+      });
+
+      // Identify articles that need embedding updates
+      const articlesNeedingUpdate = await this.identifyArticlesNeedingEmbedding();
+      
+      const result: BulkOperationResult = {
+        totalArticles: articlesNeedingUpdate.length,
+        queuedTasks: 0,
+        skippedArticles: 0,
+        errors: [],
+        taskIds: []
+      };
+
+      // Initialize progress
+      const progress: BulkOperationProgress = {
+        totalArticles: articlesNeedingUpdate.length,
+        processedArticles: 0,
+        queuedTasks: 0,
+        skippedArticles: 0,
+        errors: []
+      };
+
+      // Report initial progress
+      if (progressCallback) {
+        progressCallback({ ...progress });
+      }
+
+      // Process each article
+      for (const article of articlesNeedingUpdate) {
+        try {
+          // Check if there's already a pending or processing task for this article
+          const existingTasks = await this.getTasksForArticle(article.articleId);
+          const hasPendingTask = existingTasks.some(task => 
+            task.status === 'pending' || task.status === 'processing'
+          );
+
+          if (hasPendingTask) {
+            // Skip if there's already a pending/processing task
+            result.skippedArticles++;
+            progress.skippedArticles++;
+            progress.processedArticles++;
+          } else {
+            // Queue new embedding task
+            const taskId = await this.enqueueTask({
+              articleId: article.articleId,
+              slug: article.slug,
+              operation: 'update',
+              priority,
+              maxAttempts: 3,
+              scheduledAt: new Date(),
+              metadata: {
+                title: article.title,
+                reason: 'bulk_update',
+                originalReason: article.reason,
+                bulkOperationId: operationId
+              }
+            });
+
+            result.queuedTasks++;
+            result.taskIds.push(taskId);
+            progress.queuedTasks++;
+            progress.processedArticles++;
+          }
+
+          // Report progress periodically
+          if (progressCallback && progress.processedArticles % 10 === 0) {
+            progressCallback({ ...progress });
+          }
+
+        } catch (error) {
+          const errorMessage = `Failed to queue task for article ${article.slug}: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`;
+          result.errors.push(errorMessage);
+          progress.errors.push(errorMessage);
+          progress.processedArticles++;
+
+          // Continue processing other articles even if one fails
+          console.error(`Bulk embedding update error for article ${article.slug}:`, error);
+        }
+      }
+
+      // Report final progress
+      if (progressCallback) {
+        progressCallback({ ...progress });
+      }
+
+      const duration = Date.now() - startTime;
+
+      // Log bulk operation completion
+      await loggingService.logBulkOperation('completed', operationId, {
+        totalTasks: result.totalArticles,
+        completedTasks: result.queuedTasks,
+        failedTasks: result.errors.length,
+        duration,
+        metadata: {
+          priority,
+          skippedArticles: result.skippedArticles,
+          taskIds: result.taskIds
+        }
+      });
+
+      // Record bulk operation performance metrics
+      await performanceMetricsService.recordBulkOperationTime(duration, operationId, {
+        totalTasks: result.totalArticles,
+        successfulTasks: result.queuedTasks,
+        metadata: {
+          priority,
+          skippedArticles: result.skippedArticles,
+          errorCount: result.errors.length
+        }
+      });
+
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      
+      // Log bulk operation failure
+      await loggingService.logBulkOperation('failed', operationId, {
+        duration,
+        error: error instanceof Error ? error : new Error('Unknown error'),
+        metadata: { priority }
+      });
+
+      throw new DatabaseServiceError(
+        DatabaseErrorType.QUERY_ERROR,
+        `Failed to queue bulk embedding update: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'Unable to queue bulk embedding update. Please try again.',
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  /**
+   * Get summary of a bulk operation by operation ID
+   */
+  async getBulkOperationSummary(operationId: string): Promise<BulkOperationSummary | null> {
+    try {
+      // Find tasks belonging to this bulk operation
+      const result = await database.query(`
+        SELECT 
+          id,
+          status,
+          created_at,
+          completed_at,
+          processed_at,
+          error_message,
+          metadata
+        FROM embedding_tasks 
+        WHERE metadata->>'bulkOperationId' = $1
+        ORDER BY created_at ASC
+      `, [operationId]);
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const tasks = result.rows;
+      const totalTasks = tasks.length;
+      const completedTasks = tasks.filter(t => t.status === 'completed').length;
+      const failedTasks = tasks.filter(t => t.status === 'failed').length;
+      const pendingTasks = tasks.filter(t => t.status === 'pending').length;
+      const processingTasks = tasks.filter(t => t.status === 'processing').length;
+
+      const startedAt = new Date(tasks[0].created_at);
+      const lastCompletedTask = tasks
+        .filter(t => t.completed_at)
+        .sort((a, b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime())[0];
+      
+      const completedAt = (completedTasks + failedTasks === totalTasks && lastCompletedTask) 
+        ? new Date(lastCompletedTask.completed_at) 
+        : undefined;
+
+      const status: 'running' | 'completed' | 'failed' = 
+        completedAt ? 'completed' : 
+        failedTasks > 0 && (completedTasks + failedTasks === totalTasks) ? 'failed' : 
+        'running';
+
+      const successRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+
+      // Calculate average processing time for completed tasks
+      const completedTasksWithTiming = tasks.filter(t => 
+        t.status === 'completed' && t.processed_at && t.completed_at
+      );
+      
+      let averageProcessingTime: number | undefined;
+      if (completedTasksWithTiming.length > 0) {
+        const totalProcessingTime = completedTasksWithTiming.reduce((sum, task) => {
+          const processingTime = new Date(task.completed_at).getTime() - new Date(task.processed_at).getTime();
+          return sum + processingTime;
+        }, 0);
+        averageProcessingTime = totalProcessingTime / completedTasksWithTiming.length / 1000; // Convert to seconds
+      }
+
+      // Collect error messages
+      const errors = tasks
+        .filter(t => t.error_message)
+        .map(t => t.error_message)
+        .filter((error, index, arr) => arr.indexOf(error) === index); // Remove duplicates
+
+      return {
+        operationId,
+        startedAt,
+        completedAt,
+        status,
+        totalTasks,
+        completedTasks,
+        failedTasks,
+        pendingTasks,
+        processingTasks,
+        successRate,
+        averageProcessingTime,
+        errors
+      };
+    } catch (error) {
+      throw new DatabaseServiceError(
+        DatabaseErrorType.QUERY_ERROR,
+        `Failed to get bulk operation summary: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'Unable to retrieve bulk operation summary. Please try again.',
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  /**
+   * List recent bulk operations
+   */
+  async listRecentBulkOperations(limit: number = 10): Promise<BulkOperationSummary[]> {
+    try {
+      // Get distinct bulk operation IDs from recent tasks
+      const operationIdsResult = await database.query(`
+        SELECT DISTINCT metadata->>'bulkOperationId' as operation_id
+        FROM embedding_tasks 
+        WHERE metadata->>'bulkOperationId' IS NOT NULL
+        ORDER BY MIN(created_at) DESC
+        LIMIT $1
+      `, [limit]);
+
+      const summaries: BulkOperationSummary[] = [];
+
+      for (const row of operationIdsResult.rows) {
+        const summary = await this.getBulkOperationSummary(row.operation_id);
+        if (summary) {
+          summaries.push(summary);
+        }
+      }
+
+      return summaries;
+    } catch (error) {
+      throw new DatabaseServiceError(
+        DatabaseErrorType.QUERY_ERROR,
+        `Failed to list recent bulk operations: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'Unable to retrieve recent bulk operations. Please try again.',
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  /**
+   * Get progress of a bulk operation by task IDs
+   */
+  async getBulkOperationProgress(taskIds: string[]): Promise<{
+    total: number;
+    completed: number;
+    failed: number;
+    pending: number;
+    processing: number;
+    details: Array<{
+      taskId: string;
+      articleSlug: string;
+      status: string;
+      error?: string;
+    }>;
+  }> {
+    try {
+      if (taskIds.length === 0) {
+        return {
+          total: 0,
+          completed: 0,
+          failed: 0,
+          pending: 0,
+          processing: 0,
+          details: []
+        };
+      }
+
+      // Create placeholders for the IN clause
+      const placeholders = taskIds.map((_, index) => `$${index + 1}`).join(', ');
+      
+      const result = await database.query(`
+        SELECT 
+          id,
+          slug,
+          status,
+          error_message
+        FROM embedding_tasks 
+        WHERE id IN (${placeholders})
+        ORDER BY created_at ASC
+      `, taskIds);
+
+      const tasks = result.rows;
+      const total = tasks.length;
+      const completed = tasks.filter(t => t.status === 'completed').length;
+      const failed = tasks.filter(t => t.status === 'failed').length;
+      const pending = tasks.filter(t => t.status === 'pending').length;
+      const processing = tasks.filter(t => t.status === 'processing').length;
+
+      const details = tasks.map(task => ({
+        taskId: task.id,
+        articleSlug: task.slug,
+        status: task.status,
+        error: task.error_message || undefined
+      }));
+
+      return {
+        total,
+        completed,
+        failed,
+        pending,
+        processing,
+        details
+      };
+    } catch (error) {
+      throw new DatabaseServiceError(
+        DatabaseErrorType.QUERY_ERROR,
+        `Failed to get bulk operation progress: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'Unable to retrieve bulk operation progress. Please try again.',
         error instanceof Error ? error : undefined
       );
     }

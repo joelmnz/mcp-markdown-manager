@@ -18,6 +18,8 @@ import {
   deleteArticleVersions
 } from '../services/articles';
 import { semanticSearch } from '../services/vectorIndex';
+import { embeddingQueueService } from '../services/embeddingQueue';
+import { databaseArticleService } from '../services/databaseArticles';
 import { randomUUID } from 'crypto';
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
@@ -238,6 +240,45 @@ function createConfiguredMCPServer() {
           required: ['query'],
         },
       });
+
+      // Add embedding queue management tools
+      tools.push({
+        name: 'getEmbeddingQueueStatus',
+        description: 'Get current status and statistics of the embedding queue',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      });
+
+      tools.push({
+        name: 'getArticleEmbeddingStatus',
+        description: 'Get embedding status for a specific article',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            filename: {
+              type: 'string',
+              description: 'Filename of the article (e.g., my-article.md)',
+            },
+          },
+          required: ['filename'],
+        },
+      });
+
+      tools.push({
+        name: 'getBulkEmbeddingProgress',
+        description: 'Get progress of bulk embedding operations',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            operationId: {
+              type: 'string',
+              description: 'Optional operation ID to get specific bulk operation progress',
+            },
+          },
+        },
+      });
     }
     
     return { tools };
@@ -249,11 +290,50 @@ function createConfiguredMCPServer() {
       switch (request.params.name) {
         case 'listArticles': {
           const articles = await listArticles();
+          
+          // Add embedding status if semantic search is enabled
+          let articlesWithEmbeddingStatus = articles;
+          if (SEMANTIC_SEARCH_ENABLED) {
+            try {
+              articlesWithEmbeddingStatus = await Promise.all(
+                articles.map(async (article) => {
+                  try {
+                    const slug = article.filename.replace(/\.md$/, '');
+                    const articleId = await databaseArticleService.getArticleId(slug);
+                    
+                    if (articleId) {
+                      const tasks = await embeddingQueueService.getTasksForArticle(articleId);
+                      const latestTask = tasks.length > 0 ? tasks[0] : null;
+                      
+                      return {
+                        ...article,
+                        embeddingStatus: {
+                          status: latestTask?.status || 'no_tasks',
+                          hasEmbedding: latestTask?.status === 'completed',
+                          isPending: latestTask?.status === 'pending' || latestTask?.status === 'processing',
+                          lastUpdated: latestTask?.completedAt || latestTask?.createdAt
+                        }
+                      };
+                    }
+                    return article;
+                  } catch (error) {
+                    // Don't fail the entire list if one article's embedding status check fails
+                    console.warn(`Failed to get embedding status for article ${article.filename}:`, error);
+                    return article;
+                  }
+                })
+              );
+            } catch (error) {
+              // Don't fail the article list if embedding status checks fail
+              console.warn('Failed to get embedding status for articles:', error);
+            }
+          }
+          
           return {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(articles, null, 2),
+                text: JSON.stringify(articlesWithEmbeddingStatus, null, 2),
               },
             ],
           };
@@ -288,17 +368,166 @@ function createConfiguredMCPServer() {
           };
         }
 
+        case 'getEmbeddingQueueStatus': {
+          if (!SEMANTIC_SEARCH_ENABLED) {
+            throw new Error('Semantic search is not enabled');
+          }
+          const detailedStats = await embeddingQueueService.getDetailedQueueStats();
+          const queueHealth = await embeddingQueueService.getQueueHealth();
+          
+          const response = {
+            stats: detailedStats.stats,
+            tasksByPriority: detailedStats.tasksByPriority,
+            tasksByOperation: detailedStats.tasksByOperation,
+            recentActivity: detailedStats.recentActivity,
+            health: queueHealth
+          };
+          
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(response, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'getArticleEmbeddingStatus': {
+          if (!SEMANTIC_SEARCH_ENABLED) {
+            throw new Error('Semantic search is not enabled');
+          }
+          const { filename } = request.params.arguments as { filename: string };
+          
+          // Convert filename to slug and get article ID
+          const slug = filename.replace(/\.md$/, '');
+          const articleId = await databaseArticleService.getArticleId(slug);
+          
+          if (!articleId) {
+            throw new Error(`Article ${filename} not found`);
+          }
+          
+          // Get embedding tasks for this article
+          const tasks = await embeddingQueueService.getTasksForArticle(articleId);
+          
+          // Get the most recent task status
+          const latestTask = tasks.length > 0 ? tasks[0] : null;
+          
+          const response = {
+            filename,
+            articleId,
+            embeddingStatus: latestTask?.status || 'no_tasks',
+            latestTask: latestTask ? {
+              id: latestTask.id,
+              operation: latestTask.operation,
+              status: latestTask.status,
+              priority: latestTask.priority,
+              attempts: latestTask.attempts,
+              maxAttempts: latestTask.maxAttempts,
+              createdAt: latestTask.createdAt,
+              scheduledAt: latestTask.scheduledAt,
+              processedAt: latestTask.processedAt,
+              completedAt: latestTask.completedAt,
+              errorMessage: latestTask.errorMessage
+            } : null,
+            allTasks: tasks.map(task => ({
+              id: task.id,
+              operation: task.operation,
+              status: task.status,
+              createdAt: task.createdAt,
+              completedAt: task.completedAt,
+              errorMessage: task.errorMessage
+            }))
+          };
+          
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(response, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'getBulkEmbeddingProgress': {
+          if (!SEMANTIC_SEARCH_ENABLED) {
+            throw new Error('Semantic search is not enabled');
+          }
+          const { operationId } = request.params.arguments as { operationId?: string };
+          
+          if (operationId) {
+            // Get specific bulk operation summary
+            const summary = await embeddingQueueService.getBulkOperationSummary(operationId);
+            if (!summary) {
+              throw new Error(`Bulk operation ${operationId} not found`);
+            }
+            
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(summary, null, 2),
+                },
+              ],
+            };
+          } else {
+            // Get recent bulk operations
+            const recentOperations = await embeddingQueueService.listRecentBulkOperations(10);
+            
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify(recentOperations, null, 2),
+                },
+              ],
+            };
+          }
+        }
+
         case 'readArticle': {
           const { filename } = request.params.arguments as { filename: string };
           const article = await readArticle(filename);
           if (!article) {
             throw new Error(`Article ${filename} not found`);
           }
+          
+          // Add embedding status if semantic search is enabled
+          let embeddingStatus = undefined;
+          if (SEMANTIC_SEARCH_ENABLED) {
+            try {
+              const slug = filename.replace(/\.md$/, '');
+              const articleId = await databaseArticleService.getArticleId(slug);
+              
+              if (articleId) {
+                const tasks = await embeddingQueueService.getTasksForArticle(articleId);
+                const latestTask = tasks.length > 0 ? tasks[0] : null;
+                
+                embeddingStatus = {
+                  status: latestTask?.status || 'no_tasks',
+                  lastUpdated: latestTask?.completedAt || latestTask?.createdAt,
+                  hasEmbedding: latestTask?.status === 'completed',
+                  isPending: latestTask?.status === 'pending' || latestTask?.status === 'processing',
+                  errorMessage: latestTask?.errorMessage
+                };
+              }
+            } catch (error) {
+              // Don't fail the article read if embedding status check fails
+              console.warn('Failed to get embedding status for article:', error);
+            }
+          }
+          
+          const response = {
+            ...article,
+            ...(embeddingStatus && { embeddingStatus })
+          };
+          
           return {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(article, null, 2),
+                text: JSON.stringify(response, null, 2),
               },
             ],
           };
@@ -310,7 +539,10 @@ function createConfiguredMCPServer() {
             content: string;
             message?: string;
           };
-          const article = await createArticle(title, content, message);
+          // Use background embedding for immediate response without waiting for embedding completion
+          const article = await createArticle(title, content, message, { 
+            embeddingPriority: 'normal' 
+          });
           return {
             content: [
               {
@@ -328,7 +560,10 @@ function createConfiguredMCPServer() {
             content: string;
             message?: string;
           };
-          const article = await updateArticle(filename, title, content, message);
+          // Use background embedding for immediate response without waiting for embedding completion
+          const article = await updateArticle(filename, title, content, message, { 
+            embeddingPriority: 'normal' 
+          });
           return {
             content: [
               {
@@ -390,7 +625,10 @@ function createConfiguredMCPServer() {
             versionId: string;
             message?: string;
           };
-          const article = await restoreArticleVersion(filename, versionId, message);
+          // Use background embedding for immediate response without waiting for embedding completion
+          const article = await restoreArticleVersion(filename, versionId, message, { 
+            embeddingPriority: 'normal' 
+          });
           return {
             content: [
               {
