@@ -46,7 +46,7 @@ class DatabaseService {
         user: config.user,
         password: config.password,
         ssl: config.ssl,
-        max: config.maxConnections || 20,
+        max: config.maxConnections || 50,
         idleTimeoutMillis: config.idleTimeoutMillis || 30000,
         connectionTimeoutMillis: config.connectionTimeoutMillis || 2000,
       });

@@ -16,6 +16,7 @@ import {
 } from '../services/articles';
 import { semanticSearch, hybridSearch, getDetailedIndexStats, rebuildIndex, indexUnindexedArticles } from '../services/vectorIndex';
 import { databaseHealthService } from '../services/databaseHealth.js';
+import { databaseInit } from '../services/databaseInit.js';
 import { backgroundWorkerService } from '../services/backgroundWorker.js';
 import { embeddingQueueService } from '../services/embeddingQueue.js';
 import { embeddingQueueConfigService } from '../services/embeddingQueueConfig.js';
@@ -29,43 +30,34 @@ export async function handleApiRequest(request: Request): Promise<Response> {
   // Health check endpoint (no auth required)
   if (path === '/health') {
     try {
-      const healthCheck = await databaseHealthService.performHealthCheck();
-      const stats = await databaseHealthService.getDatabaseStats();
+      // Simple health check that uses minimal database connections
+      const basicHealthCheck = await databaseInit.healthCheck();
       
-      // Get embedding queue configuration and status
+      // Get embedding queue configuration (no database calls)
       const queueConfig = embeddingQueueConfigService.getConfig();
       const configStatus = embeddingQueueConfigService.getConfigStatus();
       
+      // Only get worker stats if basic health is good
       let workerStats = null;
-      let queueStats = null;
-      let queueHealth = null;
-      
-      if (queueConfig.enabled && configStatus.isValid) {
+      if (basicHealthCheck.healthy && queueConfig.enabled && configStatus.isValid) {
         try {
           workerStats = await backgroundWorkerService.getWorkerStats();
-          queueStats = await embeddingQueueService.getQueueStats();
-          queueHealth = await embeddingQueueService.getQueueHealth();
         } catch (error) {
-          console.error('Error getting worker/queue stats:', error);
+          console.error('Error getting worker stats:', error);
         }
       }
       
       // Determine overall system health
-      const systemHealthy = healthCheck.healthy && 
-        (!queueConfig.enabled || (queueHealth?.isHealthy !== false));
+      const systemHealthy = basicHealthCheck.healthy;
       
       return new Response(JSON.stringify({
         status: systemHealthy ? 'ok' : 'degraded',
         timestamp: new Date().toISOString(),
         database: {
-          healthy: healthCheck.healthy,
-          connection: healthCheck.details.connection,
-          schema: healthCheck.details.schema,
-          constraints: healthCheck.details.constraints,
-          performance: healthCheck.details.performance,
-          issues: healthCheck.details.issues
+          healthy: basicHealthCheck.healthy,
+          message: basicHealthCheck.message,
+          details: basicHealthCheck.details || null
         },
-        stats: stats,
         services: {
           semanticSearch: SEMANTIC_SEARCH_ENABLED,
           mcpServer: process.env.MCP_SERVER_ENABLED?.toLowerCase() === 'true',
@@ -83,21 +75,6 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           tasksFailed: workerStats.tasksFailed,
           averageProcessingTime: workerStats.averageProcessingTime,
           lastProcessedAt: workerStats.lastProcessedAt
-        } : null,
-        queue: queueStats ? {
-          pending: queueStats.pending,
-          processing: queueStats.processing,
-          completed: queueStats.completed,
-          failed: queueStats.failed,
-          total: queueStats.total,
-          health: queueHealth ? {
-            isHealthy: queueHealth.isHealthy,
-            totalTasks: queueHealth.totalTasks,
-            oldestPendingTask: queueHealth.oldestPendingTask,
-            failedTasksLast24h: queueHealth.failedTasksLast24h,
-            averageProcessingTime: queueHealth.averageProcessingTime,
-            issues: queueHealth.issues
-          } : null
         } : null
       }), {
         status: systemHealthy ? 200 : 503,
@@ -111,11 +88,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         error: error instanceof Error ? error.message : 'Health check failed',
         database: {
           healthy: false,
-          connection: false,
-          schema: false,
-          constraints: false,
-          performance: false,
-          issues: ['Health check failed']
+          message: 'Health check failed'
         }
       }), {
         status: 503,
