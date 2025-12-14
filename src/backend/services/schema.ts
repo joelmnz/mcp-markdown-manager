@@ -18,6 +18,8 @@ export class SchemaService {
       await this.createArticlesTable();
       await this.createArticleHistoryTable();
       await this.createEmbeddingsTable();
+      await this.createEmbeddingTasksTable();
+      await this.createEmbeddingWorkerStatusTable();
       
       // Create indexes for performance
       await this.createIndexes();
@@ -150,6 +152,63 @@ export class SchemaService {
   }
 
   /**
+   * Create the embedding tasks table for background queue
+   */
+  private async createEmbeddingTasksTable(): Promise<void> {
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS embedding_tasks (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+        slug VARCHAR(255) NOT NULL,
+        operation VARCHAR(20) NOT NULL CHECK (operation IN ('create', 'update', 'delete')),
+        priority VARCHAR(10) NOT NULL DEFAULT 'normal' CHECK (priority IN ('high', 'normal', 'low')),
+        status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 3,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        scheduled_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        processed_at TIMESTAMP WITH TIME ZONE,
+        completed_at TIMESTAMP WITH TIME ZONE,
+        error_message TEXT,
+        metadata JSONB
+      )
+    `;
+
+    await database.query(createTableSQL);
+    console.log('Embedding tasks table created/verified');
+  }
+
+  /**
+   * Create the embedding worker status table
+   */
+  private async createEmbeddingWorkerStatusTable(): Promise<void> {
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS embedding_worker_status (
+        id INTEGER PRIMARY KEY DEFAULT 1,
+        is_running BOOLEAN NOT NULL DEFAULT FALSE,
+        last_heartbeat TIMESTAMP WITH TIME ZONE,
+        tasks_processed INTEGER NOT NULL DEFAULT 0,
+        tasks_succeeded INTEGER NOT NULL DEFAULT 0,
+        tasks_failed INTEGER NOT NULL DEFAULT 0,
+        started_at TIMESTAMP WITH TIME ZONE,
+        
+        CONSTRAINT single_worker CHECK (id = 1)
+      )
+    `;
+
+    await database.query(createTableSQL);
+    
+    // Insert initial worker status record if it doesn't exist
+    await database.query(`
+      INSERT INTO embedding_worker_status (id, is_running) 
+      VALUES (1, FALSE) 
+      ON CONFLICT (id) DO NOTHING
+    `);
+    
+    console.log('Embedding worker status table created/verified');
+  }
+
+  /**
    * Create database indexes for performance
    */
   private async createIndexes(): Promise<void> {
@@ -171,6 +230,12 @@ export class SchemaService {
       // Embeddings indexes
       'CREATE INDEX IF NOT EXISTS idx_embeddings_article_id ON embeddings(article_id)',
       'CREATE INDEX IF NOT EXISTS idx_embeddings_chunk_id ON embeddings(chunk_id)',
+
+      // Embedding tasks indexes
+      'CREATE INDEX IF NOT EXISTS idx_embedding_tasks_status_priority ON embedding_tasks(status, priority, scheduled_at)',
+      'CREATE INDEX IF NOT EXISTS idx_embedding_tasks_article_id ON embedding_tasks(article_id)',
+      'CREATE INDEX IF NOT EXISTS idx_embedding_tasks_created_at ON embedding_tasks(created_at)',
+      'CREATE INDEX IF NOT EXISTS idx_embedding_tasks_status ON embedding_tasks(status)',
     ];
 
     // Add vector index if extension is available
@@ -213,10 +278,10 @@ export class SchemaService {
         SELECT table_name 
         FROM information_schema.tables 
         WHERE table_schema = 'public' 
-        AND table_name IN ('articles', 'article_history', 'embeddings')
+        AND table_name IN ('articles', 'article_history', 'embeddings', 'embedding_tasks', 'embedding_worker_status')
       `);
 
-      const expectedTables = ['articles', 'article_history', 'embeddings'];
+      const expectedTables = ['articles', 'article_history', 'embeddings', 'embedding_tasks', 'embedding_worker_status'];
       const existingTables = tableCheck.rows.map(row => row.table_name);
       
       const allTablesExist = expectedTables.every(table => existingTables.includes(table));
@@ -241,6 +306,8 @@ export class SchemaService {
     console.log('Dropping database schema...');
     
     const dropQueries = [
+      'DROP TABLE IF EXISTS embedding_tasks CASCADE',
+      'DROP TABLE IF EXISTS embedding_worker_status CASCADE',
       'DROP TABLE IF EXISTS embeddings CASCADE',
       'DROP TABLE IF EXISTS article_history CASCADE',
       'DROP TABLE IF EXISTS articles CASCADE',

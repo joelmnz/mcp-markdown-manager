@@ -51,18 +51,27 @@ async function initializeDatabase() {
 
 /**
  * Inject base path configuration into HTML template
+ * 
+ * This function replaces template placeholders with runtime configuration,
+ * enabling the same built assets to work with any base path deployment.
  */
-function injectBasePathConfig(htmlContent: string, config: any): string {
+function injectBasePathConfig(htmlContent: string): string {
+  // Get current base path configuration
+  const config = basePathService.getConfig();
+  const clientConfig = basePathService.getClientConfig();
+  
   // Replace template placeholders with actual base path values
   const basePath = config.isRoot ? '' : config.normalizedPath;
-  const basePathConfig = JSON.stringify({
-    basePath: config.normalizedPath,
+  
+  // Create runtime configuration object for frontend
+  const runtimeConfig = JSON.stringify({
+    ...clientConfig,
     isRoot: config.isRoot
   });
   
   return htmlContent
     .replace(/\{\{BASE_PATH\}\}/g, basePath)
-    .replace(/\{\{BASE_PATH_CONFIG\}\}/g, basePathConfig);
+    .replace(/\{\{BASE_PATH_CONFIG\}\}/g, runtimeConfig);
 }
 
 /**
@@ -100,8 +109,9 @@ async function generateManifest(config: any): Promise<string> {
 // Initialize database before starting server
 await initializeDatabase();
 
-// Get base path configuration
+// Get base path configuration and validate environment
 const basePathConfig = basePathService.getConfig();
+const envValidation = basePathService.validateEnvironmentConfiguration();
 
 const server = Bun.serve({
   port: PORT,
@@ -185,7 +195,7 @@ const server = Bun.serve({
         // Special handling for index.html - inject base path configuration
         if (filePath === '/index.html') {
           const htmlContent = await file.text();
-          const injectedHtml = injectBasePathConfig(htmlContent, basePathConfig);
+          const injectedHtml = injectBasePathConfig(htmlContent);
           
           logRequest(200);
           return new Response(injectedHtml, { 
@@ -201,7 +211,7 @@ const server = Bun.serve({
       const indexFile = Bun.file(publicDir + '/index.html');
       if (await indexFile.exists()) {
         const htmlContent = await indexFile.text();
-        const injectedHtml = injectBasePathConfig(htmlContent, basePathConfig);
+        const injectedHtml = injectBasePathConfig(htmlContent);
         
         logRequest(200);
         return new Response(injectedHtml, { 
@@ -218,8 +228,72 @@ const server = Bun.serve({
   },
 });
 
-console.log(`🚀 MCP Markdown Manager server running on http://localhost:${PORT}`);
-console.log(`🗄️  Database backend: PostgreSQL`);
+// Enhanced startup logging
+console.log('');
+console.log('🚀 MCP Markdown Manager Server Started');
+console.log('=====================================');
+console.log(`📡 Server: http://localhost:${PORT}`);
+console.log(`🗄️  Database: PostgreSQL`);
 console.log(`🔒 Authentication: ${process.env.AUTH_TOKEN ? 'Enabled' : 'MISSING - Set AUTH_TOKEN!'}`);
-console.log(`🤖 MCP Server: ${MCP_SERVER_ENABLED ? 'Enabled' : 'Disabled'}`);
-console.log(`🌐 Base Path: ${basePathConfig.isRoot ? 'Root (/)' : basePathConfig.normalizedPath}`);
+console.log(`🤖 MCP Server: ${MCP_SERVER_ENABLED ? 'Enabled at /mcp' : 'Disabled'}`);
+
+// Detailed base path configuration logging
+console.log('');
+console.log('🌐 Base Path Configuration:');
+if (basePathConfig.isRoot) {
+  console.log(`   Mode: Root path deployment`);
+  console.log(`   Frontend URL: http://localhost:${PORT}/`);
+  console.log(`   API Base: http://localhost:${PORT}/api`);
+  if (MCP_SERVER_ENABLED) {
+    console.log(`   MCP Endpoint: http://localhost:${PORT}/mcp`);
+  }
+} else {
+  console.log(`   Mode: Subpath deployment`);
+  console.log(`   Base Path: ${basePathConfig.normalizedPath}`);
+  console.log(`   Frontend URL: http://localhost:${PORT}${basePathConfig.normalizedPath}/`);
+  console.log(`   API Base: http://localhost:${PORT}${basePathConfig.normalizedPath}/api`);
+  if (MCP_SERVER_ENABLED) {
+    console.log(`   MCP Endpoint: http://localhost:${PORT}${basePathConfig.normalizedPath}/mcp`);
+  }
+  console.log(`   Static Assets: Served with base path prefix`);
+  console.log(`   Runtime Config: Injected into frontend at request time`);
+}
+
+// Environment variable status
+console.log('');
+console.log('🔧 Environment Configuration:');
+console.log(`   BASE_URL: ${process.env.BASE_URL ? `"${process.env.BASE_URL}"` : 'Not set'}`);
+console.log(`   BASE_PATH: ${process.env.BASE_PATH ? `"${process.env.BASE_PATH}"` : 'Not set'}`);
+console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+console.log(`   PORT: ${PORT}`);
+
+// Display validation warnings and recommendations
+if (envValidation.warnings.length > 0) {
+  console.log('');
+  console.log('⚠️  Configuration Warnings:');
+  envValidation.warnings.forEach((warning: string) => {
+    console.log(`   - ${warning}`);
+  });
+}
+
+if (envValidation.recommendations.length > 0) {
+  console.log('');
+  console.log('💡 Configuration Recommendations:');
+  envValidation.recommendations.forEach((recommendation: string) => {
+    console.log(`   - ${recommendation}`);
+  });
+}
+
+// Docker deployment information
+if (process.env.NODE_ENV === 'production') {
+  console.log('');
+  console.log('🐳 Docker Deployment Notes:');
+  console.log('   - Set BASE_URL or BASE_PATH in docker-compose.yml environment section');
+  console.log('   - Frontend assets are built without hardcoded paths');
+  console.log('   - Base path configuration is injected at runtime');
+  console.log('   - Same built image works with any base path configuration');
+}
+
+console.log('');
+console.log('✅ Server initialization complete');
+console.log('');

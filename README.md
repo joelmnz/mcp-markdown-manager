@@ -211,6 +211,51 @@ docker run -d \
   article-manager
 ```
 
+### Nginx Subpath Deployment
+
+For deployment behind nginx on a subpath (e.g., `/md`, `/articles`):
+
+#### Quick Start with Subpath
+
+```bash
+# 1. Configure environment for subpath
+cp .env.example .env
+echo "BASE_URL=http://localhost/md" >> .env
+
+# 2. Deploy with nginx proxy
+docker-compose -f docker-compose.subpath.yml up -d
+
+# 3. Access application
+# http://localhost/md
+```
+
+#### Production Deployment with SSL
+
+```bash
+# 1. Configure production environment
+cp .env.example .env.production
+# Edit .env.production with production values
+echo "BASE_URL=https://yourdomain.com/articles" >> .env.production
+
+# 2. Place SSL certificates in ./ssl/ directory
+mkdir ssl
+# Copy cert.pem and key.pem to ssl/
+
+# 3. Deploy production stack
+docker-compose -f docker-compose.production.yml --env-file .env.production up -d
+
+# 4. Access application
+# https://yourdomain.com/articles
+```
+
+#### Available Deployment Configurations
+
+- `docker-compose.yml` - Standard deployment (root path)
+- `docker-compose.subpath.yml` - Nginx subpath deployment with HTTP
+- `docker-compose.production.yml` - Production deployment with SSL and security features
+
+See the [Deployment Examples](docs/DEPLOYMENT_EXAMPLES.md) guide for more deployment scenarios and the [Nginx Subpath Deployment Guide](docs/nginx-subpath-deployment.md) for detailed configuration instructions.
+
 ### GitHub Container Registry
 
 To push to GitHub Container Registry:
@@ -234,6 +279,30 @@ docker push ghcr.io/YOUR_USERNAME/article-manager:latest
 |----------|-------------|
 | `AUTH_TOKEN` | Authentication token for all interfaces |
 | `DB_PASSWORD` | PostgreSQL database password |
+
+### Base Path Configuration (Nginx Subpath Deployment)
+
+The application supports runtime base path configuration for deployment behind nginx on subpaths (e.g., `/md`, `/articles`). This allows the same built frontend assets to work with different deployment paths without rebuilding.
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `BASE_URL` | Full URL including protocol and domain | `https://example.com/md` |
+| `BASE_PATH` | Path portion only | `/md`, `/articles`, `/app/docs` |
+
+**Configuration Priority**: `BASE_URL` takes precedence if both are set. The path portion is extracted from `BASE_URL`.
+
+**Path Normalization**: The system automatically normalizes paths:
+- `md` → `/md`
+- `/md/` → `/md`
+- `app/docs` → `/app/docs`
+
+**Default Behavior**: If neither variable is set, the application runs at root path (`/`).
+
+**Runtime Configuration**: The base path is injected into the frontend at request time, enabling deployment flexibility without rebuilding assets.
+
+**Documentation**:
+- [Nginx Subpath Deployment Guide](docs/nginx-subpath-deployment.md) - Comprehensive nginx configuration and deployment instructions
+- [Deployment Examples](docs/DEPLOYMENT_EXAMPLES.md) - Quick deployment examples for different scenarios
 
 ### Database Configuration
 

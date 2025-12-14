@@ -4,6 +4,7 @@ import { applyFixes } from 'markdownlint';
 import { MarkdownView } from '../components/MarkdownView';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
+import { apiClient } from '../utils/apiClient';
 
 interface ArticleEditProps {
   filename?: string;
@@ -32,11 +33,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
   const loadArticle = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/articles/${filename}.md`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiClient.get(`/api/articles/${filename}.md`, token);
 
       if (response.ok) {
         const data = await response.json();
@@ -64,16 +61,11 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       setError('');
 
       const url = isNew ? '/api/articles' : `/api/articles/${filename}.md`;
-      const method = isNew ? 'POST' : 'PUT';
+      const data = { title, content };
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ title, content })
-      });
+      const response = isNew 
+        ? await apiClient.post(url, data, token)
+        : await apiClient.put(url, data, token);
 
       if (response.ok) {
         const data = await response.json();
@@ -94,14 +86,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
     const targetFilename = articleFilename || `${filename}.md`;
 
     try {
-      const response = await fetch(`/api/articles/${targetFilename}/public`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ isPublic: newIsPublic })
-      });
+      const response = await apiClient.post(`/api/articles/${targetFilename}/public`, { isPublic: newIsPublic }, token);
 
       if (response.ok) {
         setIsPublic(newIsPublic);

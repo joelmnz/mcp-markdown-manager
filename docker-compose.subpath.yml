@@ -1,6 +1,31 @@
 version: '3.8'
 
+# Docker Compose configuration for nginx subpath deployment
+# This example deploys MCP Markdown Manager behind nginx on /md subpath
+# 
+# Usage:
+#   1. Copy .env.example to .env and configure AUTH_TOKEN and DB_PASSWORD
+#   2. Set BASE_URL=http://localhost/md in .env
+#   3. Run: docker-compose -f docker-compose.subpath.yml up -d
+#   4. Access: http://localhost/md
+
 services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx-subpath.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - mcp-markdown-manager
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
   postgres:
     image: pgvector/pgvector:pg16
     container_name: mcp-markdown-postgres
@@ -12,8 +37,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./scripts/postgres-init:/docker-entrypoint-initdb.d
-    ports:
-      - "5432:5432"
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U article_user -d article_manager"]
@@ -26,28 +49,28 @@ services:
       -c max_connections=100
       -c shared_buffers=256MB
       -c effective_cache_size=1GB
-      -c maintenance_work_mem=64MB
-      -c checkpoint_completion_target=0.9
-      -c wal_buffers=16MB
-      -c default_statistics_target=100
 
-  article-manager:
+  mcp-markdown-manager:
     build:
       context: .
       dockerfile: Dockerfile
     image: ghcr.io/joelmnz/mcp-markdown-manager:latest
     container_name: mcp-markdown-manager
-    ports:
-      - "${PORT:-5000}:5000"
     environment:
       - AUTH_TOKEN=${AUTH_TOKEN}
       - DATA_DIR=/data
       - PORT=5000
       - NODE_ENV=${NODE_ENV:-production}
       - MCP_SERVER_ENABLED=${MCP_SERVER_ENABLED:-true}
-      # Base path configuration for nginx subpath deployment
-      - BASE_URL=${BASE_URL:-}
-      - BASE_PATH=${BASE_PATH:-}
+      
+      # Runtime base path configuration for /md subpath
+      # The application will extract "/md" from the BASE_URL and use it for all URL generation
+      - BASE_URL=${BASE_URL:-http://localhost/md}
+      
+      # Alternative: Use BASE_PATH for path-only configuration
+      # - BASE_PATH=${BASE_PATH:-/md}
+      
+      # Database configuration
       - DB_HOST=postgres
       - DB_PORT=5432
       - DB_NAME=article_manager
@@ -55,10 +78,7 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_SSL=false
       - DB_MAX_CONNECTIONS=20
-      - DB_IDLE_TIMEOUT=30000
-      - DB_CONNECTION_TIMEOUT=2000
-      - DB_HEALTH_CHECK_INTERVAL=30000
-      - DB_CONSTRAINT_REPAIR_ENABLED=true
+      
       # Optional semantic search configuration
       - SEMANTIC_SEARCH_ENABLED=${SEMANTIC_SEARCH_ENABLED:-false}
       - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-ollama}
@@ -77,9 +97,9 @@ services:
       timeout: 3s
       retries: 3
       start_period: 10s
+    # Note: No external port mapping - accessed through nginx proxy
 
 volumes:
-  data:
-    driver: local
   postgres_data:
     driver: local
+</content>

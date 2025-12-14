@@ -19,11 +19,23 @@ export interface BasePathConfig {
   isValid: boolean;
 }
 
+export interface ClientBasePathConfig {
+  baseUrl: string;
+  apiBaseUrl: string;
+  mcpBaseUrl: string;
+}
+
 export interface BasePathService {
   getConfig(): BasePathConfig;
   normalizePath(path: string): string;
   prependBasePath(url: string): string;
   stripBasePath(url: string): string;
+  getClientConfig(): ClientBasePathConfig;
+  validateEnvironmentConfiguration(): {
+    isValid: boolean;
+    warnings: string[];
+    recommendations: string[];
+  };
 }
 
 class BasePathServiceImpl implements BasePathService {
@@ -34,37 +46,71 @@ class BasePathServiceImpl implements BasePathService {
   }
 
   /**
-   * Parse and validate BASE_PATH environment variable
+   * Parse and validate BASE_PATH/BASE_URL environment variables
    */
   private parseBasePathFromEnvironment(): BasePathConfig {
-    const basePath = process.env.BASE_PATH || '';
+    // Support both BASE_PATH and BASE_URL environment variables
+    // BASE_URL takes precedence if both are set
+    const baseUrl = process.env.BASE_URL?.trim();
+    const basePath = process.env.BASE_PATH?.trim();
     
-    if (!basePath) {
+    let configuredPath = '';
+    let sourceVariable = '';
+    
+    // Determine which variable to use and extract path
+    if (baseUrl) {
+      sourceVariable = 'BASE_URL';
+      // Extract path from BASE_URL if it's a full URL
+      try {
+        const url = new URL(baseUrl);
+        configuredPath = url.pathname;
+        console.log(`📍 Base path source: BASE_URL="${baseUrl}" (extracted path: "${configuredPath}")`);
+      } catch {
+        // If BASE_URL is not a valid URL, treat it as a path
+        configuredPath = baseUrl;
+        console.log(`📍 Base path source: BASE_URL="${baseUrl}" (treated as path)`);
+      }
+    } else if (basePath) {
+      sourceVariable = 'BASE_PATH';
+      configuredPath = basePath;
+      console.log(`📍 Base path source: BASE_PATH="${basePath}"`);
+    } else {
+      console.log(`📍 Base path: No BASE_URL or BASE_PATH configured, using root path mode`);
+    }
+    
+    // Handle empty or root-only paths
+    if (!configuredPath || configuredPath === '/' || configuredPath === '') {
+      console.log(`✅ Base path configuration: Root path mode (no subpath)`);
       return {
-        basePath: '',
+        basePath: configuredPath,
         normalizedPath: '',
         isRoot: true,
         isValid: true
       };
     }
 
-    const normalizedPath = this.normalizePath(basePath);
+    // Normalize and validate the path
+    const normalizedPath = this.normalizePath(configuredPath);
     const isValid = this.validateBasePath(normalizedPath);
     
     if (!isValid) {
-      console.warn(`Invalid BASE_PATH configuration: "${basePath}". Falling back to root path mode.`);
+      console.warn(`❌ Invalid base path configuration: "${configuredPath}" from ${sourceVariable}`);
+      console.warn(`   Validation failed - falling back to root path mode`);
+      console.warn(`   Valid format examples: "/md", "/app", "/docs/articles"`);
       return {
-        basePath,
+        basePath: configuredPath,
         normalizedPath: '',
         isRoot: true,
         isValid: false
       };
     }
 
-    console.log(`Base path configured: "${normalizedPath}"`);
+    console.log(`✅ Base path configuration: "${normalizedPath}" (normalized from "${configuredPath}")`);
+    console.log(`   Source: ${sourceVariable}`);
+    console.log(`   All URLs will be prefixed with: ${normalizedPath}`);
     
     return {
-      basePath,
+      basePath: configuredPath,
       normalizedPath,
       isRoot: normalizedPath === '',
       isValid: true
@@ -105,11 +151,13 @@ class BasePathServiceImpl implements BasePathService {
 
     // Must start with slash
     if (!path.startsWith('/')) {
+      console.warn(`   Validation error: Path must start with "/" (got: "${path}")`);
       return false;
     }
 
     // Must not end with slash (except root)
     if (path.length > 1 && path.endsWith('/')) {
+      console.warn(`   Validation error: Path must not end with "/" (got: "${path}")`);
       return false;
     }
 
@@ -117,11 +165,21 @@ class BasePathServiceImpl implements BasePathService {
     // Allow alphanumeric, hyphens, underscores, and forward slashes
     const validPathRegex = /^\/[a-zA-Z0-9\-_\/]*$/;
     if (!validPathRegex.test(path)) {
+      console.warn(`   Validation error: Path contains invalid characters (got: "${path}")`);
+      console.warn(`   Allowed characters: a-z, A-Z, 0-9, -, _, /`);
       return false;
     }
 
     // Must not contain double slashes
     if (path.includes('//')) {
+      console.warn(`   Validation error: Path must not contain double slashes (got: "${path}")`);
+      return false;
+    }
+
+    // Additional validation: path segments should not be empty
+    const segments = path.split('/').filter(segment => segment !== '');
+    if (segments.length === 0) {
+      console.warn(`   Validation error: Path has no valid segments (got: "${path}")`);
       return false;
     }
 
@@ -169,6 +227,78 @@ class BasePathServiceImpl implements BasePathService {
     }
 
     return url;
+  }
+
+  /**
+   * Get client-side configuration for runtime injection
+   */
+  getClientConfig(): ClientBasePathConfig {
+    const basePath = this.config.isRoot ? '' : this.config.normalizedPath;
+    
+    return {
+      baseUrl: basePath,
+      apiBaseUrl: basePath,
+      mcpBaseUrl: basePath
+    };
+  }
+
+  /**
+   * Validate environment configuration and provide detailed feedback
+   */
+  validateEnvironmentConfiguration(): {
+    isValid: boolean;
+    warnings: string[];
+    recommendations: string[];
+  } {
+    const warnings: string[] = [];
+    const recommendations: string[] = [];
+    
+    const baseUrl = process.env.BASE_URL?.trim();
+    const basePath = process.env.BASE_PATH?.trim();
+    
+    // Check for common configuration issues
+    if (baseUrl && basePath) {
+      warnings.push('Both BASE_URL and BASE_PATH are set. BASE_URL takes precedence.');
+      recommendations.push('Consider using only BASE_URL or only BASE_PATH to avoid confusion.');
+    }
+    
+    if (baseUrl) {
+      try {
+        const url = new URL(baseUrl);
+        if (url.pathname === '/') {
+          recommendations.push('BASE_URL points to root path. Consider unsetting it for root deployment.');
+        }
+      } catch {
+        // BASE_URL is treated as path, which is fine
+      }
+    }
+    
+    if (basePath) {
+      if (basePath === '/') {
+        recommendations.push('BASE_PATH is set to "/". Consider unsetting it for root deployment.');
+      }
+      
+      if (basePath.endsWith('/') && basePath.length > 1) {
+        warnings.push(`BASE_PATH "${basePath}" ends with "/". It will be normalized to "${basePath.slice(0, -1)}".`);
+      }
+      
+      if (!basePath.startsWith('/')) {
+        warnings.push(`BASE_PATH "${basePath}" doesn't start with "/". It will be normalized to "/${basePath}".`);
+      }
+    }
+    
+    // Docker-specific recommendations
+    if (process.env.NODE_ENV === 'production') {
+      if (!baseUrl && !basePath) {
+        recommendations.push('For production deployment behind nginx, consider setting BASE_PATH or BASE_URL.');
+      }
+    }
+    
+    return {
+      isValid: this.config.isValid,
+      warnings,
+      recommendations
+    };
   }
 }
 

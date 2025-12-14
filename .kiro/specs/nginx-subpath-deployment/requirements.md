@@ -75,3 +75,18 @@ This specification defines the requirements for enabling the MCP Markdown Manage
 3. WHEN the BASE_PATH is invalid THEN the system SHALL log a warning and fall back to root path behavior
 4. WHEN the application starts THEN the system SHALL log the configured base path for verification
 5. WHEN the BASE_PATH is not set THEN the system SHALL operate in root path mode without errors
+
+### Requirement 6
+
+**User Story:** As a DevOps engineer, I want the frontend to support runtime BASE_URL configuration, so that I can deploy the same built frontend assets in different environments without rebuilding.
+
+#### Acceptance Criteria
+
+1. WHEN the frontend is built THEN the system SHALL NOT hardcode any base URL paths into the bundled assets
+2. WHEN the HTML template is served THEN the system SHALL inject the BASE_URL configuration from environment variables at runtime
+3. WHEN the frontend initializes THEN the system SHALL read the BASE_URL from the injected configuration, not from build-time variables
+4. WHEN the application runs in a Docker container THEN the system SHALL use the BASE_URL environment variable set in the container
+5. WHEN the same built frontend assets are deployed to different subpaths THEN the system SHALL work correctly without rebuilding
+6. WHEN no BASE_URL is configured THEN the system SHALL default to root path (`/`) behavior
+7. WHEN the frontend makes API calls THEN the system SHALL dynamically construct URLs using the runtime BASE_URL configuration
+8. WHEN the service worker is registered THEN the system SHALL use the runtime BASE_URL for all cached resource paths

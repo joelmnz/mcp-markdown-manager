@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArticleList } from '../components/ArticleList';
+import { apiClient } from '../utils/apiClient';
 
 interface Article {
   filename: string;
@@ -48,11 +49,7 @@ export function Home({ token, onNavigate }: HomeProps) {
     try {
       setLoading(true);
       setSearchResults([]);
-      const response = await fetch('/api/articles', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiClient.get('/api/articles', token);
 
       if (response.ok) {
         const data = await response.json();
@@ -80,11 +77,7 @@ export function Home({ token, onNavigate }: HomeProps) {
       
       if (searchMode === 'semantic') {
         // Hybrid search (semantic + title boost)
-        const response = await fetch(`/api/search?query=${encodeURIComponent(searchQuery)}&k=10&mode=hybrid`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const response = await apiClient.get(`/api/search?query=${encodeURIComponent(searchQuery)}&k=10&mode=hybrid`, token);
 
         if (response.ok) {
           const data = await response.json();
@@ -97,11 +90,7 @@ export function Home({ token, onNavigate }: HomeProps) {
         }
       } else {
         // Title search
-        const response = await fetch(`/api/articles?q=${encodeURIComponent(searchQuery)}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const response = await apiClient.get(`/api/articles?q=${encodeURIComponent(searchQuery)}`, token);
 
         if (response.ok) {
           const data = await response.json();

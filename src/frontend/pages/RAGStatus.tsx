@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiClient } from '../utils/apiClient';
 
 interface RAGStatusData {
   enabled: boolean;
@@ -30,11 +31,7 @@ export function RAGStatus({ token, onNavigate }: RAGStatusProps) {
     try {
       setLoading(true);
       setError('');
-      const response = await fetch('/api/rag/status', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiClient.get('/api/rag/status', token);
 
       if (response.ok) {
         const data = await response.json();
@@ -59,12 +56,7 @@ export function RAGStatus({ token, onNavigate }: RAGStatusProps) {
       setIndexMessage('Rebuilding index...');
       setError('');
       
-      const response = await fetch('/api/rag/reindex', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiClient.post('/api/rag/reindex', undefined, token);
 
       if (response.ok) {
         const data = await response.json();
@@ -96,12 +88,7 @@ export function RAGStatus({ token, onNavigate }: RAGStatusProps) {
       setIndexMessage('Indexing unindexed articles...');
       setError('');
       
-      const response = await fetch('/api/rag/index-unindexed', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiClient.post('/api/rag/index-unindexed', undefined, token);
 
       if (response.ok) {
         const data = await response.json();

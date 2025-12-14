@@ -463,14 +463,62 @@ async function getPendingMigrations(currentVersion: number): Promise<Array<{
         console.log('  Initial schema already applied');
       }
     },
+    {
+      version: 2,
+      description: 'Add background embedding queue tables',
+      apply: async () => {
+        console.log('  Creating embedding_tasks table...');
+        await database.query(`
+          CREATE TABLE IF NOT EXISTS embedding_tasks (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            article_id INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+            slug VARCHAR(255) NOT NULL,
+            operation VARCHAR(20) NOT NULL CHECK (operation IN ('create', 'update', 'delete')),
+            priority VARCHAR(10) NOT NULL DEFAULT 'normal' CHECK (priority IN ('high', 'normal', 'low')),
+            status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'completed', 'failed')),
+            attempts INTEGER NOT NULL DEFAULT 0,
+            max_attempts INTEGER NOT NULL DEFAULT 3,
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+            scheduled_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+            processed_at TIMESTAMP WITH TIME ZONE,
+            completed_at TIMESTAMP WITH TIME ZONE,
+            error_message TEXT,
+            metadata JSONB
+          )
+        `);
+
+        console.log('  Creating embedding_worker_status table...');
+        await database.query(`
+          CREATE TABLE IF NOT EXISTS embedding_worker_status (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            is_running BOOLEAN NOT NULL DEFAULT FALSE,
+            last_heartbeat TIMESTAMP WITH TIME ZONE,
+            tasks_processed INTEGER NOT NULL DEFAULT 0,
+            tasks_succeeded INTEGER NOT NULL DEFAULT 0,
+            tasks_failed INTEGER NOT NULL DEFAULT 0,
+            started_at TIMESTAMP WITH TIME ZONE,
+            
+            CONSTRAINT single_worker CHECK (id = 1)
+          )
+        `);
+
+        console.log('  Creating indexes for embedding queue tables...');
+        await database.query('CREATE INDEX IF NOT EXISTS idx_embedding_tasks_status_priority ON embedding_tasks(status, priority, scheduled_at)');
+        await database.query('CREATE INDEX IF NOT EXISTS idx_embedding_tasks_article_id ON embedding_tasks(article_id)');
+        await database.query('CREATE INDEX IF NOT EXISTS idx_embedding_tasks_created_at ON embedding_tasks(created_at)');
+        await database.query('CREATE INDEX IF NOT EXISTS idx_embedding_tasks_status ON embedding_tasks(status)');
+
+        console.log('  Inserting initial worker status record...');
+        await database.query(`
+          INSERT INTO embedding_worker_status (id, is_running) 
+          VALUES (1, FALSE) 
+          ON CONFLICT (id) DO NOTHING
+        `);
+
+        console.log('  Background embedding queue tables created successfully');
+      }
+    }
     // Future migrations would be added here
-    // {
-    //   version: 2,
-    //   description: 'Add new column to articles table',
-    //   apply: async () => {
-    //     await database.query('ALTER TABLE articles ADD COLUMN new_field TEXT');
-    //   }
-    // }
   ];
   
   return migrations.filter(migration => migration.version > currentVersion);

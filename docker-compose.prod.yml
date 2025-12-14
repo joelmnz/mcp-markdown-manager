@@ -65,6 +65,9 @@ services:
       - NODE_ENV=${PROD_NODE_ENV:-production}
       - PORT=${PROD_INTERNAL_PORT:-5000}
       - MCP_SERVER_ENABLED=${PROD_MCP_SERVER_ENABLED:-true}
+      # Base path configuration for production nginx subpath deployment
+      - BASE_URL=${PROD_BASE_URL:-${BASE_URL:-}}
+      - BASE_PATH=${PROD_BASE_PATH:-${BASE_PATH:-}}
       # Database connection with internal hostname
       - DB_HOST=${PROD_DB_HOST:-postgres}
       - DB_PORT=${PROD_DB_INTERNAL_PORT:-5432}
