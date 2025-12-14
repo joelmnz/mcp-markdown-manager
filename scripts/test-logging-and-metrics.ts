@@ -19,7 +19,7 @@ async function testLoggingService() {
       LogCategory.TASK_LIFECYCLE,
       'Test log message',
       {
-        taskId: 'test-task-123',
+        taskId: '550e8400-e29b-41d4-a716-446655440000',
         articleId: 456,
         metadata: { test: true, operation: 'create' }
       }
@@ -27,7 +27,7 @@ async function testLoggingService() {
     console.log('✅ Basic logging test passed');
 
     // Test task event logging
-    await loggingService.logTaskEvent('test-task-456', 'processing_started', {
+    await loggingService.logTaskEvent('550e8400-e29b-41d4-a716-446655440001', 'processing_started', {
       articleId: 789,
       operation: 'update',
       attempt: 1,
@@ -44,7 +44,7 @@ async function testLoggingService() {
 
     // Test queue operation logging
     await loggingService.logQueueOperation('task_enqueued', {
-      taskId: 'test-task-789',
+      taskId: '550e8400-e29b-41d4-a716-446655440002',
       articleId: 101112,
       duration: 25,
       metadata: { operation: 'create', priority: 'normal' }
@@ -53,7 +53,7 @@ async function testLoggingService() {
 
     // Test performance metric logging
     await loggingService.logPerformanceMetric('task_processing_time', 1500, {
-      taskId: 'test-task-999',
+      taskId: '550e8400-e29b-41d4-a716-446655440003',
       unit: 'ms',
       metadata: { operation: 'update' }
     });

@@ -124,7 +124,7 @@ export class SchemaService {
           heading_path TEXT[] DEFAULT '{}' NOT NULL,
           text_content TEXT NOT NULL,
           content_hash VARCHAR(64) NOT NULL,
-          vector VECTOR(512),
+          vector VECTOR(768),
           created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
           UNIQUE(article_id, chunk_index)
         )

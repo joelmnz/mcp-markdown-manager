@@ -2,6 +2,7 @@ import { database } from './database.js';
 import { DatabaseServiceError, DatabaseErrorType } from './databaseErrors.js';
 import { loggingService, LogLevel, LogCategory } from './logging.js';
 import { performanceMetricsService, MetricType } from './performanceMetrics.js';
+import { embeddingQueueConfigService } from './embeddingQueueConfig.js';
 
 // EmbeddingTask interface as defined in the design document
 export interface EmbeddingTask {

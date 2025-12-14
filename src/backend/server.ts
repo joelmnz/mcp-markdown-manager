@@ -3,6 +3,8 @@ import { handleMCPPostRequest, handleMCPGetRequest, handleMCPDeleteRequest } fro
 import { databaseInit } from './services/databaseInit.js';
 import { databaseHealthService } from './services/databaseHealth.js';
 import { basePathService } from './services/basePath.js';
+import { backgroundWorkerService } from './services/backgroundWorker.js';
+import { embeddingQueueConfigService } from './services/embeddingQueueConfig.js';
 
 const PORT = parseInt(process.env.PORT || '5000');
 const MCP_SERVER_ENABLED = process.env.MCP_SERVER_ENABLED?.toLowerCase() === 'true';
@@ -109,9 +111,99 @@ async function generateManifest(config: any): Promise<string> {
 // Initialize database before starting server
 await initializeDatabase();
 
+// Initialize background worker for embedding queue
+async function initializeBackgroundWorker() {
+  try {
+    const config = embeddingQueueConfigService.getConfig();
+    
+    if (!config.enabled) {
+      console.log('🔄 Background embedding queue is disabled');
+      return;
+    }
+
+    // Validate configuration
+    const configStatus = embeddingQueueConfigService.getConfigStatus();
+    if (!configStatus.isValid) {
+      console.error('❌ Invalid embedding queue configuration:');
+      configStatus.errors.forEach(error => {
+        console.error(`   - ${error}`);
+      });
+      console.error('   Background worker will not start');
+      return;
+    }
+
+    // Log configuration warnings
+    if (configStatus.warnings.length > 0) {
+      console.warn('⚠️  Embedding queue configuration warnings:');
+      configStatus.warnings.forEach(warning => {
+        console.warn(`   - ${warning}`);
+      });
+    }
+
+    // Log configuration recommendations
+    if (configStatus.recommendations.length > 0) {
+      console.log('💡 Embedding queue recommendations:');
+      configStatus.recommendations.forEach(recommendation => {
+        console.log(`   - ${recommendation}`);
+      });
+    }
+
+    console.log('🔄 Starting background embedding worker...');
+    await backgroundWorkerService.start();
+    console.log('✅ Background embedding worker started successfully');
+    
+  } catch (error) {
+    console.error('❌ Failed to start background embedding worker:', error);
+    console.error('   Articles will be processed without background embedding');
+  }
+}
+
+await initializeBackgroundWorker();
+
 // Get base path configuration and validate environment
 const basePathConfig = basePathService.getConfig();
 const envValidation = basePathService.validateEnvironmentConfiguration();
+
+// Setup graceful shutdown handling
+async function gracefulShutdown(signal: string) {
+  console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
+  
+  try {
+    // Stop background worker first
+    if (backgroundWorkerService.isRunning()) {
+      console.log('🔄 Stopping background embedding worker...');
+      await backgroundWorkerService.stop();
+      console.log('✅ Background embedding worker stopped');
+    }
+    
+    // Close database connections
+    console.log('🔄 Closing database connections...');
+    const { database } = await import('./services/database.js');
+    await database.disconnect();
+    console.log('✅ Database connections closed');
+    
+    console.log('✅ Graceful shutdown complete');
+    process.exit(0);
+  } catch (error) {
+    console.error('❌ Error during graceful shutdown:', error);
+    process.exit(1);
+  }
+}
+
+// Register signal handlers for graceful shutdown
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions and unhandled rejections
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error);
+  gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+  gracefulShutdown('unhandledRejection');
+});
 
 const server = Bun.serve({
   port: PORT,
@@ -236,6 +328,19 @@ console.log(`📡 Server: http://localhost:${PORT}`);
 console.log(`🗄️  Database: PostgreSQL`);
 console.log(`🔒 Authentication: ${process.env.AUTH_TOKEN ? 'Enabled' : 'MISSING - Set AUTH_TOKEN!'}`);
 console.log(`🤖 MCP Server: ${MCP_SERVER_ENABLED ? 'Enabled at /mcp' : 'Disabled'}`);
+
+// Embedding queue configuration logging
+const queueConfig = embeddingQueueConfigService.getConfig();
+const configStatus = embeddingQueueConfigService.getConfigStatus();
+console.log(`⚙️  Embedding Queue: ${queueConfig.enabled ? 'Enabled' : 'Disabled'}`);
+if (queueConfig.enabled) {
+  console.log(`   Worker Interval: ${queueConfig.workerInterval}ms`);
+  console.log(`   Max Retries: ${queueConfig.maxRetries}`);
+  console.log(`   Background Worker: ${backgroundWorkerService.isRunning() ? 'Running' : 'Stopped'}`);
+  if (!configStatus.isValid) {
+    console.log(`   Configuration Issues: ${configStatus.errors.length} errors`);
+  }
+}
 
 // Detailed base path configuration logging
 console.log('');

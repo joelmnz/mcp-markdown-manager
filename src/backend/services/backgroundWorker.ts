@@ -6,6 +6,7 @@ import { databaseEmbeddingService } from './databaseEmbedding.js';
 import { chunkMarkdown } from './chunking.js';
 import { loggingService, LogLevel, LogCategory } from './logging.js';
 import { performanceMetricsService, MetricType } from './performanceMetrics.js';
+import { embeddingQueueConfigService, EmbeddingQueueConfig } from './embeddingQueueConfig.js';
 
 // Worker statistics interface
 export interface WorkerStats {
@@ -33,10 +34,7 @@ class BackgroundWorkerService implements BackgroundWorker {
   private metricsInterval: NodeJS.Timeout | null = null;
   private lastMetricsTime = Date.now();
   private tasksProcessedSinceLastMetrics = 0;
-  private readonly PROCESSING_INTERVAL_MS = 5000; // 5 seconds
-  private readonly HEARTBEAT_INTERVAL_MS = 30000; // 30 seconds
-  private readonly METRICS_INTERVAL_MS = 60000; // 1 minute
-  private readonly MAX_PROCESSING_TIME_MS = 30 * 60 * 1000; // 30 minutes
+  private config!: EmbeddingQueueConfig;
 
   /**
    * Start the background worker
@@ -52,6 +50,27 @@ class BackgroundWorkerService implements BackgroundWorker {
     }
 
     try {
+      // Load configuration
+      this.config = embeddingQueueConfigService.getConfig();
+      
+      // Check if background processing is enabled
+      if (!this.config.enabled) {
+        console.log('Background embedding queue is disabled via configuration');
+        return;
+      }
+
+      // Validate configuration
+      const configStatus = embeddingQueueConfigService.getConfigStatus();
+      if (!configStatus.isValid) {
+        throw new Error(`Invalid embedding queue configuration: ${configStatus.errors.join(', ')}`);
+      }
+
+      // Log configuration warnings
+      if (configStatus.warnings.length > 0) {
+        console.warn('Embedding queue configuration warnings:');
+        configStatus.warnings.forEach(warning => console.warn(`  - ${warning}`));
+      }
+
       // Update worker status in database
       await this.updateWorkerStatus(true);
       
@@ -60,11 +79,13 @@ class BackgroundWorkerService implements BackgroundWorker {
       await loggingService.logWorkerEvent('started', { 
         isRunning: true,
         metadata: { 
-          processingInterval: this.PROCESSING_INTERVAL_MS,
-          heartbeatInterval: this.HEARTBEAT_INTERVAL_MS 
+          processingInterval: this.config.workerInterval,
+          heartbeatInterval: this.config.heartbeatInterval,
+          maxRetries: this.config.maxRetries,
+          maxProcessingTime: this.config.maxProcessingTime
         }
       });
-      console.log('Background worker started');
+      console.log(`Background worker started with ${this.config.workerInterval}ms interval`);
 
       // Start the main processing loop
       this.processingInterval = setInterval(async () => {
@@ -73,11 +94,11 @@ class BackgroundWorkerService implements BackgroundWorker {
         } catch (error) {
           await loggingService.logWorkerEvent('processing_loop_error', { 
             error: error instanceof Error ? error : new Error('Unknown error'),
-            metadata: { interval: this.PROCESSING_INTERVAL_MS }
+            metadata: { interval: this.config.workerInterval }
           });
           console.error('Error in worker processing loop:', error);
         }
-      }, this.PROCESSING_INTERVAL_MS);
+      }, this.config.workerInterval);
 
       // Start heartbeat mechanism
       this.heartbeatInterval = setInterval(async () => {
@@ -86,11 +107,11 @@ class BackgroundWorkerService implements BackgroundWorker {
         } catch (error) {
           await loggingService.logWorkerEvent('heartbeat_error', { 
             error: error instanceof Error ? error : new Error('Unknown error'),
-            metadata: { interval: this.HEARTBEAT_INTERVAL_MS }
+            metadata: { interval: this.config.heartbeatInterval }
           });
           console.error('Error sending worker heartbeat:', error);
         }
-      }, this.HEARTBEAT_INTERVAL_MS);
+      }, this.config.heartbeatInterval);
 
       // Start metrics collection
       this.metricsInterval = setInterval(async () => {
@@ -99,18 +120,20 @@ class BackgroundWorkerService implements BackgroundWorker {
         } catch (error) {
           await loggingService.logWorkerEvent('metrics_collection_error', { 
             error: error instanceof Error ? error : new Error('Unknown error'),
-            metadata: { interval: this.METRICS_INTERVAL_MS }
+            metadata: { interval: this.config.metricsInterval }
           });
           console.error('Error collecting performance metrics:', error);
         }
-      }, this.METRICS_INTERVAL_MS);
+      }, this.config.metricsInterval);
 
-      // Clean up stuck tasks on startup
-      const cleanedTasks = await this.cleanupStuckTasks();
-      if (cleanedTasks > 0) {
-        await loggingService.logWorkerEvent('startup_cleanup', { 
-          metadata: { cleanedTasks, timeoutMinutes: this.MAX_PROCESSING_TIME_MS / 60000 }
-        });
+      // Clean up stuck tasks on startup if enabled
+      if (this.config.stuckTaskCleanupEnabled) {
+        const cleanedTasks = await this.cleanupStuckTasks();
+        if (cleanedTasks > 0) {
+          await loggingService.logWorkerEvent('startup_cleanup', { 
+            metadata: { cleanedTasks, timeoutMinutes: this.config.maxProcessingTime / 60000 }
+          });
+        }
       }
 
     } catch (error) {
@@ -483,13 +506,14 @@ class BackgroundWorkerService implements BackgroundWorker {
    */
   private async cleanupStuckTasks(): Promise<number> {
     try {
+      const timeoutSeconds = this.config.maxProcessingTime / 1000;
       const result = await database.query(`
         UPDATE embedding_tasks 
         SET status = 'pending', 
             processed_at = NULL,
             error_message = 'Task was stuck in processing state and has been reset on worker startup'
         WHERE status = 'processing' 
-          AND processed_at < NOW() - INTERVAL '${this.MAX_PROCESSING_TIME_MS / 1000} seconds'
+          AND processed_at < NOW() - INTERVAL '${timeoutSeconds} seconds'
       `);
 
       const cleanedCount = result.rowCount || 0;
@@ -622,7 +646,8 @@ class BackgroundWorkerService implements BackgroundWorker {
   private async handleTaskFailure(task: EmbeddingTask, errorMessage: string): Promise<void> {
     try {
       // Check if we should retry or mark as permanently failed
-      if (task.attempts >= task.maxAttempts) {
+      const maxAttempts = this.config.maxRetries;
+      if (task.attempts >= maxAttempts) {
         // Permanently failed - no more retries
         await embeddingQueueService.updateTaskStatus(task.id, 'failed', errorMessage);
         
@@ -643,8 +668,8 @@ class BackgroundWorkerService implements BackgroundWorker {
         
       } else {
         // Schedule retry with exponential backoff
-        const baseDelayMs = 1000; // 1 second base delay
-        const retryDelayMs = baseDelayMs * Math.pow(2, task.attempts); // 1s, 2s, 4s, 8s, etc.
+        const baseDelayMs = this.config.retryBackoffBase;
+        const retryDelayMs = baseDelayMs * Math.pow(2, task.attempts); // exponential backoff
         const scheduledAt = new Date(Date.now() + retryDelayMs);
         
         // Reset task to pending status with new scheduled time
@@ -663,7 +688,7 @@ class BackgroundWorkerService implements BackgroundWorker {
           operation: task.operation,
           attempt: task.attempts,
           metadata: {
-            maxAttempts: task.maxAttempts,
+            maxAttempts,
             retryDelayMs,
             scheduledAt: scheduledAt.toISOString(),
             error: errorMessage,
@@ -671,7 +696,7 @@ class BackgroundWorkerService implements BackgroundWorker {
           }
         });
         
-        console.log(`Task ${task.id} scheduled for retry in ${retryDelayMs}ms (attempt ${task.attempts + 1}/${task.maxAttempts})`);
+        console.log(`Task ${task.id} scheduled for retry in ${retryDelayMs}ms (attempt ${task.attempts + 1}/${maxAttempts})`);
       }
       
     } catch (error) {
@@ -740,13 +765,13 @@ class BackgroundWorkerService implements BackgroundWorker {
       // Utilization = (time spent processing) / (total time)
       // For simplicity, we'll estimate based on whether we processed any tasks
       const utilizationPercent = this.tasksProcessedSinceLastMetrics > 0 ? 
-        Math.min(100, (this.tasksProcessedSinceLastMetrics / (timeSinceLastMetrics / this.PROCESSING_INTERVAL_MS)) * 100) : 0;
+        Math.min(100, (this.tasksProcessedSinceLastMetrics / (timeSinceLastMetrics / this.config.workerInterval)) * 100) : 0;
       
       await performanceMetricsService.recordWorkerUtilization(utilizationPercent, {
         metadata: {
           tasksProcessed: this.tasksProcessedSinceLastMetrics,
           intervalMs: timeSinceLastMetrics,
-          processingIntervalMs: this.PROCESSING_INTERVAL_MS
+          processingIntervalMs: this.config.workerInterval
         }
       });
 

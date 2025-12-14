@@ -480,7 +480,73 @@ bun run reindex
 - Monitor for unauthorized access
 - Backup encryption for sensitive data
 
+## Background Embedding Queue Deployment
+
+The system includes an optional background embedding queue for asynchronous processing of article embeddings. This prevents UI blocking during article operations.
+
+### Quick Setup
+
+```bash
+# Enable background embedding processing
+export SEMANTIC_SEARCH_ENABLED=true
+export EMBEDDING_PROVIDER=ollama
+export OLLAMA_BASE_URL=http://localhost:11434
+
+# Deploy with embedding queue
+bun scripts/deploy-embedding-queue.ts --env production --yes
+```
+
+### Manual Setup
+
+1. **Configure Environment:**
+   ```bash
+   # Required settings
+   SEMANTIC_SEARCH_ENABLED=true
+   EMBEDDING_PROVIDER=ollama  # or openai
+   OLLAMA_BASE_URL=http://localhost:11434
+   
+   # Optional queue settings
+   EMBEDDING_QUEUE_ENABLED=true
+   EMBEDDING_WORKER_INTERVAL=5000
+   EMBEDDING_MAX_RETRIES=3
+   ```
+
+2. **Run Database Migration:**
+   ```bash
+   bun scripts/migrations/002-embedding-queue.ts
+   ```
+
+3. **Migrate Existing Articles:**
+   ```bash
+   bun scripts/migrations/003-embedding-migration.ts --yes
+   ```
+
+4. **Verify Deployment:**
+   ```bash
+   bun scripts/queue-admin.ts status
+   ```
+
+### Monitoring
+
+```bash
+# Check queue status
+bun scripts/queue-admin.ts status
+
+# Monitor processing
+bun scripts/queue-admin.ts health
+
+# View recent activity
+bun scripts/queue-admin.ts recent
+```
+
+For detailed embedding queue deployment instructions, see:
+- [Embedding Queue Deployment Guide](docs/embedding-queue/DEPLOYMENT_GUIDE.md)
+- [Configuration Guide](docs/embedding-queue/CONFIGURATION.md)
+- [Troubleshooting Guide](docs/embedding-queue/TROUBLESHOOTING.md)
+
 ## Rollback Procedures
+
+### File-Based Storage Rollback
 
 If you need to rollback to file-based storage:
 
@@ -493,6 +559,8 @@ If you need to rollback to file-based storage:
 3. **Switch to file-based branch/version**
 4. **Restart application**
 
+### Database Rollback
+
 For database rollbacks:
 
 1. **Restore from database backup:**
@@ -503,3 +571,25 @@ For database rollbacks:
    ```bash
    bun run db:validate
    ```
+
+### Embedding Queue Rollback
+
+For embedding queue rollback:
+
+1. **Quick disable:**
+   ```bash
+   export SEMANTIC_SEARCH_ENABLED=false
+   docker-compose restart article-manager
+   ```
+
+2. **Complete rollback:**
+   ```bash
+   bun scripts/deploy-embedding-queue.ts rollback --yes
+   ```
+
+3. **Emergency rollback:**
+   ```bash
+   bun scripts/queue-admin.ts emergency-stop
+   ```
+
+For comprehensive rollback procedures, see [Rollback Procedures Guide](docs/embedding-queue/ROLLBACK_PROCEDURES.md).

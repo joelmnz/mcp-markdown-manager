@@ -3,6 +3,7 @@ import { databaseVersionHistoryService } from './databaseVersionHistory.js';
 import { chunkMarkdown } from './chunking.js';
 import { upsertArticleChunks, deleteArticleChunks } from './vectorIndex.js';
 import { embeddingQueueService } from './embeddingQueue.js';
+import { embeddingQueueConfigService } from './embeddingQueueConfig.js';
 
 // Maintain backward compatibility with existing interfaces
 export interface Article {
@@ -41,6 +42,13 @@ export interface ArticleServiceOptions {
 }
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
+
+// Helper function to check if background embedding is enabled
+function isBackgroundEmbeddingEnabled(): boolean {
+  if (!SEMANTIC_SEARCH_ENABLED) return false;
+  const config = embeddingQueueConfigService.getConfig();
+  return config.enabled;
+}
 
 // Helper function to safely handle embedding operations without affecting article CRUD
 async function safelyHandleEmbeddingOperation(
@@ -200,19 +208,20 @@ export async function createArticle(title: string, content: string, message?: st
   await createVersionSnapshot(filename, title, cleanedContent, '', message || 'Initial version');
   
   // Handle embedding generation with failure isolation
-  if (SEMANTIC_SEARCH_ENABLED && !options?.skipEmbedding) {
+  if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
     await safelyHandleEmbeddingOperation(async () => {
       // Get article ID for task queuing
       const articleId = await databaseArticleService.getArticleId(dbArticle.slug);
       
       if (articleId) {
         // Queue embedding task for background processing
+        const config = embeddingQueueConfigService.getConfig();
         await embeddingQueueService.enqueueTask({
           articleId,
           slug: dbArticle.slug,
           operation: 'create',
           priority: options?.embeddingPriority || 'normal',
-          maxAttempts: 3,
+          maxAttempts: config.maxRetries,
           scheduledAt: new Date(),
           metadata: {
             filename,
@@ -246,7 +255,7 @@ export async function updateArticle(filename: string, title: string, content: st
   await createVersionSnapshot(newFilename, title, cleanedContent, existing.folder, message || 'Updated article');
   
   // Handle embedding updates with failure isolation
-  if (SEMANTIC_SEARCH_ENABLED && !options?.skipEmbedding) {
+  if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
     await safelyHandleEmbeddingOperation(async () => {
       // Get article ID for task queuing
       const articleId = await databaseArticleService.getArticleId(updatedArticle.slug);
@@ -255,12 +264,13 @@ export async function updateArticle(filename: string, title: string, content: st
         // If slug changed, queue a delete task for the old slug first
         if (filename !== newFilename) {
           const oldSlug = filenameToSlug(filename);
+          const config = embeddingQueueConfigService.getConfig();
           await embeddingQueueService.enqueueTask({
             articleId,
             slug: oldSlug,
             operation: 'delete',
             priority: options?.embeddingPriority || 'normal',
-            maxAttempts: 3,
+            maxAttempts: config.maxRetries,
             scheduledAt: new Date(),
             metadata: {
               filename,
@@ -270,12 +280,13 @@ export async function updateArticle(filename: string, title: string, content: st
         }
         
         // Queue embedding update task for background processing
+        const config = embeddingQueueConfigService.getConfig();
         await embeddingQueueService.enqueueTask({
           articleId,
           slug: updatedArticle.slug,
           operation: 'update',
           priority: options?.embeddingPriority || 'normal',
-          maxAttempts: 3,
+          maxAttempts: config.maxRetries,
           scheduledAt: new Date(),
           metadata: {
             filename: newFilename,
@@ -297,7 +308,7 @@ export async function deleteArticle(filename: string, options?: ArticleServiceOp
   
   // Get article ID before deletion for embedding cleanup
   let articleId: number | null = null;
-  if (SEMANTIC_SEARCH_ENABLED && !options?.skipEmbedding) {
+  if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
     try {
       articleId = await databaseArticleService.getArticleId(slug);
     } catch (error) {
@@ -310,14 +321,15 @@ export async function deleteArticle(filename: string, options?: ArticleServiceOp
   await databaseArticleService.deleteArticle(slug);
   
   // Queue embedding cleanup task with failure isolation
-  if (SEMANTIC_SEARCH_ENABLED && !options?.skipEmbedding && articleId) {
+  if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding && articleId) {
     await safelyHandleEmbeddingOperation(async () => {
+      const config = embeddingQueueConfigService.getConfig();
       await embeddingQueueService.enqueueTask({
         articleId,
         slug,
         operation: 'delete',
         priority: options?.embeddingPriority || 'normal',
-        maxAttempts: 3,
+        maxAttempts: config.maxRetries,
         scheduledAt: new Date(),
         metadata: {
           filename,
@@ -403,14 +415,15 @@ export async function restoreArticleVersion(filename: string, versionId: string,
   );
   
   // Queue embedding update task with failure isolation
-  if (SEMANTIC_SEARCH_ENABLED && !options?.skipEmbedding) {
+  if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
     await safelyHandleEmbeddingOperation(async () => {
+      const config = embeddingQueueConfigService.getConfig();
       await embeddingQueueService.enqueueTask({
         articleId,
         slug: restoredArticle.slug,
         operation: 'update',
         priority: options?.embeddingPriority || 'normal',
-        maxAttempts: 3,
+        maxAttempts: config.maxRetries,
         scheduledAt: new Date(),
         metadata: {
           filename,
@@ -459,7 +472,7 @@ export async function getArticleEmbeddingStatus(filename: string): Promise<{
   lastTaskStatus?: string;
   lastError?: string;
 } | null> {
-  if (!SEMANTIC_SEARCH_ENABLED) {
+  if (!isBackgroundEmbeddingEnabled()) {
     return null;
   }
   
@@ -493,7 +506,7 @@ export async function getArticleEmbeddingStatus(filename: string): Promise<{
 
 // Retry failed embedding tasks for an article
 export async function retryArticleEmbedding(filename: string, priority: 'high' | 'normal' | 'low' = 'high'): Promise<boolean> {
-  if (!SEMANTIC_SEARCH_ENABLED) {
+  if (!isBackgroundEmbeddingEnabled()) {
     return false;
   }
   
@@ -507,12 +520,13 @@ export async function retryArticleEmbedding(filename: string, priority: 'high' |
     }
     
     // Queue a new embedding task with high priority
+    const config = embeddingQueueConfigService.getConfig();
     await embeddingQueueService.enqueueTask({
       articleId,
       slug: article.slug,
       operation: 'update',
       priority,
-      maxAttempts: 3,
+      maxAttempts: config.maxRetries,
       scheduledAt: new Date(),
       metadata: {
         filename,
@@ -540,7 +554,7 @@ export async function getArticlesNeedingEmbedding(): Promise<Array<{
   lastTaskStatus?: string;
   lastError?: string;
 }>> {
-  if (!SEMANTIC_SEARCH_ENABLED) {
+  if (!isBackgroundEmbeddingEnabled()) {
     return [];
   }
   
@@ -577,7 +591,7 @@ export async function queueBulkEmbeddingUpdate(
   errors: string[];
   taskIds: string[];
 } | null> {
-  if (!SEMANTIC_SEARCH_ENABLED) {
+  if (!isBackgroundEmbeddingEnabled()) {
     return null;
   }
   
@@ -604,7 +618,7 @@ export async function getBulkOperationSummary(operationId: string): Promise<{
   averageProcessingTime?: number;
   errors: string[];
 } | null> {
-  if (!SEMANTIC_SEARCH_ENABLED) {
+  if (!isBackgroundEmbeddingEnabled()) {
     return null;
   }
   
@@ -631,7 +645,7 @@ export async function listRecentBulkOperations(limit: number = 10): Promise<Arra
   averageProcessingTime?: number;
   errors: string[];
 }>> {
-  if (!SEMANTIC_SEARCH_ENABLED) {
+  if (!isBackgroundEmbeddingEnabled()) {
     return [];
   }
   

@@ -1,74 +1,254 @@
 # Database Migrations
 
-This directory contains database migration scripts for schema updates.
+This directory contains database migration scripts for the MCP Markdown Manager.
 
-## Migration System
+## Available Migrations
 
-The migration system tracks schema versions and applies changes incrementally. Each migration has:
+### Migration 002: Background Embedding Queue
+**File:** `002-embedding-queue.ts`
+**Description:** Adds database tables and infrastructure for the background embedding queue system.
 
-- **Version number**: Sequential integer (1, 2, 3, ...)
-- **Description**: Human-readable description of changes
-- **Apply function**: Code to execute the migration
+**Tables Created:**
+- `embedding_tasks` - Task queue for embedding processing
+- `embedding_worker_status` - Worker state tracking
+- `embedding_audit_logs` - Comprehensive audit logging
+- `performance_metrics` - Performance tracking and metrics
 
-## Creating Migrations
+**Usage:**
+```bash
+# Run migration
+bun scripts/migrations/002-embedding-queue.ts
 
-1. Add a new migration object to the `migrations` array in `scripts/database.ts`
-2. Increment the version number
-3. Provide a clear description
-4. Implement the `apply` function with the necessary SQL changes
+# Rollback migration
+bun scripts/migrations/002-embedding-queue.ts rollback
+```
 
-Example:
-```typescript
-{
-  version: 2,
-  description: 'Add tags column to articles table',
-  apply: async () => {
-    await database.query('ALTER TABLE articles ADD COLUMN tags TEXT[] DEFAULT \'{}\'');
-    await database.query('CREATE INDEX idx_articles_tags ON articles USING gin(tags)');
-  }
-}
+### Migration 003: Embedding Migration for Existing Articles
+**File:** `003-embedding-migration.ts`
+**Description:** Identifies existing articles without embeddings and queues them for background processing.
+
+**Usage:**
+```bash
+# Preview what would be migrated
+bun scripts/migrations/003-embedding-migration.ts --dry-run
+
+# Run migration with confirmation
+bun scripts/migrations/003-embedding-migration.ts
+
+# Run migration without confirmation
+bun scripts/migrations/003-embedding-migration.ts --yes
+
+# Run with custom settings
+bun scripts/migrations/003-embedding-migration.ts --batch-size 25 --priority high
+
+# Rollback migration (cancel pending tasks)
+bun scripts/migrations/003-embedding-migration.ts rollback
+```
+
+**Options:**
+- `--dry-run` - Show what would be done without making changes
+- `--yes` - Skip confirmation prompts
+- `--batch-size <n>` - Process articles in batches of n (default: 50)
+- `--priority <level>` - Set task priority: high, normal, low (default: normal)
+
+## Migration Template
+
+Use `migration-template.ts` as a starting point for new migrations:
+
+```bash
+# Copy template
+cp scripts/migrations/migration-template.ts scripts/migrations/004-new-feature.ts
+
+# Edit the new migration
+# - Update version number
+# - Add description
+# - Implement apply() and rollback() methods
 ```
 
 ## Running Migrations
 
-Use the database CLI to manage migrations:
+### Individual Migrations
 
 ```bash
-# Check current schema version and pending migrations
-bun run db:migrate
+# Run specific migration
+bun scripts/migrations/002-embedding-queue.ts
 
-# Apply all pending migrations
-bun run db:migrate
-
-# Verify schema after migration
-bun run db:verify
+# Rollback specific migration
+bun scripts/migrations/002-embedding-queue.ts rollback
 ```
 
-## Best Practices
+### Automated Deployment
 
-1. **Always backup** before running migrations in production
-2. **Test migrations** on a copy of production data first
-3. **Make migrations reversible** when possible
-4. **Use transactions** for complex migrations
-5. **Document breaking changes** clearly
+Use the deployment script for complete setup:
 
-## Schema Versioning
+```bash
+# Deploy embedding queue system
+bun scripts/deploy-embedding-queue.ts --env production
 
-The system uses a `schema_version` table to track applied migrations:
+# Deploy with dry run
+bun scripts/deploy-embedding-queue.ts --dry-run
 
-```sql
-CREATE TABLE schema_version (
-  version INTEGER PRIMARY KEY,
-  applied_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  description TEXT
-);
+# Rollback deployment
+bun scripts/deploy-embedding-queue.ts rollback
 ```
 
-## Rollback Strategy
+## Migration Best Practices
 
-Currently, rollbacks must be done manually by:
+### Before Running Migrations
 
-1. Restoring from backup: `bun run db:restore <backup-file>`
-2. Or creating a new migration that reverses changes
+1. **Backup Database:**
+   ```bash
+   bun run db:backup
+   ```
 
-Future versions may include automatic rollback capabilities.
+2. **Test in Development:**
+   ```bash
+   bun scripts/migrations/XXX-migration.ts --dry-run
+   ```
+
+3. **Verify Prerequisites:**
+   ```bash
+   bun run db:health
+   bun run db:verify
+   ```
+
+### During Migration
+
+1. **Monitor Progress:**
+   ```bash
+   # For embedding migration
+   bun scripts/queue-admin.ts status
+   ```
+
+2. **Check for Errors:**
+   ```bash
+   # View application logs
+   docker-compose logs -f article-manager
+   ```
+
+### After Migration
+
+1. **Verify Success:**
+   ```bash
+   bun run db:verify
+   bun run db:validate
+   ```
+
+2. **Test Functionality:**
+   ```bash
+   bun scripts/test-api-compatibility.ts
+   ```
+
+3. **Monitor Performance:**
+   ```bash
+   bun scripts/queue-admin.ts health
+   ```
+
+## Troubleshooting
+
+### Migration Fails
+
+1. **Check Prerequisites:**
+   - Database connection
+   - Required environment variables
+   - Sufficient permissions
+
+2. **Review Error Messages:**
+   - Check console output
+   - Review application logs
+   - Check database logs
+
+3. **Rollback if Necessary:**
+   ```bash
+   bun scripts/migrations/XXX-migration.ts rollback
+   ```
+
+### Partial Migration
+
+If a migration partially completes:
+
+1. **Check Database State:**
+   ```sql
+   SELECT table_name FROM information_schema.tables 
+   WHERE table_name LIKE 'embedding_%';
+   ```
+
+2. **Manual Cleanup if Needed:**
+   ```bash
+   # Use rollback to clean up
+   bun scripts/migrations/002-embedding-queue.ts rollback
+   ```
+
+3. **Re-run Migration:**
+   ```bash
+   bun scripts/migrations/002-embedding-queue.ts
+   ```
+
+### Performance Issues
+
+For large datasets:
+
+1. **Use Smaller Batches:**
+   ```bash
+   bun scripts/migrations/003-embedding-migration.ts --batch-size 10
+   ```
+
+2. **Run During Off-Peak Hours:**
+   ```bash
+   # Schedule for low-traffic periods
+   ```
+
+3. **Monitor System Resources:**
+   ```bash
+   docker stats
+   ```
+
+## Migration History
+
+| Version | Description | Date | Status |
+|---------|-------------|------|--------|
+| 002 | Background Embedding Queue | 2024-12-14 | ✅ Available |
+| 003 | Embedding Migration | 2024-12-14 | ✅ Available |
+
+## Creating New Migrations
+
+1. **Copy Template:**
+   ```bash
+   cp scripts/migrations/migration-template.ts scripts/migrations/004-new-feature.ts
+   ```
+
+2. **Update Migration:**
+   - Increment version number
+   - Add descriptive name
+   - Implement `apply()` method
+   - Implement `rollback()` method
+
+3. **Test Migration:**
+   ```bash
+   bun scripts/migrations/004-new-feature.ts --dry-run
+   ```
+
+4. **Document Migration:**
+   - Update this README
+   - Add to migration history table
+   - Document any special requirements
+
+## Support
+
+For migration issues:
+
+1. **Check Documentation:**
+   - [Deployment Guide](../../docs/DEPLOYMENT_GUIDE.md)
+   - [Embedding Queue Deployment](../../docs/embedding-queue/DEPLOYMENT_GUIDE.md)
+   - [Troubleshooting Guide](../../docs/embedding-queue/TROUBLESHOOTING.md)
+
+2. **Review Logs:**
+   ```bash
+   docker-compose logs article-manager
+   ```
+
+3. **Check Database Health:**
+   ```bash
+   bun run db:health
+   bun run db:info
+   ```

@@ -40,6 +40,36 @@ This directory contains various utility scripts for managing the Article Manager
 - **`deploy-production.sh`** - Linux/macOS production deployment
 - **`deploy-production.ps1`** - Windows production deployment
 
+## Background Embedding Queue Administration
+
+### Queue Management Tools
+
+- **`queue-admin.ts`** - Primary queue management and monitoring tool
+  - Real-time queue monitoring and statistics
+  - Task inspection, debugging, and retry operations
+  - Health checks with automated issue detection
+  - Cleanup utilities for maintenance operations
+  - Usage: `bun scripts/queue-admin.ts <command> [options]`
+
+- **`embedding-migration.ts`** - Migration and deployment support tool
+  - System migration from synchronous to background embedding
+  - Deployment readiness checks and documentation generation
+  - Configuration backup and restore operations
+  - Rollback procedures for emergency situations
+  - Usage: `bun scripts/embedding-migration.ts <command> [options]`
+
+- **`bulk-embedding-admin.ts`** - Bulk embedding operations tool
+  - Identify articles needing embedding updates
+  - Queue bulk embedding operations with progress tracking
+  - Monitor bulk operation status and progress
+  - Usage: `bun scripts/bulk-embedding-admin.ts <command> [options]`
+
+- **`emergency-rollback.ts`** - Emergency rollback to synchronous mode
+  - Quick rollback for critical situations
+  - Cancels all pending embedding tasks
+  - Creates rollback documentation and instructions
+  - Usage: `bun scripts/emergency-rollback.ts [--force]`
+
 ## Testing and Utilities
 
 - **`reindex.ts`** - Rebuild search indexes
@@ -85,6 +115,33 @@ bun scripts/import-articles.ts import ./data
 
 # Dry run import
 bun scripts/import-articles.ts import ./data --dry-run
+```
+
+### Queue Administration
+
+```bash
+# Monitor queue in real-time
+bun scripts/queue-admin.ts monitor
+
+# Check queue health and statistics
+bun scripts/queue-admin.ts health
+bun scripts/queue-admin.ts stats
+
+# List and debug failed tasks
+bun scripts/queue-admin.ts list failed 10
+bun scripts/queue-admin.ts debug <task-id>
+
+# Retry failed tasks and cleanup
+bun scripts/queue-admin.ts retry-failed
+bun scripts/queue-admin.ts cleanup 30
+
+# Migration and deployment
+bun scripts/embedding-migration.ts analyze
+bun scripts/embedding-migration.ts migrate --dry-run
+bun scripts/embedding-migration.ts deploy-check
+
+# Emergency rollback
+bun scripts/emergency-rollback.ts --force
 ```
 
 ## Environment Variables

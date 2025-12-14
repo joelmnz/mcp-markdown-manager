@@ -16,6 +16,9 @@ import {
 } from '../services/articles';
 import { semanticSearch, hybridSearch, getDetailedIndexStats, rebuildIndex, indexUnindexedArticles } from '../services/vectorIndex';
 import { databaseHealthService } from '../services/databaseHealth.js';
+import { backgroundWorkerService } from '../services/backgroundWorker.js';
+import { embeddingQueueService } from '../services/embeddingQueue.js';
+import { embeddingQueueConfigService } from '../services/embeddingQueueConfig.js';
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 
@@ -29,8 +32,30 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       const healthCheck = await databaseHealthService.performHealthCheck();
       const stats = await databaseHealthService.getDatabaseStats();
       
+      // Get embedding queue configuration and status
+      const queueConfig = embeddingQueueConfigService.getConfig();
+      const configStatus = embeddingQueueConfigService.getConfigStatus();
+      
+      let workerStats = null;
+      let queueStats = null;
+      let queueHealth = null;
+      
+      if (queueConfig.enabled && configStatus.isValid) {
+        try {
+          workerStats = await backgroundWorkerService.getWorkerStats();
+          queueStats = await embeddingQueueService.getQueueStats();
+          queueHealth = await embeddingQueueService.getQueueHealth();
+        } catch (error) {
+          console.error('Error getting worker/queue stats:', error);
+        }
+      }
+      
+      // Determine overall system health
+      const systemHealthy = healthCheck.healthy && 
+        (!queueConfig.enabled || (queueHealth?.isHealthy !== false));
+      
       return new Response(JSON.stringify({
-        status: healthCheck.healthy ? 'ok' : 'degraded',
+        status: systemHealthy ? 'ok' : 'degraded',
         timestamp: new Date().toISOString(),
         database: {
           healthy: healthCheck.healthy,
@@ -43,10 +68,39 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         stats: stats,
         services: {
           semanticSearch: SEMANTIC_SEARCH_ENABLED,
-          mcpServer: process.env.MCP_SERVER_ENABLED?.toLowerCase() === 'true'
-        }
+          mcpServer: process.env.MCP_SERVER_ENABLED?.toLowerCase() === 'true',
+          embeddingQueue: {
+            enabled: queueConfig.enabled,
+            configValid: configStatus.isValid,
+            configErrors: configStatus.errors,
+            configWarnings: configStatus.warnings
+          }
+        },
+        worker: workerStats ? {
+          isRunning: workerStats.isRunning,
+          tasksProcessed: workerStats.tasksProcessed,
+          tasksSucceeded: workerStats.tasksSucceeded,
+          tasksFailed: workerStats.tasksFailed,
+          averageProcessingTime: workerStats.averageProcessingTime,
+          lastProcessedAt: workerStats.lastProcessedAt
+        } : null,
+        queue: queueStats ? {
+          pending: queueStats.pending,
+          processing: queueStats.processing,
+          completed: queueStats.completed,
+          failed: queueStats.failed,
+          total: queueStats.total,
+          health: queueHealth ? {
+            isHealthy: queueHealth.isHealthy,
+            totalTasks: queueHealth.totalTasks,
+            oldestPendingTask: queueHealth.oldestPendingTask,
+            failedTasksLast24h: queueHealth.failedTasksLast24h,
+            averageProcessingTime: queueHealth.averageProcessingTime,
+            issues: queueHealth.issues
+          } : null
+        } : null
       }), {
-        status: healthCheck.healthy ? 200 : 503,
+        status: systemHealthy ? 200 : 503,
         headers: { 'Content-Type': 'application/json' }
       });
     } catch (error) {
