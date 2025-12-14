@@ -2,6 +2,7 @@ import { handleApiRequest } from './routes/api';
 import { handleMCPPostRequest, handleMCPGetRequest, handleMCPDeleteRequest } from './mcp/server';
 import { databaseInit } from './services/databaseInit.js';
 import { databaseHealthService } from './services/databaseHealth.js';
+import { basePathService } from './services/basePath.js';
 
 const PORT = parseInt(process.env.PORT || '5000');
 const MCP_SERVER_ENABLED = process.env.MCP_SERVER_ENABLED?.toLowerCase() === 'true';
@@ -48,8 +49,59 @@ async function initializeDatabase() {
   }
 }
 
+/**
+ * Inject base path configuration into HTML template
+ */
+function injectBasePathConfig(htmlContent: string, config: any): string {
+  // Replace template placeholders with actual base path values
+  const basePath = config.isRoot ? '' : config.normalizedPath;
+  const basePathConfig = JSON.stringify({
+    basePath: config.normalizedPath,
+    isRoot: config.isRoot
+  });
+  
+  return htmlContent
+    .replace(/\{\{BASE_PATH\}\}/g, basePath)
+    .replace(/\{\{BASE_PATH_CONFIG\}\}/g, basePathConfig);
+}
+
+/**
+ * Generate manifest.json with runtime base path configuration
+ */
+async function generateManifest(config: any): Promise<string> {
+  const templatePath = process.env.NODE_ENV === 'production' 
+    ? './public/manifest.template.json' 
+    : './public/manifest.template.json';
+  
+  try {
+    const templateFile = Bun.file(templatePath);
+    const templateContent = await templateFile.text();
+    const basePath = config.isRoot ? '' : config.normalizedPath;
+    
+    // Replace template placeholders with actual base path values
+    const manifestContent = templateContent.replace(/\{\{BASE_PATH\}\}/g, basePath);
+    
+    return manifestContent;
+  } catch (error) {
+    console.error('Error generating manifest.json:', error);
+    // Fallback to basic manifest
+    const basePath = config.isRoot ? '' : config.normalizedPath;
+    return JSON.stringify({
+      name: "MCP Markdown Manager",
+      short_name: "Articles",
+      start_url: basePath + "/",
+      scope: basePath + "/",
+      display: "standalone",
+      theme_color: "#4a9eff"
+    });
+  }
+}
+
 // Initialize database before starting server
 await initializeDatabase();
+
+// Get base path configuration
+const basePathConfig = basePathService.getConfig();
 
 const server = Bun.serve({
   port: PORT,
@@ -63,8 +115,12 @@ const server = Bun.serve({
       console.log(`[${timestamp}] ${request.method} ${url.pathname} ${status} ${duration}ms`);
     };
     
+    // Strip base path from URL for internal routing
+    const originalPath = url.pathname;
+    const routePath = basePathService.stripBasePath(originalPath);
+    
     // Handle MCP endpoint
-    if (url.pathname === '/mcp') {
+    if (routePath === '/mcp') {
       if (!MCP_SERVER_ENABLED) {
         logRequest(404);
         return new Response('MCP server disabled', { status: 404 });
@@ -86,8 +142,17 @@ const server = Bun.serve({
     }
     
     // Handle API endpoints
-    if (url.pathname.startsWith('/api/') || url.pathname === '/health') {
-      const response = await handleApiRequest(request);
+    if (routePath.startsWith('/api/') || routePath === '/health') {
+      // Create a new request with the stripped path for API handling
+      const apiUrl = new URL(request.url);
+      apiUrl.pathname = routePath;
+      const apiRequest = new Request(apiUrl.toString(), {
+        method: request.method,
+        headers: request.headers,
+        body: request.body
+      });
+      
+      const response = await handleApiRequest(apiRequest);
       logRequest(response.status);
       return response;
     }
@@ -98,18 +163,34 @@ const server = Bun.serve({
       : './public';
     
     // Serve index.html for all non-API routes (SPA routing)
-    if (!url.pathname.startsWith('/api/') && !url.pathname.startsWith('/mcp')) {
-      const filePath = url.pathname === '/' ? '/index.html' : url.pathname;
+    if (!routePath.startsWith('/api/') && !routePath.startsWith('/mcp')) {
+      const filePath = routePath === '/' ? '/index.html' : routePath;
       const file = Bun.file(publicDir + filePath);
       
       if (await file.exists()) {
         // Set proper MIME type for service worker
         const headers: Record<string, string> = {};
-        if (url.pathname === '/sw.js') {
+        if (routePath === '/sw.js') {
           headers['Content-Type'] = 'application/javascript';
-          headers['Service-Worker-Allowed'] = '/';
-        } else if (url.pathname === '/manifest.json') {
-          headers['Content-Type'] = 'application/manifest+json';
+          headers['Service-Worker-Allowed'] = basePathConfig.isRoot ? '/' : basePathConfig.normalizedPath + '/';
+        } else if (routePath === '/manifest.json') {
+          // Generate manifest.json with runtime base path configuration
+          const manifestContent = await generateManifest(basePathConfig);
+          logRequest(200);
+          return new Response(manifestContent, { 
+            headers: { 'Content-Type': 'application/manifest+json' }
+          });
+        }
+        
+        // Special handling for index.html - inject base path configuration
+        if (filePath === '/index.html') {
+          const htmlContent = await file.text();
+          const injectedHtml = injectBasePathConfig(htmlContent, basePathConfig);
+          
+          logRequest(200);
+          return new Response(injectedHtml, { 
+            headers: { 'Content-Type': 'text/html' }
+          });
         }
         
         logRequest(200);
@@ -119,8 +200,13 @@ const server = Bun.serve({
       // Fallback to index.html for client-side routing
       const indexFile = Bun.file(publicDir + '/index.html');
       if (await indexFile.exists()) {
+        const htmlContent = await indexFile.text();
+        const injectedHtml = injectBasePathConfig(htmlContent, basePathConfig);
+        
         logRequest(200);
-        return new Response(indexFile);
+        return new Response(injectedHtml, { 
+          headers: { 'Content-Type': 'text/html' }
+        });
       }
       
       logRequest(404);
@@ -136,3 +222,4 @@ console.log(`🚀 MCP Markdown Manager server running on http://localhost:${PORT
 console.log(`🗄️  Database backend: PostgreSQL`);
 console.log(`🔒 Authentication: ${process.env.AUTH_TOKEN ? 'Enabled' : 'MISSING - Set AUTH_TOKEN!'}`);
 console.log(`🤖 MCP Server: ${MCP_SERVER_ENABLED ? 'Enabled' : 'Disabled'}`);
+console.log(`🌐 Base Path: ${basePathConfig.isRoot ? 'Root (/)' : basePathConfig.normalizedPath}`);
