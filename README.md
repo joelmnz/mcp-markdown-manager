@@ -1,21 +1,24 @@
 # MCP Markdown Manager
 
-A complete full-stack TypeScript monolithic markdown article management system designed for AI agents to save and manage research content. This self-hosted single-user POC system handles hundreds of markdown articles with multiple interfaces: Web UI, REST API, and MCP server.
+A complete full-stack TypeScript monolithic markdown article management system designed for AI agents to save and manage research content. This self-hosted single-user system handles hundreds of markdown articles with PostgreSQL database backend and multiple interfaces: Web UI, REST API, and MCP server.
 
 ## Features
 
-- 📝 **Markdown-based articles** with frontmatter support
-- 🔍 **Search functionality** with partial title matching
+- 📝 **Database-backed articles** with structured metadata storage
+- 📁 **Folder organization** for hierarchical article structure
+- 🔍 **Search functionality** with title and content search
 - 🧠 **Semantic search** with RAG-style vector embeddings (optional)
+- 📚 **Version history** with comprehensive change tracking
 - 🎨 **Dark/Light theme** toggle
 - 📱 **Mobile-first responsive design**
 - 📲 **Progressive Web App (PWA)** support for offline access
 - 🔐 **Bearer token authentication** for all interfaces
 - 🌐 **REST API** for programmatic access
 - 🤖 **MCP server** integration for AI agent access
-- 🐳 **Docker support** with multi-stage builds and non-root user
+- 🐳 **Docker support** with PostgreSQL integration
 - ⚡ **Bun runtime** for fast TypeScript execution
 - 📊 **Request logging** for monitoring and debugging
+- 📦 **Import utility** for migrating existing markdown files
 
 ## Architecture
 
@@ -41,8 +44,9 @@ A complete full-stack TypeScript monolithic markdown article management system d
 - **Runtime**: Bun (fast TypeScript execution)
 - **Backend**: TypeScript, @modelcontextprotocol/sdk
 - **Frontend**: React, react-markdown
-- **Storage**: File-based markdown with frontmatter
-- **Deployment**: Docker with oven/bun base image
+- **Database**: PostgreSQL with pgvector extension
+- **Storage**: Database-backed with structured metadata
+- **Deployment**: Docker with PostgreSQL integration
 
 ## Quick Start
 
@@ -50,6 +54,7 @@ A complete full-stack TypeScript monolithic markdown article management system d
 
 - [Bun](https://bun.sh) installed (v1.0+)
 - Docker and Docker Compose (for containerized deployment)
+- PostgreSQL 12+ with pgvector extension (for local development)
 
 ### Development Setup
 
@@ -67,7 +72,20 @@ cp .env.example .env
 # Edit .env and set your AUTH_TOKEN
 ```
 
-#### 3. Run development servers
+#### 3. Start database and initialize
+
+```bash
+# Start PostgreSQL with Docker
+docker-compose up -d postgres
+
+# Initialize database schema
+bun run db:init
+
+# Verify database health
+bun run db:health
+```
+
+#### 4. Run development servers
 
 Terminal 1 (Backend):
 
@@ -81,11 +99,23 @@ Terminal 2 (Frontend):
 bun run dev:frontend
 ```
 
-#### 4. Access the application
+#### 5. Access the application
 
 - Web UI: http://localhost:5000
 - API: http://localhost:5000/api/*
 - MCP: http://localhost:5000/mcp
+
+#### 6. Import existing articles (optional)
+
+If you have existing markdown files to import:
+
+```bash
+# Validate import first
+bun run import validate ./path/to/markdown/files
+
+# Import with interactive conflict resolution
+bun run import import ./path/to/markdown/files --conflict interactive
+```
 
 To test the MCP Server you can use the MCP inspector
 
@@ -198,19 +228,45 @@ docker push ghcr.io/YOUR_USERNAME/article-manager:latest
 
 ## Environment Variables
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `AUTH_TOKEN` | Yes | - | Authentication token for all interfaces |
-| `DATA_DIR` | No | `/data` | Directory where markdown articles are stored |
-| `PORT` | No | `5000` | Server port |
-| `NODE_ENV` | No | `development` | Environment mode |
-| `SEMANTIC_SEARCH_ENABLED` | No | `false` | Enable semantic search with vector embeddings |
-| `EMBEDDING_PROVIDER` | No | `ollama` | Embedding provider: `ollama` or `openai` |
-| `EMBEDDING_MODEL` | No | `nomic-embed-text` | Model to use for embeddings |
-| `OLLAMA_BASE_URL` | No | `http://localhost:11434` | Ollama server URL |
-| `OPENAI_API_KEY` | No | - | OpenAI API key (required if using OpenAI provider) |
-| `CHUNK_SIZE` | No | `500` | Number of words per chunk for semantic search |
-| `CHUNK_OVERLAP` | No | `50` | Number of overlapping words between chunks |
+### Required Variables
+
+| Variable | Description |
+|----------|-------------|
+| `AUTH_TOKEN` | Authentication token for all interfaces |
+| `DB_PASSWORD` | PostgreSQL database password |
+
+### Database Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DB_HOST` | `localhost` | PostgreSQL host |
+| `DB_PORT` | `5432` | PostgreSQL port |
+| `DB_NAME` | `article_manager` | Database name |
+| `DB_USER` | `article_user` | Database user |
+| `DB_SSL` | `false` | Enable SSL for database connections |
+| `DB_MAX_CONNECTIONS` | `20` | Maximum database connections for app |
+| `DATABASE_URL` | - | Complete database URL (alternative to individual DB_* vars) |
+
+### Application Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `5000` | Server port |
+| `NODE_ENV` | `development` | Environment mode |
+| `MCP_SERVER_ENABLED` | `true` | Enable MCP server |
+| `DATA_DIR` | `/data` | Data directory (for Docker volumes) |
+
+### Semantic Search (Optional)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SEMANTIC_SEARCH_ENABLED` | `false` | Enable semantic search with vector embeddings |
+| `EMBEDDING_PROVIDER` | `ollama` | Embedding provider: `ollama` or `openai` |
+| `EMBEDDING_MODEL` | `nomic-embed-text` | Model to use for embeddings |
+| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `OPENAI_API_KEY` | - | OpenAI API key (required if using OpenAI provider) |
+| `CHUNK_SIZE` | `500` | Number of words per chunk for semantic search |
+| `CHUNK_OVERLAP` | `50` | Number of overlapping words between chunks |
 
 ## Semantic Search (RAG)
 
@@ -294,6 +350,108 @@ If you change embedding models or need to rebuild the index:
 ```bash
 bun run reindex
 ```
+
+## Database Management
+
+The system uses PostgreSQL with pgvector extension for structured storage and semantic search capabilities.
+
+### Database Commands
+
+```bash
+# Initialize database schema
+bun run db:init
+
+# Check database health and connectivity
+bun run db:health
+
+# Get database information and statistics
+bun run db:info
+
+# Verify database schema and constraints
+bun run db:verify
+
+# Create database backup
+bun run db:backup
+
+# Restore from backup
+bun run db:restore ./backups/backup-file.sql
+
+# Reset database (WARNING: destroys all data)
+bun run db:reset --confirm
+```
+
+### Database Schema
+
+The system uses three main tables:
+
+- **articles**: Core article data with metadata fields
+- **article_history**: Version history for all article changes
+- **embeddings**: Vector embeddings for semantic search
+
+## Import Utility
+
+The import utility allows migration from file-based markdown systems or bulk import of existing content.
+
+### Import Commands
+
+```bash
+# Validate import without making changes
+bun run import validate ./markdown-directory
+
+# Preview what would be imported
+bun run import preview ./markdown-directory --preserve-folders
+
+# Import with interactive conflict resolution
+bun run import import ./markdown-directory --conflict interactive
+
+# Import with automatic conflict handling
+bun run import import ./markdown-directory --conflict skip --preserve-folders
+
+# Get import statistics
+bun run import stats ./markdown-directory
+```
+
+### Import Options
+
+- `--preserve-folders`: Maintain directory structure as article folders
+- `--conflict <action>`: Handle conflicts (skip, rename, overwrite, interactive)
+- `--batch-size <n>`: Process files in batches (default: 50)
+- `--dry-run`: Show what would be imported without making changes
+- `--use-title-slug`: Generate slugs from titles instead of filenames
+
+### Import Process
+
+1. **Validation**: Scans directory for `.md` files and validates format
+2. **Conflict Detection**: Identifies duplicate titles or slugs
+3. **Frontmatter Processing**: Extracts YAML frontmatter into database fields
+4. **Content Cleaning**: Stores pure markdown without frontmatter
+5. **Batch Import**: Processes files in configurable batches
+6. **Progress Reporting**: Shows real-time import progress
+
+### Migration from File-Based System
+
+If migrating from the previous file-based version:
+
+1. **Backup existing data**:
+   ```bash
+   cp -r ./data ./data-backup-$(date +%Y%m%d)
+   ```
+
+2. **Validate migration**:
+   ```bash
+   bun run import validate ./data
+   ```
+
+3. **Import with conflict resolution**:
+   ```bash
+   bun run import import ./data --conflict interactive --preserve-folders
+   ```
+
+4. **Verify import**:
+   ```bash
+   bun run db:health
+   bun run db:info
+   ```
 
 ## REST API Documentation
 
@@ -739,12 +897,35 @@ Delete an article.
 
 ## Article Format
 
-Articles are stored as markdown files with YAML frontmatter:
+Articles are stored in PostgreSQL database with structured metadata fields and clean markdown content.
+
+### Database Storage
+
+Articles are stored with the following structure:
+
+- **Metadata Fields**: title, slug, folder, creation/modification dates, public status
+- **Content**: Pure markdown without YAML frontmatter
+- **Version History**: Complete change history with timestamps and messages
+- **Embeddings**: Vector embeddings for semantic search (optional)
+
+### Article Creation
+
+When creating articles:
+
+- **Title**: User-provided or extracted from first `#` heading
+- **Slug**: Auto-generated from title for URL compatibility
+- **Folder**: Optional hierarchical organization (e.g., "projects/web-dev")
+- **Content**: Clean markdown without frontmatter
+
+### Import Format
+
+When importing existing markdown files, the system processes:
 
 ```markdown
 ---
 title: Article Title
 created: 2025-01-15T10:30:00Z
+folder: projects/web-dev
 ---
 
 # Article Title
@@ -756,19 +937,14 @@ Article content goes here...
 More content...
 ```
 
-### Filename Generation
+The frontmatter is extracted into database fields, and only the clean markdown content is stored.
 
-- User provides title when creating articles
-- Filename is auto-generated: "My Article Name" → "my-article-name.md"
-- Title is extracted from first `#` heading in markdown for display
-- Filename may differ from displayed title
+### Folder Organization
 
-### Frontmatter Fields
-
-- `title`: Article title (string)
-- `created`: ISO 8601 timestamp (string)
-
-If frontmatter is missing, the system falls back to file system timestamps.
+- **Root Level**: Articles without folder (folder = "")
+- **Nested Folders**: Hierarchical structure (e.g., "projects/web-dev/react")
+- **Folder Filtering**: Search and list articles by folder
+- **Folder Migration**: Move articles between folders while preserving content
 
 ## Web UI Usage
 
@@ -919,14 +1095,13 @@ ls -la public/
 ## Limitations
 
 - Single user only (no multi-tenancy)
-- Optimized for hundreds of articles (not thousands)
-- Simple partial text search (no full-text indexing)
-- Manual article creation (paste markdown)
+- Optimized for hundreds to thousands of articles
+- Manual article creation (paste markdown or import)
 - No image uploads or media management
-- No tags, categories, or advanced metadata
-- File-based storage only (no database)
+- No tags or categories (use folders for organization)
 - Bearer token auth only (no OAuth, sessions)
-- Single Docker container (not microservices)
+- Single Docker container deployment (not microservices)
+- PostgreSQL dependency for all operations
 
 ## Security Considerations
 
@@ -943,14 +1118,15 @@ MIT License - feel free to use and modify as needed.
 
 ## Contributing
 
-This is a POC project. For production use, consider:
+This project now includes database backend support. For enhanced production use, consider:
 
-- Adding database support for better scalability
-- Implementing full-text search (e.g., Elasticsearch)
-- Adding user management and roles
-- Implementing rate limiting
+- Adding user management and multi-tenancy
+- Implementing advanced full-text search features
+- Adding role-based access control
+- Implementing rate limiting and API quotas
 - Adding comprehensive test coverage
 - Setting up CI/CD pipelines
+- Adding real-time collaboration features
 
 ## Support
 

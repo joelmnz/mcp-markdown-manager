@@ -1,38 +1,63 @@
 # Deployment Guide
 
-This guide covers deploying the Article Manager with database backend.
+This guide covers deploying the MCP Markdown Manager with PostgreSQL database backend, including migration from file-based storage.
 
 ## Prerequisites
 
-- PostgreSQL 12+ with vector extension support
-- Node.js/Bun runtime environment
+- PostgreSQL 12+ with pgvector extension support
+- Docker and Docker Compose (recommended)
+- Bun runtime environment (for local development)
 - Environment variables configured
 
 ## Environment Variables
 
-Required environment variables:
+### Required Variables
+
+```bash
+# Authentication
+AUTH_TOKEN=your-secure-auth-token
+
+# Database Configuration
+DB_PASSWORD=your-secure-database-password
+```
+
+### Complete Configuration
 
 ```bash
 # Database Configuration
-DATABASE_URL=postgresql://user:password@host:port/database
-# OR individual components:
 DB_HOST=localhost
 DB_PORT=5432
 DB_NAME=article_manager
 DB_USER=article_user
 DB_PASSWORD=secure_password
 DB_SSL=false
+DB_MAX_CONNECTIONS=20
+DATABASE_URL=postgresql://article_user:secure_password@localhost:5432/article_manager
 
 # Application Configuration
 AUTH_TOKEN=your-secure-auth-token
 PORT=5000
 NODE_ENV=production
+MCP_SERVER_ENABLED=true
+DATA_DIR=/data
+
+# Database Pool Settings
+DB_IDLE_TIMEOUT=30000
+DB_CONNECTION_TIMEOUT=2000
+DB_HEALTH_CHECK_INTERVAL=30000
+DB_CONSTRAINT_REPAIR_ENABLED=true
 
 # Optional Features
-SEMANTIC_SEARCH_ENABLED=true
+SEMANTIC_SEARCH_ENABLED=false
 EMBEDDING_PROVIDER=ollama
 EMBEDDING_MODEL=nomic-embed-text
-MCP_SERVER_ENABLED=true
+OLLAMA_BASE_URL=http://localhost:11434
+OPENAI_API_KEY=
+
+# Backup Configuration
+BACKUP_DIR=./backups
+RETENTION_DAYS=30
+COMPRESS_BACKUPS=true
 ```
 
 ## Database Setup
@@ -69,47 +94,195 @@ bun run db:verify
 
 ## Migration from File-Based Storage
 
-If migrating from the previous file-based system:
+If migrating from the previous file-based system, follow this comprehensive guide:
 
-### 1. Backup Existing Data
+### Pre-Migration Steps
+
+#### 1. Backup Existing Data
 
 ```bash
-# Backup your data directory
-cp -r ./data ./data-backup-$(date +%Y%m%d)
+# Create timestamped backup
+cp -r ./data ./data-backup-$(date +%Y%m%d-%H%M%S)
+
+# Backup version history if it exists
+if [ -d "./data/.versions" ]; then
+  cp -r ./data/.versions ./versions-backup-$(date +%Y%m%d-%H%M%S)
+fi
+
+# Backup vector index if it exists
+if [ -f "./data/index.vectors.jsonl" ]; then
+  cp ./data/index.vectors.jsonl ./vectors-backup-$(date +%Y%m%d-%H%M%S).jsonl
+fi
 ```
 
-### 2. Validate Migration
+#### 2. Validate Migration Readiness
 
 ```bash
 # Check what will be imported
 bun run import validate ./data
 
-# Get detailed preview
+# Get detailed preview with folder structure
 bun run import preview ./data --preserve-folders
+
+# Check for potential conflicts
+bun run import stats ./data
 ```
 
-### 3. Run Migration
+### Migration Process
+
+#### 3. Database Setup
 
 ```bash
-# Interactive migration (recommended)
-bun run import import ./data --conflict interactive
+# Start PostgreSQL
+docker-compose up -d postgres
 
-# Or automated with conflict resolution
-bun run import import ./data --conflict skip --preserve-folders
-```
+# Wait for database to be ready
+docker-compose exec postgres pg_isready -U article_user -d article_manager
 
-### 4. Verify Migration
+# Initialize database schema
+bun run db:init
 
-```bash
-# Check database health
+# Verify database health
 bun run db:health
+```
+
+#### 4. Import Articles
+
+**Interactive Migration (Recommended)**:
+```bash
+# Import with interactive conflict resolution
+bun run import import ./data --conflict interactive --preserve-folders
+```
+
+**Automated Migration**:
+```bash
+# Skip conflicts (safest for automated deployment)
+bun run import import ./data --conflict skip --preserve-folders
+
+# Or overwrite conflicts (use with caution)
+bun run import import ./data --conflict overwrite --preserve-folders
+```
+
+**Batch Processing for Large Datasets**:
+```bash
+# Process in smaller batches
+bun run import import ./data --conflict skip --preserve-folders --batch-size 25
+```
+
+#### 5. Verify Migration
+
+```bash
+# Check database health and connectivity
+bun run db:health
+
+# Get database information and statistics
+bun run db:info
 
 # Validate data integrity
 bun run db:validate
 
-# Check import statistics
+# Check import results
 bun run import stats ./data
 ```
+
+### Post-Migration Steps
+
+#### 6. Rebuild Semantic Search Index (if enabled)
+
+```bash
+# Rebuild vector embeddings for all articles
+bun run reindex
+```
+
+#### 7. Test Application Functionality
+
+```bash
+# Start the application
+bun run start
+
+# Test key endpoints
+curl -H "Authorization: Bearer $AUTH_TOKEN" http://localhost:5000/health
+curl -H "Authorization: Bearer $AUTH_TOKEN" http://localhost:5000/api/articles
+```
+
+#### 8. Cleanup (Optional)
+
+After verifying successful migration:
+
+```bash
+# Remove old file-based data (keep backups!)
+# rm -rf ./data  # Only after confirming migration success
+
+# Clean up old vector index
+# rm -f ./data/index.vectors.jsonl  # If migration successful
+```
+
+### Migration Troubleshooting
+
+#### Common Issues
+
+**Database Connection Errors**:
+```bash
+# Check PostgreSQL status
+docker-compose ps postgres
+docker-compose logs postgres
+
+# Test connection manually
+psql postgresql://article_user:$DB_PASSWORD@localhost:5432/article_manager
+```
+
+**Import Conflicts**:
+```bash
+# Review conflicts in detail
+bun run import preview ./data --preserve-folders
+
+# Handle conflicts manually
+bun run import import ./data --conflict interactive
+```
+
+**Performance Issues**:
+```bash
+# Use smaller batch sizes
+bun run import import ./data --batch-size 10
+
+# Monitor database performance
+bun run db:info
+```
+
+#### Rollback Procedure
+
+If migration fails and you need to rollback:
+
+1. **Stop the application**:
+   ```bash
+   docker-compose down
+   ```
+
+2. **Restore file-based data**:
+   ```bash
+   rm -rf ./data
+   cp -r ./data-backup-YYYYMMDD-HHMMSS ./data
+   ```
+
+3. **Switch to file-based version**:
+   ```bash
+   git checkout file-based-version  # If using version control
+   ```
+
+4. **Restart with file-based system**:
+   ```bash
+   bun run start
+   ```
+
+### Migration Best Practices
+
+1. **Always backup before migration**
+2. **Test migration on a copy of production data first**
+3. **Use interactive conflict resolution for important data**
+4. **Validate migration results thoroughly**
+5. **Keep backups until migration is fully verified**
+6. **Plan for downtime during migration**
+7. **Have a rollback plan ready**
 
 ## Production Deployment
 

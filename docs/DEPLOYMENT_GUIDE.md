@@ -30,8 +30,8 @@ This guide covers the complete deployment process for the Article Manager with P
 - 10 GB disk space
 
 **Recommended (Production):**
-- 4+ CPU cores
-- 8+ GB RAM
+- 1+ CPU cores
+- 2+ GB RAM
 - 50+ GB disk space (depending on data volume)
 - SSD storage for database
 

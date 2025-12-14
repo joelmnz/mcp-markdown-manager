@@ -12,7 +12,7 @@
     "build:icons": "node scripts/generate-icons.cjs",
     "build:html": "node scripts/build-html.cjs",
     "build:css": "echo 'CSS already bundled'",
-    "clean:build": "rm -f public/App.*.js public/App.*.css",
+    "clean:build": "del /Q public\\App.*.js public\\App.*.css 2>nul || echo No files to clean",
     "start": "NODE_ENV=production bun src/backend/server.ts",
     "reindex": "bun scripts/reindex.ts",
     "db:init": "bun scripts/database.ts init",

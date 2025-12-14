@@ -1,18 +1,10 @@
 import { handleApiRequest } from './routes/api';
 import { handleMCPPostRequest, handleMCPGetRequest, handleMCPDeleteRequest } from './mcp/server';
-import { existsSync, mkdirSync } from 'fs';
 import { databaseInit } from './services/databaseInit.js';
 import { databaseHealthService } from './services/databaseHealth.js';
 
 const PORT = parseInt(process.env.PORT || '5000');
-const DATA_DIR = process.env.DATA_DIR || '/data';
 const MCP_SERVER_ENABLED = process.env.MCP_SERVER_ENABLED?.toLowerCase() === 'true';
-
-// Ensure data directory exists
-if (!existsSync(DATA_DIR)) {
-  mkdirSync(DATA_DIR, { recursive: true });
-  console.log(`Created data directory: ${DATA_DIR}`);
-}
 
 // Initialize database and perform health checks
 async function initializeDatabase() {
@@ -141,6 +133,6 @@ const server = Bun.serve({
 });
 
 console.log(`🚀 MCP Markdown Manager server running on http://localhost:${PORT}`);
-console.log(`📁 Data directory: ${DATA_DIR}`);
+console.log(`🗄️  Database backend: PostgreSQL`);
 console.log(`🔒 Authentication: ${process.env.AUTH_TOKEN ? 'Enabled' : 'MISSING - Set AUTH_TOKEN!'}`);
 console.log(`🤖 MCP Server: ${MCP_SERVER_ENABLED ? 'Enabled' : 'Disabled'}`);

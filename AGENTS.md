@@ -4,7 +4,11 @@
 - **Build**: `bun run build` (builds frontend with hashed assets)
 - **Typecheck**: `bun run typecheck`
 - **Dev**: `bun run dev:backend` (backend) and `bun run dev:frontend` (frontend, separate terminals)
-- **Tests**: No formal test suite (POC project)
+- **Tests**: Manual test scripts in `scripts/` directory (no formal test framework)
+  - `bun scripts/test-parsing.ts` - Test markdown parsing functions
+  - `bun scripts/test-import.ts` - Test article import functionality  
+  - `bun scripts/test-import-logic.ts` - Test import logic without database
+  - `bun scripts/test-error-handling.ts` - Test database error handling
 
 ## Environment Variables
 - **AUTH_TOKEN**: Authentication token for all interfaces (required)
