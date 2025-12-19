@@ -43,11 +43,6 @@
   - **Validates: Requirements 3.3**
 
 - [x] 3. Update build system for runtime configuration support
-
-
-
-
-
   - Modify build-html.ts to remove hardcoded base paths from assets
   - Ensure built assets use relative paths and runtime configuration
   - Update build process to support runtime base path injection
@@ -63,11 +58,6 @@
   - **Validates: Requirements 6.5**
 
 - [x] 4. Create frontend runtime configuration utilities
-
-
-
-
-
   - Implement useBasePath hook that reads runtime configuration
   - Create API client utility with runtime base path support
   - Add URL building utilities for navigation and links using runtime config
@@ -78,20 +68,15 @@
   - **Property 3: Runtime API and MCP URL generation includes base path**
   - **Validates: Requirements 1.3, 4.2, 4.3, 6.7**
 
-- [ ]* 4.3 Write property test for runtime configuration initialization
-  - **Property 15: Runtime configuration initialization**
-  - **Validates: Requirements 6.3**
-
 - [ ]* 4.2 Write property test for public article URL generation
   - **Property 11: Public article URL generation**
   - **Validates: Requirements 3.5**
 
-
+- [ ]* 4.3 Write property test for runtime configuration initialization
+  - **Property 15: Runtime configuration initialization**
+  - **Validates: Requirements 6.3**
 
 - [x] 5. Update frontend routing system for runtime configuration
-
-
-
   - Modify App.tsx to initialize runtime configuration and parse routes with base path awareness
   - Update navigation functions to maintain base path using runtime config
   - Implement browser history management with runtime base path
@@ -106,12 +91,7 @@
   - **Property 8: Configuration change adaptation**
   - **Validates: Requirements 2.4**
 
-
 - [x] 6. Update service worker for runtime base path support
-
-
-
-
   - Modify service worker registration to use runtime base path configuration
   - Update cached resource URLs to include base path from runtime config
   - Ensure PWA functionality works with subpaths using runtime configuration
@@ -122,11 +102,6 @@
   - **Validates: Requirements 1.4, 6.8**
 
 - [x] 7. Update all API calls throughout the application for runtime configuration
-
-
-
-
-
   - Replace direct fetch calls with runtime base path-aware API client
   - Update all components to use new API utilities with runtime configuration
   - Ensure error responses maintain base path consistency
@@ -136,11 +111,7 @@
   - **Property 12: Error response URL consistency**
   - **Validates: Requirements 4.5**
 
-
 - [x] 8. Add environment variable configuration for runtime support
-
-
-
   - Update .env.example with BASE_PATH/BASE_URL documentation
   - Add startup logging for base path configuration
   - Implement validation and fallback behavior for both variables
@@ -155,18 +126,9 @@
   - _Requirements: 5.4, 5.5, 6.6_
 
 - [x] 9. Checkpoint - Ensure all tests pass
-
-
-
-
-
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 10. Update documentation and deployment examples
-
-
-
-
   - Add nginx configuration examples for subpath deployment
   - Update README with BASE_PATH/BASE_URL configuration instructions
   - Create docker-compose examples with runtime base path setup

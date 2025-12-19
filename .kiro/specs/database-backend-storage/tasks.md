@@ -144,64 +144,39 @@
   - Add database backup and restore procedures
   - _Requirements: 6.4_
 
-- [x] 8. Checkpoint - Ensure all tests pass
+- [x] 8. Integration and compatibility testing
 
-
-
-
-
-  - Ensure all tests pass, ask the user if questions arise.
-
-- [x] 9. Integration and compatibility testing
-
-
-
-
-
-- [x] 9.1 Test API endpoint compatibility
-
-
-
+- [x] 8.1 Test API endpoint compatibility
   - Verify all existing API endpoints return identical responses
   - Test public article access and authentication
   - Validate MCP server functionality with database backend
   - _Requirements: 7.1, 7.4_
 
-- [ ]* 9.2 Write integration tests for end-to-end workflows
+- [ ]* 8.2 Write integration tests for end-to-end workflows
   - Test complete article lifecycle (create, read, update, delete)
   - Test version history operations
   - Test import and search functionality
-
-
   - _Requirements: 1.2, 3.1, 5.5_
 
-- [ ] 9.3 Performance and load testing
+- [ ] 8.3 Performance and load testing
   - Test database performance with large datasets
   - Validate embedding search performance
   - Test concurrent operations and connection pooling
   - _Requirements: 6.3_
 
-- [x] 10. Documentation and cleanup
+- [x] 9. Documentation and cleanup
 
-
-
-
-
-- [x] 10.1 Update API documentation
-
-
+- [x] 9.1 Update API documentation
   - Document new database configuration options
   - Update import utility documentation
   - Add migration guide for existing installations
   - _Requirements: 5.1, 6.1_
 
-
-- [x] 10.2 Clean up legacy file-based code
-
+- [x] 9.2 Clean up legacy file-based code
   - Remove unused file system operations
   - Clean up version history file management code
   - Remove vector index file operations
   - _Requirements: 1.3_
 
-- [ ] 11. Final checkpoint - Ensure all tests pass
+- [ ] 10. Final checkpoint - Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
