@@ -17,7 +17,7 @@ function largestJsFile(dir: string, prefix: string, ext: string): string[] {
     .filter((f) => f.startsWith(prefix) && f.endsWith(ext))
     .map((f) => ({ f, size: fs.statSync(path.join(dir, f)).size }))
     .sort((a, b) => b.size - a.size);
-  
+
   return files.length > 0 ? [files[0].f] : [];
 }
 
@@ -31,7 +31,7 @@ function largestJsFile(dir: string, prefix: string, ext: string): string[] {
  */
 function buildHtml() {
   const publicDir = path.join(import.meta.dir, '..', 'public');
-  
+
   // Use largest file for JS (main entry point) and newest for CSS
   const jsFiles = largestJsFile(publicDir, 'App.', '.js');
   const cssFiles = newestFiles(publicDir, 'App.', '.css');
@@ -67,12 +67,23 @@ function buildHtml() {
   <script type="module" src="{{BASE_PATH}}/${jsFiles[0]}"></script>
 </body>
 </html>`;
-  
+
   fs.writeFileSync(path.join(publicDir, 'index.html'), html);
   console.log('✅ HTML template built with runtime configuration support');
   console.log('   - JS:', jsFiles[0]);
   console.log('   - CSS:', cssFiles[0]);
   console.log('   - Template supports runtime base path injection');
+
+  // Generate manifest.json from template if it exists
+  const manifestTemplatePath = path.join(publicDir, 'manifest.template.json');
+  if (fs.existsSync(manifestTemplatePath)) {
+    const templateContent = fs.readFileSync(manifestTemplatePath, 'utf-8');
+    // For static builds, we assume root path or relative path support is handled by the server
+    // But for the physical file, we default to root path behavior
+    const manifestContent = templateContent.replace(/\{\{BASE_PATH\}\}/g, '');
+    fs.writeFileSync(path.join(publicDir, 'manifest.json'), manifestContent);
+    console.log('✅ manifest.json generated from template');
+  }
 }
 
 // Run the build process

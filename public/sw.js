@@ -9,14 +9,14 @@ function getRuntimeBasePath() {
   if (registration && registration.scope) {
     const url = new URL(registration.scope);
     const pathname = url.pathname;
-    
+
     // If scope is not root, extract base path
     if (pathname !== '/') {
       // Remove trailing slash for consistency
       return pathname.replace(/\/$/, '');
     }
   }
-  
+
   // Default to root path
   return '';
 }
@@ -56,12 +56,19 @@ self.addEventListener('activate', (event) => {
 // When caching is enabled in the future, this is where base path-aware
 // resource URLs would be constructed using the basePath variable.
 
+self.addEventListener('fetch', (event) => {
+  // PWA requires a fetch handler to be installable.
+  // We use a simple network-only strategy here to satisfy the requirement
+  // without risking serving stale content.
+  event.respondWith(fetch(event.request));
+});
+
 // Handle messages from clients
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
-  
+
   // Handle base path configuration requests from clients
   if (event.data && event.data.type === 'GET_BASE_PATH') {
     event.ports[0].postMessage({
