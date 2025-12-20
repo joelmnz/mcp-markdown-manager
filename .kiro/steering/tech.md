@@ -14,7 +14,8 @@ inclusion: always
 - **TypeScript**: Strict mode enabled
 - **Bun**: Server runtime and bundler
 - **MCP SDK**: `@modelcontextprotocol/sdk` for AI agent integration
-- **File System**: Node.js `fs/promises` for article storage
+- **Database**: PostgreSQL with `pgvector` for article and vector storage
+- **File System**: `fs/promises` used only for backups and imports
 
 ### Frontend
 - **React 18**: With TypeScript and JSX
@@ -33,6 +34,10 @@ inclusion: always
 bun run dev:backend    # Start backend with watch mode
 bun run dev:frontend   # Start frontend watcher
 bun run dev           # Start both (parallel)
+
+# Database
+bun run db:init       # Initialize schema
+bun run db:health     # Check connectivity
 
 # Building
 bun run build         # Build frontend with hashed assets
@@ -53,7 +58,11 @@ bun run reindex       # Rebuild semantic search index
 
 ## Environment Variables
 - `AUTH_TOKEN`: Required authentication token
-- `DATA_DIR`: Article storage directory (default: `/data`)
+- `DB_HOST`: PostgreSQL host (default: localhost)
+- `DB_PORT`: PostgreSQL port (default: 5432)
+- `DB_NAME`: Database name
+- `DB_USER`: Database user
+- `DB_PASSWORD`: Database password
 - `PORT`: Server port (default: `5000`)
 - `MCP_SERVER_ENABLED`: Enable MCP server (default: `true`)
 - `SEMANTIC_SEARCH_ENABLED`: Enable vector search (default: `false`)

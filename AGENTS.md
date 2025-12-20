@@ -26,7 +26,7 @@
 - **Types**: Strict TypeScript (`strict: true`), explicit interfaces for data structures (e.g., `Article`, `ArticleMetadata`)
 - **Naming**: camelCase for functions/variables, PascalCase for React components and interfaces
 - **Error Handling**: Services throw descriptive errors; HTTP handlers return status codes; MCP handlers return `isError: true`
-- **File System**: All article operations through `services/articles.ts`; markdown files with YAML frontmatter in `DATA_DIR`
+- **File System**: All article operations through `services/articles.ts` (DB-backed); `fs` used for imports/backups
 - **Frontend**: No state library; localStorage for persistence; props drilling; custom routing in `App.tsx`
 - **CSS**: Custom properties with `data-theme` attribute for theming; mobile-first responsive design
 

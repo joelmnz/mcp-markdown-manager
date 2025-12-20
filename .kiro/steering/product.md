@@ -26,7 +26,7 @@ A full-stack TypeScript monolithic markdown article management system designed f
 - **Database Storage**: All articles stored in PostgreSQL with structured schema
 - **Service Layer**: Business logic centralized in `src/backend/services/` for sharing between API and MCP
 - **No External Dependencies**: Self-contained system with optional Ollama/OpenAI integration
-- **Flat Article Structure**: No nested categories or folders, articles identified by unique slugs
+- **Folder Organization**: Hierarchical structure with support for nested folders (e.g., "projects/web-dev")
 - **Immutable History**: Version snapshots preserved, never deleted
 
 ## Content Management Rules

@@ -48,14 +48,21 @@ src/
 ```sql
 -- Core articles table
 articles (
-  id, slug, title, content, 
+  id, slug, title, content, folder,
   created_at, updated_at, is_public
 )
 
 -- Version history table
-article_versions (
-  id, article_id, version_number, title, content,
-  created_at, change_summary
+article_history (
+  id, article_id, version_number, title, content, folder,
+  created_at, change_summary, change_type
+)
+
+-- Embeddings table
+embeddings (
+  id, article_id, chunk_index, 
+  embedding vector(768), 
+  chunk_text, heading_path
 )
 
 -- Full-text search indexes
