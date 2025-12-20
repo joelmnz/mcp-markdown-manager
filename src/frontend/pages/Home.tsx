@@ -189,48 +189,72 @@ export function Home({ token, onNavigate }: HomeProps) {
         </div>
       </div>
 
-      <form onSubmit={handleSearch} className="search-form">
-        <div className="search-mode-toggle">
-          <label>
-            <input
-              type="radio"
-              value="title"
-              checked={searchMode === 'title'}
-              onChange={() => handleSearchModeChange('title')}
-            />
-            Title Search
-          </label>
-          <label>
-            <input
-              type="radio"
-              value="semantic"
-              checked={searchMode === 'semantic'}
-              onChange={() => handleSearchModeChange('semantic')}
-            />
-            Semantic Search
-          </label>
-        </div>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={searchMode === 'semantic' ? 'Search by meaning...' : 'Search articles...'}
-          className="search-input"
-        />
-        <button type="submit" className="button">Search</button>
-        {searchQuery && (
-          <button
-            type="button"
-            className="button button-secondary"
-            onClick={() => {
-              setSearchQuery('');
-              loadArticles();
-            }}
-          >
-            Clear
-          </button>
+      <div className="filter-controls-container">
+        {/* Folder Filter */}
+        {folders.length > 0 && (
+          <div className="folder-filter-section">
+            <label className="filter-label">Filter by folder:</label>
+            <select
+              value={selectedFolder || ''}
+              onChange={(e) => handleFolderSelect(e.target.value)}
+              className="folder-select"
+            >
+              <option value="">All Folders</option>
+              {folders.map((folder) => (
+                <option key={folder} value={folder}>
+                  📁 {folder}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
-      </form>
+
+        {/* Search Form */}
+        <form onSubmit={handleSearch} className="search-form">
+          <div className="search-mode-toggle">
+            <label>
+              <input
+                type="radio"
+                value="title"
+                checked={searchMode === 'title'}
+                onChange={() => handleSearchModeChange('title')}
+              />
+              Title Search
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="semantic"
+                checked={searchMode === 'semantic'}
+                onChange={() => handleSearchModeChange('semantic')}
+              />
+              Semantic Search
+            </label>
+          </div>
+          <div className="search-input-row">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={searchMode === 'semantic' ? 'Search by meaning...' : 'Search articles...'}
+              className="search-input"
+            />
+            <button type="submit" className="button">Search</button>
+            {searchQuery && (
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => {
+                  setSearchQuery('');
+                  loadArticles();
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
 
       {error && <div className="error-message">{error}</div>}
 
@@ -258,9 +282,6 @@ export function Home({ token, onNavigate }: HomeProps) {
           <ArticleList
             articles={paginatedArticles}
             onArticleClick={handleArticleClick}
-            selectedFolder={selectedFolder}
-            onFolderSelect={handleFolderSelect}
-            availableFolders={folders}
           />
           {articles.length > 0 && (
             <div className="pagination-controls">
