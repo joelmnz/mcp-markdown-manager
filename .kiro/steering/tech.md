@@ -12,14 +12,14 @@ inclusion: always
 ## Tech Stack
 ### Backend
 - **TypeScript**: Strict mode enabled
-- **Bun**: Server runtime and bundler
+- **Bun**: Server runtime and bundler e.g. `bun run dev:backend`
 - **MCP SDK**: `@modelcontextprotocol/sdk` for AI agent integration
 - **Database**: PostgreSQL with `pgvector` for article and vector storage
 - **File System**: `fs/promises` used only for backups and imports
 
 ### Frontend
 - **React 18**: With TypeScript and JSX
-- **Bundling**: Bun build with code splitting and hashing
+- **Bundling**: Bun build with code splitting and hashing e.g. `bun run build`
 - **CSS**: Custom properties for theming, no frameworks
 - **Markdown**: `react-markdown` with `remark-gfm` for GitHub flavored markdown
 - **PWA**: Service worker and manifest for offline support

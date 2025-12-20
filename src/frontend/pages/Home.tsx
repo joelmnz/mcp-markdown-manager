@@ -5,6 +5,7 @@ import { apiClient } from '../utils/apiClient';
 interface Article {
   filename: string;
   title: string;
+  folder?: string;
   created: string;
 }
 
@@ -40,6 +41,8 @@ export function Home({ token, onNavigate }: HomeProps) {
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [folders, setFolders] = useState<string[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<string>('');
 
   useEffect(() => {
     loadArticles();
@@ -49,11 +52,22 @@ export function Home({ token, onNavigate }: HomeProps) {
     try {
       setLoading(true);
       setSearchResults([]);
-      const response = await apiClient.get('/api/articles', token);
 
-      if (response.ok) {
-        const data = await response.json();
-        setArticles(data);
+      const queryParams = new URLSearchParams();
+      if (selectedFolder) {
+        queryParams.append('folder', selectedFolder);
+      }
+
+      const [articlesResponse, foldersResponse] = await Promise.all([
+        apiClient.get(`/api/articles?${queryParams.toString()}`, token),
+        apiClient.get('/api/folders', token)
+      ]);
+
+      if (articlesResponse.ok && foldersResponse.ok) {
+        const articlesData = await articlesResponse.json();
+        const foldersData = await foldersResponse.json();
+        setArticles(articlesData);
+        setFolders(foldersData);
         setCurrentPage(1); // Reset to first page when loading all articles
       } else {
         setError('Failed to load articles');
@@ -74,7 +88,7 @@ export function Home({ token, onNavigate }: HomeProps) {
 
     try {
       setLoading(true);
-      
+
       if (searchMode === 'semantic') {
         // Hybrid search (semantic + title boost)
         const response = await apiClient.get(`/api/search?query=${encodeURIComponent(searchQuery)}&k=10&mode=hybrid`, token);
@@ -90,7 +104,13 @@ export function Home({ token, onNavigate }: HomeProps) {
         }
       } else {
         // Title search
-        const response = await apiClient.get(`/api/articles?q=${encodeURIComponent(searchQuery)}`, token);
+        const queryParams = new URLSearchParams();
+        queryParams.append('q', searchQuery);
+        if (selectedFolder) {
+          queryParams.append('folder', selectedFolder);
+        }
+
+        const response = await apiClient.get(`/api/articles?${queryParams.toString()}`, token);
 
         if (response.ok) {
           const data = await response.json();
@@ -137,19 +157,30 @@ export function Home({ token, onNavigate }: HomeProps) {
     }
   };
 
+  const handleFolderSelect = (folder: string) => {
+    setSelectedFolder(folder);
+    // Reload articles will be triggered by useEffect logic if we separate effects, 
+    // but here we call it manually to keep it simple or add it to dependencies
+  };
+
+  // Reload when folder changes
+  useEffect(() => {
+    loadArticles();
+  }, [selectedFolder]);
+
   return (
     <div className="page">
       <div className="page-header">
         <h1>Articles</h1>
         <div className="page-header-actions">
-          <button 
+          <button
             className="button"
             onClick={() => onNavigate('/rag-status')}
             title="View RAG index status"
           >
             🔍 RAG Status
           </button>
-          <button 
+          <button
             className="button button-primary"
             onClick={() => onNavigate('/new')}
           >
@@ -188,8 +219,8 @@ export function Home({ token, onNavigate }: HomeProps) {
         />
         <button type="submit" className="button">Search</button>
         {searchQuery && (
-          <button 
-            type="button" 
+          <button
+            type="button"
             className="button button-secondary"
             onClick={() => {
               setSearchQuery('');
@@ -202,7 +233,7 @@ export function Home({ token, onNavigate }: HomeProps) {
       </form>
 
       {error && <div className="error-message">{error}</div>}
-      
+
       {loading ? (
         <div className="loading">Loading...</div>
       ) : searchResults.length > 0 ? (
@@ -224,17 +255,23 @@ export function Home({ token, onNavigate }: HomeProps) {
         </div>
       ) : (
         <>
-          <ArticleList articles={paginatedArticles} onArticleClick={handleArticleClick} />
+          <ArticleList
+            articles={paginatedArticles}
+            onArticleClick={handleArticleClick}
+            selectedFolder={selectedFolder}
+            onFolderSelect={handleFolderSelect}
+            availableFolders={folders}
+          />
           {articles.length > 0 && (
             <div className="pagination-controls">
               <div className="pagination-info">
                 Showing {startIndex + 1}-{Math.min(endIndex, articles.length)} of {articles.length} articles
               </div>
-              
+
               <div className="pagination-size-selector">
                 <label>Items per page:</label>
-                <select 
-                  value={pageSize} 
+                <select
+                  value={pageSize}
                   onChange={(e) => handlePageSizeChange(Number(e.target.value))}
                   className="page-size-select"
                 >
@@ -253,16 +290,16 @@ export function Home({ token, onNavigate }: HomeProps) {
                   >
                     Previous
                   </button>
-                  
+
                   <div className="page-numbers">
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
                       // Show first page, last page, current page, and pages around current
-                      const showPage = 
-                        page === 1 || 
-                        page === totalPages || 
+                      const showPage =
+                        page === 1 ||
+                        page === totalPages ||
                         (page >= currentPage - 1 && page <= currentPage + 1);
-                      
-                      const showEllipsis = 
+
+                      const showEllipsis =
                         (page === currentPage - 2 && currentPage > 3) ||
                         (page === currentPage + 2 && currentPage < totalPages - 2);
 

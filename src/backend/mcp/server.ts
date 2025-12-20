@@ -95,6 +95,10 @@ function createConfiguredMCPServer() {
               type: 'string',
               description: 'Markdown content of the article',
             },
+            folder: {
+              type: 'string',
+              description: 'Optional folder path (e.g., "projects/web-dev")'
+            },
             message: {
               type: 'string',
               description: 'Optional message describing this version',
@@ -120,6 +124,10 @@ function createConfiguredMCPServer() {
             content: {
               type: 'string',
               description: 'New markdown content of the article',
+            },
+            folder: {
+              type: 'string',
+              description: 'New folder path (e.g., "projects/web-dev")'
             },
             message: {
               type: 'string',
@@ -219,7 +227,7 @@ function createConfiguredMCPServer() {
         },
       },
     ];
-    
+
     // Add semantic search tool if enabled
     if (SEMANTIC_SEARCH_ENABLED) {
       tools.push({
@@ -280,7 +288,7 @@ function createConfiguredMCPServer() {
         },
       });
     }
-    
+
     return { tools };
   });
 
@@ -290,7 +298,7 @@ function createConfiguredMCPServer() {
       switch (request.params.name) {
         case 'listArticles': {
           const articles = await listArticles();
-          
+
           // Add embedding status if semantic search is enabled
           let articlesWithEmbeddingStatus = articles;
           if (SEMANTIC_SEARCH_ENABLED) {
@@ -300,11 +308,11 @@ function createConfiguredMCPServer() {
                   try {
                     const slug = article.filename.replace(/\.md$/, '');
                     const articleId = await databaseArticleService.getArticleId(slug);
-                    
+
                     if (articleId) {
                       const tasks = await embeddingQueueService.getTasksForArticle(articleId);
                       const latestTask = tasks.length > 0 ? tasks[0] : null;
-                      
+
                       return {
                         ...article,
                         embeddingStatus: {
@@ -328,7 +336,7 @@ function createConfiguredMCPServer() {
               console.warn('Failed to get embedding status for articles:', error);
             }
           }
-          
+
           return {
             content: [
               {
@@ -374,7 +382,7 @@ function createConfiguredMCPServer() {
           }
           const detailedStats = await embeddingQueueService.getDetailedQueueStats();
           const queueHealth = await embeddingQueueService.getQueueHealth();
-          
+
           const response = {
             stats: detailedStats.stats,
             tasksByPriority: detailedStats.tasksByPriority,
@@ -382,7 +390,7 @@ function createConfiguredMCPServer() {
             recentActivity: detailedStats.recentActivity,
             health: queueHealth
           };
-          
+
           return {
             content: [
               {
@@ -398,21 +406,21 @@ function createConfiguredMCPServer() {
             throw new Error('Semantic search is not enabled');
           }
           const { filename } = request.params.arguments as { filename: string };
-          
+
           // Convert filename to slug and get article ID
           const slug = filename.replace(/\.md$/, '');
           const articleId = await databaseArticleService.getArticleId(slug);
-          
+
           if (!articleId) {
             throw new Error(`Article ${filename} not found`);
           }
-          
+
           // Get embedding tasks for this article
           const tasks = await embeddingQueueService.getTasksForArticle(articleId);
-          
+
           // Get the most recent task status
           const latestTask = tasks.length > 0 ? tasks[0] : null;
-          
+
           const response = {
             filename,
             articleId,
@@ -439,7 +447,7 @@ function createConfiguredMCPServer() {
               errorMessage: task.errorMessage
             }))
           };
-          
+
           return {
             content: [
               {
@@ -455,14 +463,14 @@ function createConfiguredMCPServer() {
             throw new Error('Semantic search is not enabled');
           }
           const { operationId } = request.params.arguments as { operationId?: string };
-          
+
           if (operationId) {
             // Get specific bulk operation summary
             const summary = await embeddingQueueService.getBulkOperationSummary(operationId);
             if (!summary) {
               throw new Error(`Bulk operation ${operationId} not found`);
             }
-            
+
             return {
               content: [
                 {
@@ -474,7 +482,7 @@ function createConfiguredMCPServer() {
           } else {
             // Get recent bulk operations
             const recentOperations = await embeddingQueueService.listRecentBulkOperations(10);
-            
+
             return {
               content: [
                 {
@@ -492,18 +500,18 @@ function createConfiguredMCPServer() {
           if (!article) {
             throw new Error(`Article ${filename} not found`);
           }
-          
+
           // Add embedding status if semantic search is enabled
           let embeddingStatus = undefined;
           if (SEMANTIC_SEARCH_ENABLED) {
             try {
               const slug = filename.replace(/\.md$/, '');
               const articleId = await databaseArticleService.getArticleId(slug);
-              
+
               if (articleId) {
                 const tasks = await embeddingQueueService.getTasksForArticle(articleId);
                 const latestTask = tasks.length > 0 ? tasks[0] : null;
-                
+
                 embeddingStatus = {
                   status: latestTask?.status || 'no_tasks',
                   lastUpdated: latestTask?.completedAt || latestTask?.createdAt,
@@ -517,12 +525,12 @@ function createConfiguredMCPServer() {
               console.warn('Failed to get embedding status for article:', error);
             }
           }
-          
+
           const response = {
             ...article,
             ...(embeddingStatus && { embeddingStatus })
           };
-          
+
           return {
             content: [
               {
@@ -534,14 +542,15 @@ function createConfiguredMCPServer() {
         }
 
         case 'createArticle': {
-          const { title, content, message } = request.params.arguments as {
+          const { title, content, folder, message } = request.params.arguments as {
             title: string;
             content: string;
+            folder?: string;
             message?: string;
           };
           // Use background embedding for immediate response without waiting for embedding completion
-          const article = await createArticle(title, content, message, { 
-            embeddingPriority: 'normal' 
+          const article = await createArticle(title, content, folder, message, {
+            embeddingPriority: 'normal'
           });
           return {
             content: [
@@ -554,15 +563,16 @@ function createConfiguredMCPServer() {
         }
 
         case 'updateArticle': {
-          const { filename, title, content, message } = request.params.arguments as {
+          const { filename, title, content, folder, message } = request.params.arguments as {
             filename: string;
             title: string;
             content: string;
+            folder?: string;
             message?: string;
           };
           // Use background embedding for immediate response without waiting for embedding completion
-          const article = await updateArticle(filename, title, content, message, { 
-            embeddingPriority: 'normal' 
+          const article = await updateArticle(filename, title, content, folder, message, {
+            embeddingPriority: 'normal'
           });
           return {
             content: [
@@ -626,8 +636,8 @@ function createConfiguredMCPServer() {
             message?: string;
           };
           // Use background embedding for immediate response without waiting for embedding completion
-          const article = await restoreArticleVersion(filename, versionId, message, { 
-            embeddingPriority: 'normal' 
+          const article = await restoreArticleVersion(filename, versionId, message, {
+            embeddingPriority: 'normal'
           });
           return {
             content: [
@@ -703,45 +713,45 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
   try {
     body = await request.json();
     console.log('MCP POST request received:', body);
-    
+
     const sessionId = request.headers.get('mcp-session-id');
-    
+
     // Handle initialize request - this is the first request from the client
     if (isInitializeRequest(body)) {
       console.log('Handling initialize request');
-      
+
       // Generate a new session ID
       const newSessionId = randomUUID();
-      
+
       // Create a new transport for this session
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => newSessionId,
       });
-      
+
       // Store the transport
       transports[newSessionId] = transport;
-      
+
       // Set up transport close handler
       transport.onclose = () => {
         console.log(`Transport closed for session ${newSessionId}`);
         delete transports[newSessionId];
       };
-      
+
       // Connect the server to the transport
       const server = createConfiguredMCPServer();
       await server.connect(transport);
-      
+
       // Convert Bun Request to Node.js-compatible request object
       const nodeReq = await convertBunRequestToNode(request, body);
       const nodeRes = createNodeResponse();
-      
+
       // Handle the request with the transport
       await transport.handleRequest(nodeReq, nodeRes, body);
-      
+
       // Convert Node.js response back to Bun Response
       return convertNodeResponseToBun(nodeRes, newSessionId);
     }
-    
+
     // For non-initialize requests, we need a session ID
     if (!sessionId) {
       console.log('No session ID provided for non-initialize request');
@@ -757,7 +767,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    
+
     // Check if we have a transport for this session
     const transport = transports[sessionId];
     if (!transport) {
@@ -774,15 +784,15 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    
+
     // Handle the request with the existing transport
     const nodeReq = await convertBunRequestToNode(request, body);
     const nodeRes = createNodeResponse();
-    
+
     await transport.handleRequest(nodeReq, nodeRes, body);
-    
+
     return convertNodeResponseToBun(nodeRes);
-    
+
   } catch (error) {
     console.log('MCP error:', error);
     const id = body?.id;
@@ -803,38 +813,38 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
 // HTTP endpoint handler for MCP protocol - GET requests (SSE streams)
 export async function handleMCPGetRequest(request: Request): Promise<Response> {
   const sessionId = request.headers.get('mcp-session-id');
-  
+
   if (!sessionId || !transports[sessionId]) {
     return new Response('Invalid or missing session ID', { status: 400 });
   }
-  
+
   console.log(`Establishing SSE stream for session ${sessionId}`);
-  
+
   const transport = transports[sessionId];
   const nodeReq = await convertBunRequestToNode(request);
   const nodeRes = createNodeResponse();
-  
+
   await transport.handleRequest(nodeReq, nodeRes);
-  
+
   return convertNodeResponseToBun(nodeRes);
 }
 
 // HTTP endpoint handler for MCP protocol - DELETE requests (session termination)
 export async function handleMCPDeleteRequest(request: Request): Promise<Response> {
   const sessionId = request.headers.get('mcp-session-id');
-  
+
   if (!sessionId || !transports[sessionId]) {
     return new Response('Invalid or missing session ID', { status: 400 });
   }
-  
+
   console.log(`Terminating session ${sessionId}`);
-  
+
   const transport = transports[sessionId];
   const nodeReq = await convertBunRequestToNode(request);
   const nodeRes = createNodeResponse();
-  
+
   await transport.handleRequest(nodeReq, nodeRes);
-  
+
   return convertNodeResponseToBun(nodeRes);
 }
 
@@ -842,19 +852,19 @@ export async function handleMCPDeleteRequest(request: Request): Promise<Response
 
 async function convertBunRequestToNode(bunReq: Request, parsedBody?: any): Promise<any> {
   const url = new URL(bunReq.url);
-  
+
   const nodeReq: any = {
     method: bunReq.method,
     url: url.pathname + url.search,
     headers: {} as Record<string, string>,
     body: parsedBody,
   };
-  
+
   // Convert headers
   bunReq.headers.forEach((value, key) => {
     nodeReq.headers[key.toLowerCase()] = value;
   });
-  
+
   return nodeReq;
 }
 
@@ -867,27 +877,27 @@ function createNodeResponse(): any {
   const listeners: Record<string, Function[]> = {};
   let finishPromise: Promise<void>;
   let resolveFinish: () => void;
-  
+
   // Create a promise that resolves when the response is finished
   finishPromise = new Promise((resolve) => {
     resolveFinish = resolve;
   });
-  
+
   const nodeRes: any = {
     statusCode,
     statusMessage,
     finished,
     headersSent: false,
-    
+
     setHeader(name: string, value: string | string[]) {
       headers[name.toLowerCase()] = value;
       return this;
     },
-    
+
     getHeader(name: string) {
       return headers[name.toLowerCase()];
     },
-    
+
     writeHead(code: number, message?: string | Record<string, string>, headersObj?: Record<string, string>) {
       statusCode = code;
       if (typeof message === 'string') {
@@ -906,12 +916,12 @@ function createNodeResponse(): any {
       this.statusCode = code;
       return this;
     },
-    
+
     write(chunk: any) {
       chunks.push(chunk);
       return true;
     },
-    
+
     end(data?: any) {
       if (data) {
         chunks.push(data);
@@ -923,7 +933,7 @@ function createNodeResponse(): any {
       // Resolve the finish promise
       resolveFinish();
     },
-    
+
     // EventEmitter-like methods
     on(event: string, listener: Function) {
       if (!listeners[event]) {
@@ -932,7 +942,7 @@ function createNodeResponse(): any {
       listeners[event].push(listener);
       return this;
     },
-    
+
     once(event: string, listener: Function) {
       const onceWrapper = (...args: any[]) => {
         listener(...args);
@@ -940,45 +950,45 @@ function createNodeResponse(): any {
       };
       return this.on(event, onceWrapper);
     },
-    
+
     removeListener(event: string, listener: Function) {
       if (listeners[event]) {
         listeners[event] = listeners[event].filter(l => l !== listener);
       }
       return this;
     },
-    
+
     emit(event: string, ...args: any[]) {
       if (listeners[event]) {
         listeners[event].forEach(listener => listener(...args));
       }
       return true;
     },
-    
+
     // Expose internal state for conversion
     _getState() {
       return { statusCode, statusMessage, headers, chunks, finished };
     },
-    
+
     // Expose the finish promise
     _waitForFinish() {
       return finishPromise;
     },
   };
-  
+
   return nodeRes;
 }
 
 async function convertNodeResponseToBun(nodeRes: any, sessionId?: string): Promise<Response> {
   // Wait for the response to finish
   await nodeRes._waitForFinish();
-  
+
   const state = nodeRes._getState();
   const { statusCode, headers, chunks } = state;
-  
+
   // Combine all chunks
   const body = chunks.length > 0 ? chunks.join('') : '';
-  
+
   // Convert headers to Headers object
   const responseHeaders = new Headers();
   Object.entries(headers).forEach(([key, value]) => {
@@ -988,12 +998,12 @@ async function convertNodeResponseToBun(nodeRes: any, sessionId?: string): Promi
       responseHeaders.set(key, value as string);
     }
   });
-  
+
   // Add session ID header if provided
   if (sessionId) {
     responseHeaders.set('mcp-session-id', sessionId);
   }
-  
+
   return new Response(body, {
     status: statusCode,
     headers: responseHeaders,

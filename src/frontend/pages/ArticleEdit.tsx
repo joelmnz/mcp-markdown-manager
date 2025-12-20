@@ -15,6 +15,7 @@ interface ArticleEditProps {
 export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [folder, setFolder] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [linting, setLinting] = useState(false);
@@ -39,6 +40,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         const data = await response.json();
         setTitle(data.title);
         setContent(data.content);
+        setFolder(data.folder || '');
         setIsPublic(data.isPublic || false);
       } else {
         setError('Article not found');
@@ -61,9 +63,9 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       setError('');
 
       const url = isNew ? '/api/articles' : `/api/articles/${filename}.md`;
-      const data = { title, content };
+      const data = { title, content, folder };
 
-      const response = isNew 
+      const response = isNew
         ? await apiClient.post(url, data, token)
         : await apiClient.put(url, data, token);
 
@@ -290,6 +292,16 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Article title"
             className="edit-title-input"
+          />
+
+          <label className="edit-label">Folder</label>
+          <input
+            type="text"
+            value={folder}
+            onChange={(e) => setFolder(e.target.value)}
+            placeholder="Folder path (optional, e.g. projects/web-dev)"
+            className="edit-input"
+            style={{ width: '100%', marginBottom: '1rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
           />
 
           <label className="edit-label">Content (Markdown)</label>

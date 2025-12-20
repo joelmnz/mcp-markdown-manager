@@ -1,6 +1,7 @@
 import { requireAuth } from '../middleware/auth';
 import {
   listArticles,
+  getFolders,
   searchArticles,
   readArticle,
   createArticle,
@@ -287,19 +288,37 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
     }
 
+    // GET /api/folders - List all folders
+    if (path === '/api/folders' && request.method === 'GET') {
+      try {
+        const folders = await getFolders();
+        return new Response(JSON.stringify(folders), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          error: error instanceof Error ? error.message : 'Failed to retrieve folders'
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     // GET /api/articles - List all articles
     if (path === '/api/articles' && request.method === 'GET') {
       const query = url.searchParams.get('q');
+      const folder = url.searchParams.get('folder') || undefined;
 
       if (query) {
         // Search articles
-        const results = await searchArticles(query);
+        const results = await searchArticles(query, folder);
         return new Response(JSON.stringify(results), {
           headers: { 'Content-Type': 'application/json' }
         });
       } else {
         // List all articles
-        const articles = await listArticles();
+        const articles = await listArticles(folder);
         return new Response(JSON.stringify(articles), {
           headers: { 'Content-Type': 'application/json' }
         });
@@ -360,7 +379,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // POST /api/articles - Create new article
     if (path === '/api/articles' && request.method === 'POST') {
       const body = await request.json();
-      const { title, content, message } = body;
+      const { title, content, folder, message } = body;
 
       if (!title || !content) {
         return new Response(JSON.stringify({ error: 'Title and content are required' }), {
@@ -369,7 +388,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       }
 
-      const article = await createArticle(title, content, message);
+      const article = await createArticle(title, content, folder, message);
       return new Response(JSON.stringify(article), {
         status: 201,
         headers: { 'Content-Type': 'application/json' }
@@ -399,7 +418,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
       // Regular article update
       const body = await request.json();
-      const { title, content, message } = body;
+      const { title, content, folder, message } = body;
 
       if (!title || !content) {
         return new Response(JSON.stringify({ error: 'Title and content are required' }), {
@@ -408,7 +427,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       }
 
-      const article = await updateArticle(filename, title, content, message);
+      const article = await updateArticle(filename, title, content, folder, message);
       return new Response(JSON.stringify(article), {
         headers: { 'Content-Type': 'application/json' }
       });

@@ -10,6 +10,7 @@ export interface Article {
   filename: string;  // Will be slug + '.md' for compatibility
   title: string;
   content: string;
+  folder?: string;
   created: string;
   isPublic: boolean;
 }
@@ -17,6 +18,7 @@ export interface Article {
 export interface ArticleMetadata {
   filename: string;  // Will be slug + '.md' for compatibility
   title: string;
+  folder?: string;
   created: string;
   modified: string;
   isPublic: boolean;
@@ -61,12 +63,12 @@ async function safelyHandleEmbeddingOperation(
       console.warn(`Embedding queue service not available for ${operationName}`);
       return;
     }
-    
+
     await operation();
   } catch (error) {
     // Log the error but don't throw it to ensure embedding failures don't affect article operations
     console.error(`Error in ${operationName}:`, error);
-    
+
     // In production, you might want to send this to a monitoring service
     if (process.env.NODE_ENV === 'production') {
       // Could integrate with monitoring service here
@@ -77,7 +79,7 @@ async function safelyHandleEmbeddingOperation(
         operation: operationName
       });
     }
-    
+
     // Additional safety: if this is a database connection error, we should be extra careful
     if (error instanceof Error && error.message.includes('database')) {
       console.warn(`Database-related embedding error in ${operationName}, article operation will continue normally`);
@@ -103,6 +105,7 @@ function convertToLegacyArticle(dbArticle: any): Article {
     filename: slugToFilename(dbArticle.slug),
     title: dbArticle.title,
     content: dbArticle.content,
+    folder: dbArticle.folder,
     created: dbArticle.created,
     isPublic: dbArticle.isPublic
   };
@@ -113,6 +116,7 @@ function convertToLegacyMetadata(dbMetadata: any): ArticleMetadata {
   return {
     filename: slugToFilename(dbMetadata.slug),
     title: dbMetadata.title,
+    folder: dbMetadata.folder,
     created: dbMetadata.created,
     modified: dbMetadata.modified,
     isPublic: dbMetadata.isPublic
@@ -122,11 +126,11 @@ function convertToLegacyMetadata(dbMetadata: any): ArticleMetadata {
 // Clean markdown content by trimming leading newlines and whitespace
 function cleanMarkdownContent(content: string): string {
   const cleaned = content.replace(/^[\n\r]+/, '');
-  
+
   if (!cleaned.trim()) {
     throw new Error('Content cannot be empty');
   }
-  
+
   return cleaned;
 }
 
@@ -165,7 +169,7 @@ async function createVersionSnapshot(
 ): Promise<void> {
   const slug = filenameToSlug(filename);
   const articleId = await databaseArticleService.getArticleId(slug);
-  
+
   if (articleId) {
     await databaseVersionHistoryService.createVersion(
       articleId,
@@ -178,14 +182,19 @@ async function createVersionSnapshot(
 }
 
 // List all articles with metadata
-export async function listArticles(): Promise<ArticleMetadata[]> {
-  const dbArticles = await databaseArticleService.listArticles();
+export async function listArticles(folder?: string): Promise<ArticleMetadata[]> {
+  const dbArticles = await databaseArticleService.listArticles(folder);
   return dbArticles.map(convertToLegacyMetadata);
 }
 
+// Get all available folders
+export async function getFolders(): Promise<string[]> {
+  return await databaseArticleService.getFolderHierarchy();
+}
+
 // Search articles by title
-export async function searchArticles(query: string): Promise<ArticleMetadata[]> {
-  const dbArticles = await databaseArticleService.searchArticles(query);
+export async function searchArticles(query: string, folder?: string): Promise<ArticleMetadata[]> {
+  const dbArticles = await databaseArticleService.searchArticles(query, folder);
   return dbArticles.map(convertToLegacyMetadata);
 }
 
@@ -197,22 +206,22 @@ export async function readArticle(filename: string): Promise<Article | null> {
 }
 
 // Create a new article
-export async function createArticle(title: string, content: string, message?: string, options?: ArticleServiceOptions): Promise<Article> {
+export async function createArticle(title: string, content: string, folder: string = '', message?: string, options?: ArticleServiceOptions): Promise<Article> {
   const cleanedContent = cleanMarkdownContent(content);
-  
+
   // Create article in database first (ensures article persistence precedes task queuing)
-  const dbArticle = await databaseArticleService.createArticle(title, cleanedContent, '', message);
-  
+  const dbArticle = await databaseArticleService.createArticle(title, cleanedContent, folder, message);
+
   // Create initial version snapshot
   const filename = slugToFilename(dbArticle.slug);
-  await createVersionSnapshot(filename, title, cleanedContent, '', message || 'Initial version');
-  
+  await createVersionSnapshot(filename, title, cleanedContent, folder, message || 'Initial version');
+
   // Handle embedding generation with failure isolation
   if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
     await safelyHandleEmbeddingOperation(async () => {
       // Get article ID for task queuing
       const articleId = await databaseArticleService.getArticleId(dbArticle.slug);
-      
+
       if (articleId) {
         // Queue embedding task for background processing
         const config = embeddingQueueConfigService.getConfig();
@@ -232,34 +241,37 @@ export async function createArticle(title: string, content: string, message?: st
       }
     }, 'article creation embedding task queuing');
   }
-  
+
   return convertToLegacyArticle(dbArticle);
 }
 
 // Update an existing article
-export async function updateArticle(filename: string, title: string, content: string, message?: string, options?: ArticleServiceOptions): Promise<Article> {
+export async function updateArticle(filename: string, title: string, content: string, folder?: string, message?: string, options?: ArticleServiceOptions): Promise<Article> {
   const cleanedContent = cleanMarkdownContent(content);
   const slug = filenameToSlug(filename);
-  
+
   // Get existing article to preserve creation date
   const existing = await databaseArticleService.readArticle(slug);
   if (!existing) {
     throw new Error(`Article ${filename} not found`);
   }
-  
+
+  // Use existing folder if not provided
+  const targetFolder = folder !== undefined ? folder : existing.folder;
+
   // Update article in database first (this handles slug changes automatically)
-  const updatedArticle = await databaseArticleService.updateArticle(slug, title, cleanedContent, existing.folder, message);
-  
+  const updatedArticle = await databaseArticleService.updateArticle(slug, title, cleanedContent, targetFolder, message);
+
   // Create version snapshot
   const newFilename = slugToFilename(updatedArticle.slug);
-  await createVersionSnapshot(newFilename, title, cleanedContent, existing.folder, message || 'Updated article');
-  
+  await createVersionSnapshot(newFilename, title, cleanedContent, targetFolder, message || 'Updated article');
+
   // Handle embedding updates with failure isolation
   if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
     await safelyHandleEmbeddingOperation(async () => {
       // Get article ID for task queuing
       const articleId = await databaseArticleService.getArticleId(updatedArticle.slug);
-      
+
       if (articleId) {
         // If slug changed, queue a delete task for the old slug first
         if (filename !== newFilename) {
@@ -278,7 +290,7 @@ export async function updateArticle(filename: string, title: string, content: st
             }
           });
         }
-        
+
         // Queue embedding update task for background processing
         const config = embeddingQueueConfigService.getConfig();
         await embeddingQueueService.enqueueTask({
@@ -298,14 +310,14 @@ export async function updateArticle(filename: string, title: string, content: st
       }
     }, 'article update embedding task queuing');
   }
-  
+
   return convertToLegacyArticle(updatedArticle);
 }
 
 // Delete an article
 export async function deleteArticle(filename: string, options?: ArticleServiceOptions): Promise<void> {
   const slug = filenameToSlug(filename);
-  
+
   // Get article ID before deletion for embedding cleanup
   let articleId: number | null = null;
   if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
@@ -316,10 +328,10 @@ export async function deleteArticle(filename: string, options?: ArticleServiceOp
       // Continue with deletion even if we can't get the ID
     }
   }
-  
+
   // Delete from database first (this will cascade to version history and embeddings)
   await databaseArticleService.deleteArticle(slug);
-  
+
   // Queue embedding cleanup task with failure isolation
   if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding && articleId) {
     await safelyHandleEmbeddingOperation(async () => {
@@ -344,13 +356,13 @@ export async function deleteArticle(filename: string, options?: ArticleServiceOp
 export async function listArticleVersions(filename: string): Promise<VersionMetadata[]> {
   const slug = filenameToSlug(filename);
   const articleId = await databaseArticleService.getArticleId(slug);
-  
+
   if (!articleId) {
     throw new Error(`Article ${filename} not found`);
   }
-  
+
   const dbVersions = await databaseVersionHistoryService.listVersions(articleId);
-  
+
   // Convert to legacy format
   return dbVersions.map(v => ({
     versionId: `v${v.versionId}`,
@@ -366,27 +378,28 @@ export async function listArticleVersions(filename: string): Promise<VersionMeta
 export async function getArticleVersion(filename: string, versionId: string): Promise<Article | null> {
   const slug = filenameToSlug(filename);
   const articleId = await databaseArticleService.getArticleId(slug);
-  
+
   if (!articleId) {
     throw new Error(`Article ${filename} not found`);
   }
-  
+
   // Extract numeric version ID (remove 'v' prefix)
   const numericVersionId = parseInt(versionId.replace(/^v/, ''), 10);
   if (isNaN(numericVersionId)) {
     return null;
   }
-  
+
   const dbVersion = await databaseVersionHistoryService.getVersion(articleId, numericVersionId);
-  
+
   if (!dbVersion) {
     return null;
   }
-  
+
   return {
     filename,
     title: dbVersion.title,
     content: dbVersion.content,
+    folder: dbVersion.folder,
     created: dbVersion.created,
     isPublic: false // Version snapshots are not marked as public
   };
@@ -396,24 +409,24 @@ export async function getArticleVersion(filename: string, versionId: string): Pr
 export async function restoreArticleVersion(filename: string, versionId: string, message?: string, options?: ArticleServiceOptions): Promise<Article> {
   const slug = filenameToSlug(filename);
   const articleId = await databaseArticleService.getArticleId(slug);
-  
+
   if (!articleId) {
     throw new Error(`Article ${filename} not found`);
   }
-  
+
   // Extract numeric version ID (remove 'v' prefix)
   const numericVersionId = parseInt(versionId.replace(/^v/, ''), 10);
   if (isNaN(numericVersionId)) {
     throw new Error(`Invalid version ID: ${versionId}`);
   }
-  
+
   // Restore using database service
   const restoredArticle = await databaseVersionHistoryService.restoreVersion(
-    articleId, 
-    numericVersionId, 
+    articleId,
+    numericVersionId,
     message || `Restore to ${versionId}`
   );
-  
+
   // Queue embedding update task with failure isolation
   if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
     await safelyHandleEmbeddingOperation(async () => {
@@ -435,7 +448,7 @@ export async function restoreArticleVersion(filename: string, versionId: string,
       });
     }, 'article version restore embedding task queuing');
   }
-  
+
   return convertToLegacyArticle(restoredArticle);
 }
 
@@ -443,22 +456,22 @@ export async function restoreArticleVersion(filename: string, versionId: string,
 export async function deleteArticleVersions(filename: string, versionIds?: string[]): Promise<void> {
   const slug = filenameToSlug(filename);
   const articleId = await databaseArticleService.getArticleId(slug);
-  
+
   if (!articleId) {
     throw new Error(`Article ${filename} not found`);
   }
-  
+
   if (!versionIds || versionIds.length === 0) {
     // Delete all versions
     await databaseVersionHistoryService.deleteAllVersions(articleId);
     return;
   }
-  
+
   // Convert version IDs to numeric format (remove 'v' prefix)
   const numericVersionIds = versionIds
     .map(id => parseInt(id.replace(/^v/, ''), 10))
     .filter(id => !isNaN(id));
-  
+
   if (numericVersionIds.length > 0) {
     await databaseVersionHistoryService.deleteVersions(articleId, numericVersionIds);
   }
@@ -475,22 +488,22 @@ export async function getArticleEmbeddingStatus(filename: string): Promise<{
   if (!isBackgroundEmbeddingEnabled()) {
     return null;
   }
-  
+
   try {
     const slug = filenameToSlug(filename);
     const articleId = await databaseArticleService.getArticleId(slug);
-    
+
     if (!articleId) {
       return null;
     }
-    
+
     // Get embedding tasks for this article
     const tasks = await embeddingQueueService.getTasksForArticle(articleId);
-    
+
     const pendingTasks = tasks.filter(t => t.status === 'pending').length;
     const failedTasks = tasks.filter(t => t.status === 'failed').length;
     const lastTask = tasks[0]; // Most recent task
-    
+
     return {
       hasEmbeddings: tasks.some(t => t.status === 'completed'),
       pendingTasks,
@@ -509,16 +522,16 @@ export async function retryArticleEmbedding(filename: string, priority: 'high' |
   if (!isBackgroundEmbeddingEnabled()) {
     return false;
   }
-  
+
   try {
     const slug = filenameToSlug(filename);
     const articleId = await databaseArticleService.getArticleId(slug);
     const article = await databaseArticleService.readArticle(slug);
-    
+
     if (!articleId || !article) {
       return false;
     }
-    
+
     // Queue a new embedding task with high priority
     const config = embeddingQueueConfigService.getConfig();
     await embeddingQueueService.enqueueTask({
@@ -535,7 +548,7 @@ export async function retryArticleEmbedding(filename: string, priority: 'high' |
         reason: 'manual_retry'
       }
     });
-    
+
     return true;
   } catch (error) {
     console.error('Error retrying article embedding:', error);
@@ -557,7 +570,7 @@ export async function getArticlesNeedingEmbedding(): Promise<Array<{
   if (!isBackgroundEmbeddingEnabled()) {
     return [];
   }
-  
+
   try {
     const articles = await embeddingQueueService.identifyArticlesNeedingEmbedding();
     return articles.map(article => ({
@@ -594,7 +607,7 @@ export async function queueBulkEmbeddingUpdate(
   if (!isBackgroundEmbeddingEnabled()) {
     return null;
   }
-  
+
   try {
     return await embeddingQueueService.queueBulkEmbeddingUpdate(priority, progressCallback);
   } catch (error) {
@@ -621,7 +634,7 @@ export async function getBulkOperationSummary(operationId: string): Promise<{
   if (!isBackgroundEmbeddingEnabled()) {
     return null;
   }
-  
+
   try {
     return await embeddingQueueService.getBulkOperationSummary(operationId);
   } catch (error) {
@@ -648,7 +661,7 @@ export async function listRecentBulkOperations(limit: number = 10): Promise<Arra
   if (!isBackgroundEmbeddingEnabled()) {
     return [];
   }
-  
+
   try {
     return await embeddingQueueService.listRecentBulkOperations(limit);
   } catch (error) {
