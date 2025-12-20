@@ -1,11 +1,11 @@
 import { database } from './database.js';
 import { createHash } from 'crypto';
-import { 
-  handleDatabaseError, 
-  DatabaseServiceError, 
-  DatabaseErrorType, 
+import {
+  handleDatabaseError,
+  DatabaseServiceError,
+  DatabaseErrorType,
   retryDatabaseOperation,
-  logDatabaseError 
+  logDatabaseError
 } from './databaseErrors.js';
 import { databaseConstraintService } from './databaseConstraints.js';
 
@@ -114,7 +114,7 @@ export class DatabaseArticleService {
   }
 
   /**
-   * List all articles with optional folder filtering
+   * List all articles with optional folder filtering (includes subfolders)
    */
   async listArticles(folder?: string): Promise<ArticleMetadata[]> {
     try {
@@ -127,8 +127,17 @@ export class DatabaseArticleService {
       if (folder !== undefined) {
         const normalizedFolder = this.normalizeFolder(folder);
         await this.validateFolder(normalizedFolder);
-        query += ' WHERE folder = $1';
-        params.push(normalizedFolder);
+        // Use LIKE pattern to include subfolders
+        // e.g., 'projects' matches 'projects', 'projects/web-dev', 'projects/project-1', etc.
+        if (normalizedFolder === '') {
+          // Empty folder means root - show all articles
+          query += ' WHERE folder = $1';
+          params.push(normalizedFolder);
+        } else {
+          // Include the folder itself and all subfolders
+          query += ' WHERE (folder = $1 OR folder LIKE $2)';
+          params.push(normalizedFolder, `${normalizedFolder}/%`);
+        }
       }
 
       query += ' ORDER BY updated_at DESC';
@@ -146,7 +155,7 @@ export class DatabaseArticleService {
   }
 
   /**
-   * Search articles by title with optional folder filtering
+   * Search articles by title with optional folder filtering (includes subfolders)
    */
   async searchArticles(query: string, folder?: string): Promise<ArticleMetadata[]> {
     let sql = `
@@ -158,8 +167,17 @@ export class DatabaseArticleService {
 
     if (folder !== undefined) {
       const normalizedFolder = this.normalizeFolder(folder);
-      sql += ' AND folder = $2';
-      params.push(normalizedFolder);
+      // Use LIKE pattern to include subfolders
+      // e.g., 'projects' matches 'projects', 'projects/web-dev', 'projects/project-1', etc.
+      if (normalizedFolder === '') {
+        // Empty folder means root - exact match only
+        sql += ' AND folder = $2';
+        params.push(normalizedFolder);
+      } else {
+        // Include the folder itself and all subfolders
+        sql += ' AND (folder = $2 OR folder LIKE $3)';
+        params.push(normalizedFolder, `${normalizedFolder}/%`);
+      }
     }
 
     sql += ' ORDER BY updated_at DESC';
@@ -309,7 +327,7 @@ export class DatabaseArticleService {
 
     // Generate new slug from title
     const newSlug = this.generateSlug(title);
-    
+
     // Validate new slug if it's different
     if (newSlug !== slug) {
       await this.validateSlug(newSlug, articleId);
@@ -443,7 +461,7 @@ export class DatabaseArticleService {
    */
   async listArticlesInFolder(folderPath: string, includeSubfolders: boolean = false): Promise<ArticleMetadata[]> {
     const normalizedFolder = this.normalizeFolder(folderPath);
-    
+
     let query: string;
     let params: any[];
 
