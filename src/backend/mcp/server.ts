@@ -13,7 +13,7 @@ import {
   updateArticle,
   deleteArticle
 } from '../services/articles';
-import { semanticSearch } from '../services/vectorIndex';
+import { semanticSearch, SearchResult } from '../services/vectorIndex';
 import { embeddingQueueService } from '../services/embeddingQueue';
 import { databaseArticleService } from '../services/databaseArticles';
 import { randomUUID } from 'crypto';
@@ -527,8 +527,8 @@ function createConfiguredMCPServer() {
           );
 
           // Flatten results and remove duplicates based on chunk filename + chunkIndex
-          const seenChunks = new Map<string, any>();
-          const uniqueResults = [];
+          const seenChunks = new Map<string, SearchResult>();
+          const uniqueResults: SearchResult[] = [];
 
           for (const results of allResults) {
             for (const result of results) {
