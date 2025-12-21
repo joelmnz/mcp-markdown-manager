@@ -14,7 +14,7 @@ import {
   deleteArticle,
   getFolders
 } from '../services/articles';
-import { semanticSearch } from '../services/vectorIndex';
+import { semanticSearch, SearchResult } from '../services/vectorIndex';
 import { randomUUID } from 'crypto';
 
 type McpSessionEntry = {
@@ -345,45 +345,6 @@ function createConfiguredMCPServer() {
           required: ['queries'],
         },
       });
-
-      // Add embedding queue management tools
-      tools.push({
-        name: 'getEmbeddingQueueStatus',
-        description: 'Get current status and statistics of the embedding queue',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      });
-
-      tools.push({
-        name: 'getArticleEmbeddingStatus',
-        description: 'Get embedding status for a specific article',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            filename: {
-              type: 'string',
-              description: 'Filename of the article (e.g., my-article.md)',
-            },
-          },
-          required: ['filename'],
-        },
-      });
-
-      tools.push({
-        name: 'getBulkEmbeddingProgress',
-        description: 'Get progress of bulk embedding operations',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            operationId: {
-              type: 'string',
-              description: 'Optional operation ID to get specific bulk operation progress',
-            },
-          },
-        },
-      });
     }
 
     return { tools };
@@ -529,124 +490,6 @@ function createConfiguredMCPServer() {
               },
             ],
           };
-        }
-
-        case 'getEmbeddingQueueStatus': {
-          if (!SEMANTIC_SEARCH_ENABLED) {
-            throw new Error('Semantic search is not enabled');
-          }
-          const detailedStats = await embeddingQueueService.getDetailedQueueStats();
-          const queueHealth = await embeddingQueueService.getQueueHealth();
-
-          const response = {
-            stats: detailedStats.stats,
-            tasksByPriority: detailedStats.tasksByPriority,
-            tasksByOperation: detailedStats.tasksByOperation,
-            recentActivity: detailedStats.recentActivity,
-            health: queueHealth
-          };
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(response, null, 2),
-              },
-            ],
-          };
-        }
-
-        case 'getArticleEmbeddingStatus': {
-          if (!SEMANTIC_SEARCH_ENABLED) {
-            throw new Error('Semantic search is not enabled');
-          }
-          const { filename } = request.params.arguments as { filename: string };
-
-          // Convert filename to slug and get article ID
-          const slug = filename.replace(/\.md$/, '');
-          const articleId = await databaseArticleService.getArticleId(slug);
-
-          if (!articleId) {
-            throw new Error(`Article ${filename} not found`);
-          }
-
-          // Get embedding tasks for this article
-          const tasks = await embeddingQueueService.getTasksForArticle(articleId);
-
-          // Get the most recent task status
-          const latestTask = tasks.length > 0 ? tasks[0] : null;
-
-          const response = {
-            filename,
-            articleId,
-            embeddingStatus: latestTask?.status || 'no_tasks',
-            latestTask: latestTask ? {
-              id: latestTask.id,
-              operation: latestTask.operation,
-              status: latestTask.status,
-              priority: latestTask.priority,
-              attempts: latestTask.attempts,
-              maxAttempts: latestTask.maxAttempts,
-              createdAt: latestTask.createdAt,
-              scheduledAt: latestTask.scheduledAt,
-              processedAt: latestTask.processedAt,
-              completedAt: latestTask.completedAt,
-              errorMessage: latestTask.errorMessage
-            } : null,
-            allTasks: tasks.map(task => ({
-              id: task.id,
-              operation: task.operation,
-              status: task.status,
-              createdAt: task.createdAt,
-              completedAt: task.completedAt,
-              errorMessage: task.errorMessage
-            }))
-          };
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(response, null, 2),
-              },
-            ],
-          };
-        }
-
-        case 'getBulkEmbeddingProgress': {
-          if (!SEMANTIC_SEARCH_ENABLED) {
-            throw new Error('Semantic search is not enabled');
-          }
-          const { operationId } = request.params.arguments as { operationId?: string };
-
-          if (operationId) {
-            // Get specific bulk operation summary
-            const summary = await embeddingQueueService.getBulkOperationSummary(operationId);
-            if (!summary) {
-              throw new Error(`Bulk operation ${operationId} not found`);
-            }
-
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(summary, null, 2),
-                },
-              ],
-            };
-          } else {
-            // Get recent bulk operations
-            const recentOperations = await embeddingQueueService.listRecentBulkOperations(10);
-
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify(recentOperations, null, 2),
-                },
-              ],
-            };
-          }
         }
 
         case 'readArticle': {
