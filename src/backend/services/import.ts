@@ -148,6 +148,11 @@ async function scanMarkdownFiles(directoryPath: string, preserveFolderStructure:
     const fullPath = join(directoryPath, entry.name);
     
     if (entry.isDirectory()) {
+      // Skip dot-directories (like .versions, .git, etc.)
+      if (entry.name.startsWith('.')) {
+        continue;
+      }
+
       if (preserveFolderStructure) {
         // Recursively scan subdirectories
         const subFiles = await scanMarkdownFiles(fullPath, true);

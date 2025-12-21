@@ -78,6 +78,11 @@ async function scanMarkdownFiles(directoryPath: string, preserveFolderStructure:
     const fullPath = join(directoryPath, entry.name);
     
     if (entry.isDirectory()) {
+      // Skip dot-directories (like .versions, .git, etc.)
+      if (entry.name.startsWith('.')) {
+        continue;
+      }
+
       if (preserveFolderStructure) {
         // Recursively scan subdirectories
         const subFiles = await scanMarkdownFiles(fullPath, true);
@@ -100,9 +105,15 @@ async function createTestFiles() {
   
   await mkdir(TEST_DIR, { recursive: true });
   await mkdir(join(TEST_DIR, 'subfolder'), { recursive: true });
+  await mkdir(join(TEST_DIR, '.versions'), { recursive: true });
   
   // Create test markdown files
   const testFiles = [
+    {
+      path: join(TEST_DIR, '.versions', 'backup-article.md'),
+      content: `# Backup Article
+This should be ignored.`
+    },
     {
       path: join(TEST_DIR, 'simple-article.md'),
       content: `---
