@@ -319,16 +319,18 @@ export class DatabaseArticleService {
     const normalizedFolder = this.normalizeFolder(folder);
     this.validateFolder(normalizedFolder);
 
-    // Get existing article
-    const existingArticle = await this.readArticle(slug);
-    if (!existingArticle) {
+    // Get existing article with all fields in a single query
+    const existingResult = await database.query(
+      'SELECT * FROM articles WHERE slug = $1',
+      [slug]
+    );
+
+    if (existingResult.rows.length === 0) {
       throw new Error(`Article with slug '${slug}' not found`);
     }
 
-    const articleId = await this.getArticleId(slug);
-    if (!articleId) {
-      throw new Error(`Article with slug '${slug}' not found`);
-    }
+    const existingRow = existingResult.rows[0];
+    const articleId = existingRow.id;
 
     // Generate new slug from title
     const newSlug = this.generateSlug(title);
@@ -338,14 +340,18 @@ export class DatabaseArticleService {
       await this.validateSlug(newSlug, articleId);
     }
 
-    const now = new Date();
+    // Check if content or title changed to decide whether to update updated_at
+    const hasContentChanged =
+      title !== existingRow.title || content !== existingRow.content;
+
+    const updatedAt = hasContentChanged ? new Date() : existingRow.updated_at;
 
     const result = await database.query(
       `UPDATE articles 
        SET title = $1, slug = $2, content = $3, folder = $4, updated_at = $5
        WHERE id = $6
        RETURNING *`,
-      [title, newSlug, content, normalizedFolder, now, articleId]
+      [title, newSlug, content, normalizedFolder, updatedAt, articleId]
     );
 
     if (result.rows.length === 0) {
