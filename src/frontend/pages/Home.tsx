@@ -229,7 +229,7 @@ export function Home({ token, onNavigate }: HomeProps) {
         {/* Folder Filter */}
         {folders.length > 0 && (
           <div className="folder-filter-section">
-            <label className="filter-label">Filter by folder:</label>
+            <label className="filter-label">Folder:</label>
             <select
               value={selectedFolder || ''}
               onChange={(e) => handleFolderSelect(e.target.value)}

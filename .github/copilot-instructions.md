@@ -81,6 +81,13 @@ bun run dev:backend
 bun run dev:frontend
 ```
 
+If using Docker:
+
+```bash
+bun run dc:db        # Start Postgres DB
+bun run dc:ui        # Build and start the app container
+```
+
 ### Build Process (Multi-stage)
 ```bash
 bun run build  # Builds frontend with hash-named chunks
@@ -117,6 +124,18 @@ Both share the same tool definitions in `mcp/server.ts` but handle transport dif
 ```
 
 Theme switching updates `document.documentElement.setAttribute('data-theme', theme)`.
+
+### Frontend API Client
+**Always use `apiClient`** for backend requests instead of raw `fetch`.
+- Handles base URL configuration automatically (critical for subpath deployments)
+- Automatically injects authentication headers
+- Provides consistent error handling
+
+```typescript
+import { apiClient } from '../utils/apiClient';
+// ...
+const response = await apiClient.get('/api/articles', token);
+```
 
 ## Integration Patterns
 
@@ -215,7 +234,7 @@ This app has no formal testing framework yet. When adding tests:
 2. Page components in `src/frontend/pages/`
 3. All styles in `src/frontend/styles/main.css`
 4. Update `App.tsx` for routing changes
-5. Use `localStorage.getItem('auth-token')` for authentication
+5. Use `apiClient` for all API calls (handles auth and base path automatically)
 
 ### Working with Articles
 - All article operations go through `services/articles.ts`

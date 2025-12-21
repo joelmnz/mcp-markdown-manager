@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { apiClient } from '../utils/apiClient';
 
 const AUTO_CLOSE_DELAY_MS = 1500; // Delay before auto-closing modal after successful operation
 
@@ -57,14 +58,7 @@ export function FolderManagementModal({
     setSuccess('');
 
     try {
-      const response = await fetch(`/api/folders/${encodeURIComponent(folderToManage)}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ newName: newFolderName.trim() })
-      });
+      const response = await apiClient.put(`/api/folders/${encodeURIComponent(folderToManage)}`, { newName: newFolderName.trim() }, token);
 
       const data = await response.json();
 
@@ -98,12 +92,7 @@ export function FolderManagementModal({
     setSuccess('');
 
     try {
-      const response = await fetch(`/api/folders/${encodeURIComponent(folderToManage)}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiClient.delete(`/api/folders/${encodeURIComponent(folderToManage)}`, token);
 
       const data = await response.json();
 

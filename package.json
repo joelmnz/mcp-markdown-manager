@@ -9,6 +9,7 @@
     "dev:frontend": "bun scripts/watch-frontend.ts",
     "dc:ui": "docker compose down article-manager && docker compose up -d --build article-manager",
     "dc:db": "docker compose up -d postgres",
+    "dc:down": "docker compose down",
     "build": "bun run build:frontend",
     "build:frontend": "bun run clean:build && bun build src/frontend/App.tsx --outdir=public --target=browser --minify --splitting --format=esm --entry-naming=[dir]/[name].[hash].[ext] --chunk-naming=[name].[hash].[ext] && bun run build:html && bun run build:css",
     "build:icons": "node scripts/generate-icons.cjs",
