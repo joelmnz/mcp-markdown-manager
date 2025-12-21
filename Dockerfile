@@ -16,6 +16,10 @@ COPY src ./src
 COPY scripts ./scripts
 COPY tsconfig.json ./
 
+# Create public directory and copy static assets (sw.js, icons, manifest template)
+RUN mkdir -p public
+COPY public/sw.js public/manifest.template.json public/manifest.json public/icon-*.png public/favicon.png ./public/
+
 # Build frontend
 RUN bun run build
 
