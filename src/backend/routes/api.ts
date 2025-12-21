@@ -1,4 +1,4 @@
-import { requireAuth } from '../middleware/auth';
+import { authenticate, requireAuth } from '../middleware/auth';
 import {
   listArticles,
   getFolders,
@@ -32,8 +32,26 @@ export async function handleApiRequest(request: Request): Promise<Response> {
   // Health check endpoint (no auth required)
   if (path === '/health') {
     try {
+      const isAuthenticated = authenticate(request);
+
       // Simple health check that uses minimal database connections
       const basicHealthCheck = await databaseInit.healthCheck();
+
+      // Public/minimal response to reduce information leakage
+      if (!isAuthenticated) {
+        const systemHealthy = basicHealthCheck.healthy;
+        return new Response(JSON.stringify({
+          status: systemHealthy ? 'ok' : 'degraded',
+          timestamp: new Date().toISOString(),
+          database: {
+            healthy: basicHealthCheck.healthy,
+            message: basicHealthCheck.message,
+          },
+        }), {
+          status: systemHealthy ? 200 : 503,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
 
       // Get embedding queue configuration (no database calls)
       const queueConfig = embeddingQueueConfigService.getConfig();

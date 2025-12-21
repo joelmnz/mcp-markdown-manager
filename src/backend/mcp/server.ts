@@ -18,11 +18,138 @@ import { embeddingQueueService } from '../services/embeddingQueue';
 import { databaseArticleService } from '../services/databaseArticles';
 import { randomUUID } from 'crypto';
 
+type McpSessionEntry = {
+  transport: StreamableHTTPServerTransport;
+  token: string;
+  createdAtMs: number;
+  lastSeenAtMs: number;
+  ip: string;
+  userAgent: string | null;
+};
+
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 
+const MCP_SESSION_IDLE_MS = Number.parseInt(process.env.MCP_SESSION_IDLE_MS ?? '900000', 10); // 15m
+const MCP_SESSION_TTL_MS = Number.parseInt(process.env.MCP_SESSION_TTL_MS ?? '3600000', 10); // 1h
+const MCP_MAX_SESSIONS_TOTAL = Number.parseInt(process.env.MCP_MAX_SESSIONS_TOTAL ?? '200', 10);
+const MCP_MAX_SESSIONS_PER_IP = Number.parseInt(process.env.MCP_MAX_SESSIONS_PER_IP ?? '50', 10);
+const MCP_MAX_SESSIONS_PER_TOKEN = Number.parseInt(process.env.MCP_MAX_SESSIONS_PER_TOKEN ?? '100', 10);
+const MCP_BIND_SESSION_TO_IP = process.env.MCP_BIND_SESSION_TO_IP?.toLowerCase() === 'true';
+
 // Session management for HTTP transport
-const transports: Record<string, StreamableHTTPServerTransport> = {};
+const sessions: Record<string, McpSessionEntry> = {};
+
+function getBearerToken(request: Request): string | null {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader) {
+    return null;
+  }
+
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  const token = match[1].trim();
+  return token ? token : null;
+}
+
+function isAuthorizedToken(token: string | null): token is string {
+  if (!token || !AUTH_TOKEN) {
+    return false;
+  }
+  return token === AUTH_TOKEN;
+}
+
+function getClientIp(request: Request): string {
+  const forwardedFor = request.headers.get('x-forwarded-for');
+  if (forwardedFor) {
+    return forwardedFor.split(',')[0].trim();
+  }
+  return request.headers.get('x-real-ip') || 'unknown';
+}
+
+function cleanupExpiredSessions(nowMs: number) {
+  for (const [sessionId, entry] of Object.entries(sessions)) {
+    const idleExpired = nowMs - entry.lastSeenAtMs > MCP_SESSION_IDLE_MS;
+    const ttlExpired = nowMs - entry.createdAtMs > MCP_SESSION_TTL_MS;
+    if (idleExpired || ttlExpired) {
+      try {
+        (entry.transport as any).close?.();
+      } catch {
+        // ignore
+      }
+      delete sessions[sessionId];
+    }
+  }
+}
+
+function enforceSessionLimits(ip: string, token: string): Response | null {
+  const allSessions = Object.values(sessions);
+  if (allSessions.length >= MCP_MAX_SESSIONS_TOTAL) {
+    return new Response(JSON.stringify({ error: 'Too many active sessions' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const ipCount = allSessions.filter((s) => s.ip === ip).length;
+  if (ipCount >= MCP_MAX_SESSIONS_PER_IP) {
+    return new Response(JSON.stringify({ error: 'Too many active sessions for IP' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  const tokenCount = allSessions.filter((s) => s.token === token).length;
+  if (tokenCount >= MCP_MAX_SESSIONS_PER_TOKEN) {
+    return new Response(JSON.stringify({ error: 'Too many active sessions for token' }), {
+      status: 429,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  return null;
+}
+
+function getAuthorizedSession(request: Request, sessionId: string | null): { entry: McpSessionEntry; sessionId: string } | Response {
+  const token = getBearerToken(request);
+  if (!isAuthorizedToken(token)) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (!sessionId) {
+    return new Response('Invalid or missing session ID', { status: 400 });
+  }
+
+  const entry = sessions[sessionId];
+  if (!entry) {
+    return new Response('Invalid or missing session ID', { status: 400 });
+  }
+
+  if (entry.token !== token) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  if (MCP_BIND_SESSION_TO_IP) {
+    const ip = getClientIp(request);
+    if (entry.ip !== ip) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
+  return { entry, sessionId };
+}
 
 // Create a configured MCP server instance (shared logic for stdio and HTTP)
 function createConfiguredMCPServer() {
@@ -543,8 +670,8 @@ function isInitializeRequest(body: any): boolean {
 // HTTP endpoint handler for MCP protocol - POST requests
 export async function handleMCPPostRequest(request: Request): Promise<Response> {
   // Check authentication
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader || authHeader.replace('Bearer ', '') !== AUTH_TOKEN) {
+  const token = getBearerToken(request);
+  if (!isAuthorizedToken(token)) {
     console.log('MCP auth failed');
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
@@ -552,16 +679,27 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
     });
   }
 
+  const nowMs = Date.now();
+  cleanupExpiredSessions(nowMs);
+
   let body: any;
   try {
     body = await request.json();
-    console.log('MCP POST request received:', body);
+    console.log('MCP POST request received:', { id: body?.id ?? null, method: body?.method ?? null });
 
     const sessionId = request.headers.get('mcp-session-id');
 
     // Handle initialize request - this is the first request from the client
     if (isInitializeRequest(body)) {
       console.log('Handling initialize request');
+
+      const ip = getClientIp(request);
+      const userAgent = request.headers.get('user-agent');
+
+      const limitResponse = enforceSessionLimits(ip, token);
+      if (limitResponse) {
+        return limitResponse;
+      }
 
       // Generate a new session ID
       const newSessionId = randomUUID();
@@ -572,12 +710,19 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
       });
 
       // Store the transport
-      transports[newSessionId] = transport;
+      sessions[newSessionId] = {
+        transport,
+        token,
+        createdAtMs: nowMs,
+        lastSeenAtMs: nowMs,
+        ip,
+        userAgent,
+      };
 
       // Set up transport close handler
       transport.onclose = () => {
         console.log(`Transport closed for session ${newSessionId}`);
-        delete transports[newSessionId];
+        delete sessions[newSessionId];
       };
 
       // Connect the server to the transport
@@ -612,8 +757,8 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
     }
 
     // Check if we have a transport for this session
-    const transport = transports[sessionId];
-    if (!transport) {
+    const entry = sessions[sessionId];
+    if (!entry) {
       console.log(`No transport found for session ${sessionId}`);
       return new Response(JSON.stringify({
         jsonrpc: '2.0',
@@ -628,11 +773,33 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
       });
     }
 
+    // Token binding check (prevents session ID hijack)
+    if (entry.token !== token) {
+      console.log(`Token mismatch for session ${sessionId}`);
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (MCP_BIND_SESSION_TO_IP) {
+      const ip = getClientIp(request);
+      if (entry.ip !== ip) {
+        console.log(`IP mismatch for session ${sessionId}`);
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    entry.lastSeenAtMs = nowMs;
+
     // Handle the request with the existing transport
     const nodeReq = await convertBunRequestToNode(request, body);
     const nodeRes = createNodeResponse();
 
-    await transport.handleRequest(nodeReq, nodeRes, body);
+    await entry.transport.handleRequest(nodeReq, nodeRes, body);
 
     return convertNodeResponseToBun(nodeRes);
 
@@ -657,17 +824,23 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
 export async function handleMCPGetRequest(request: Request): Promise<Response> {
   const sessionId = request.headers.get('mcp-session-id');
 
-  if (!sessionId || !transports[sessionId]) {
-    return new Response('Invalid or missing session ID', { status: 400 });
+  const nowMs = Date.now();
+  cleanupExpiredSessions(nowMs);
+
+  const authorized = getAuthorizedSession(request, sessionId);
+  if (authorized instanceof Response) {
+    return authorized;
   }
 
   console.log(`Establishing SSE stream for session ${sessionId}`);
 
-  const transport = transports[sessionId];
+  const { entry } = authorized;
+  entry.lastSeenAtMs = nowMs;
+
   const nodeReq = await convertBunRequestToNode(request);
   const nodeRes = createNodeResponse();
 
-  await transport.handleRequest(nodeReq, nodeRes);
+  await entry.transport.handleRequest(nodeReq, nodeRes);
 
   return convertNodeResponseToBun(nodeRes);
 }
@@ -676,17 +849,23 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
 export async function handleMCPDeleteRequest(request: Request): Promise<Response> {
   const sessionId = request.headers.get('mcp-session-id');
 
-  if (!sessionId || !transports[sessionId]) {
-    return new Response('Invalid or missing session ID', { status: 400 });
+  const nowMs = Date.now();
+  cleanupExpiredSessions(nowMs);
+
+  const authorized = getAuthorizedSession(request, sessionId);
+  if (authorized instanceof Response) {
+    return authorized;
   }
 
   console.log(`Terminating session ${sessionId}`);
 
-  const transport = transports[sessionId];
+  const { entry } = authorized;
+  entry.lastSeenAtMs = nowMs;
+
   const nodeReq = await convertBunRequestToNode(request);
   const nodeRes = createNodeResponse();
 
-  await transport.handleRequest(nodeReq, nodeRes);
+  await entry.transport.handleRequest(nodeReq, nodeRes);
 
   return convertNodeResponseToBun(nodeRes);
 }
