@@ -9,6 +9,30 @@ import { embeddingQueueConfigService } from './services/embeddingQueueConfig.js'
 const PORT = parseInt(process.env.PORT || '5000');
 const MCP_SERVER_ENABLED = process.env.MCP_SERVER_ENABLED?.toLowerCase() === 'true';
 
+/**
+ * Get MIME type based on file extension
+ */
+function getMimeType(filePath: string): string {
+  const ext = filePath.toLowerCase().split('.').pop();
+  const mimeTypes: Record<string, string> = {
+    'html': 'text/html',
+    'css': 'text/css',
+    'js': 'application/javascript',
+    'json': 'application/json',
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'gif': 'image/gif',
+    'svg': 'image/svg+xml',
+    'ico': 'image/x-icon',
+    'woff': 'font/woff',
+    'woff2': 'font/woff2',
+    'ttf': 'font/ttf',
+    'eot': 'application/vnd.ms-fontobject',
+  };
+  return mimeTypes[ext || ''] || 'application/octet-stream';
+}
+
 // Initialize database and perform health checks
 async function initializeDatabase() {
   try {
@@ -270,10 +294,12 @@ const server = Bun.serve({
       const file = Bun.file(publicDir + filePath);
       
       if (await file.exists()) {
-        // Set proper MIME type for service worker
-        const headers: Record<string, string> = {};
+        // Set proper MIME type for all files
+        const headers: Record<string, string> = {
+          'Content-Type': getMimeType(filePath)
+        };
+        
         if (routePath === '/sw.js') {
-          headers['Content-Type'] = 'application/javascript';
           headers['Service-Worker-Allowed'] = basePathConfig.isRoot ? '/' : basePathConfig.normalizedPath + '/';
         } else if (routePath === '/manifest.json') {
           // Generate manifest.json with runtime base path configuration
@@ -299,7 +325,17 @@ const server = Bun.serve({
         return new Response(file, { headers });
       }
       
-      // Fallback to index.html for client-side routing
+      // Don't fallback to index.html for static asset requests
+      // These should 404 if the file doesn't exist
+      const staticAssetExtensions = ['.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.eot', '.json'];
+      const isStaticAsset = staticAssetExtensions.some(ext => routePath.toLowerCase().endsWith(ext));
+      
+      if (isStaticAsset) {
+        logRequest(404);
+        return new Response('Not Found', { status: 404 });
+      }
+      
+      // Fallback to index.html for client-side routing (only for HTML routes)
       const indexFile = Bun.file(publicDir + '/index.html');
       if (await indexFile.exists()) {
         const htmlContent = await indexFile.text();

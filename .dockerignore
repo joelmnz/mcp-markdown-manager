@@ -4,7 +4,12 @@ node_modules
 *.log
 .DS_Store
 data
-public
+public/*
+!public/sw.js
+!public/manifest.template.json
+!public/manifest.json
+!public/icon-*.png
+!public/favicon.png
 dist
 .git
 .gitignore

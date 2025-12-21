@@ -14,7 +14,7 @@ import {
   deleteArticle,
   getFolders
 } from '../services/articles';
-import { semanticSearch } from '../services/vectorIndex';
+import { semanticSearch, SearchResult } from '../services/vectorIndex';
 import { randomUUID } from 'crypto';
 
 type McpSessionEntry = {
@@ -28,6 +28,7 @@ type McpSessionEntry = {
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
+const MCP_MULTI_SEARCH_LIMIT = Number.parseInt(process.env.MCP_MULTI_SEARCH_LIMIT ?? '10', 10);
 
 const MCP_SESSION_IDLE_MS = Number.parseInt(process.env.MCP_SESSION_IDLE_MS ?? '900000', 10); // 15m
 const MCP_SESSION_TTL_MS = Number.parseInt(process.env.MCP_SESSION_TTL_MS ?? '3600000', 10); // 1h
@@ -172,7 +173,17 @@ function createConfiguredMCPServer() {
         description: 'List all articles with metadata (title, filename, creation date)',
         inputSchema: {
           type: 'object',
-          properties: {},
+          properties: {
+            folder: {
+              type: 'string',
+              description: 'Folder to list articles from. Use "" for all folders, "/" for root folder only.',
+            },
+            maxArticles: {
+              type: 'number',
+              description: 'Maximum number of articles to return (default: 100)',
+            },
+          },
+          required: ['folder'],
         },
       },
       {
@@ -193,8 +204,34 @@ function createConfiguredMCPServer() {
               type: 'string',
               description: 'Search query to match against article titles',
             },
+            folder: {
+              type: 'string',
+              description: 'Optional folder path. Use "" (default) for all folders, "/" for root folder only.',
+            },
           },
           required: ['query'],
+        },
+      },
+      {
+        name: 'multiSearchArticles',
+        description: 'Search articles by multiple titles (partial match) and return unique results',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            titles: {
+              type: 'array',
+              description: `Array of title search queries (max ${MCP_MULTI_SEARCH_LIMIT} items)`,
+              items: {
+                type: 'string',
+              },
+              maxItems: MCP_MULTI_SEARCH_LIMIT,
+            },
+            folder: {
+              type: 'string',
+              description: 'Optional folder path to filter results (e.g., "projects/web-dev")',
+            },
+          },
+          required: ['titles'],
         },
       },
       {
@@ -291,8 +328,39 @@ function createConfiguredMCPServer() {
               type: 'number',
               description: 'Number of results to return (default: 5)',
             },
+            folder: {
+              type: 'string',
+              description: 'Optional folder path. Use "" (default) for all folders, "/" for root folder only.',
+            },
           },
           required: ['query'],
+        },
+      });
+
+      tools.push({
+        name: 'multiSemanticSearch',
+        description: 'Perform multiple semantic searches across article content and return unique results',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            queries: {
+              type: 'array',
+              description: `Array of search queries (max ${MCP_MULTI_SEARCH_LIMIT} items)`,
+              items: {
+                type: 'string',
+              },
+              maxItems: MCP_MULTI_SEARCH_LIMIT,
+            },
+            k: {
+              type: 'number',
+              description: 'Number of results to return per query (default: 5)',
+            },
+            folder: {
+              type: 'string',
+              description: 'Optional folder path to filter results (e.g., "projects/web-dev")',
+            },
+          },
+          required: ['queries'],
         },
       });
     }
@@ -305,7 +373,14 @@ function createConfiguredMCPServer() {
     try {
       switch (request.params.name) {
         case 'listArticles': {
-          const articles = await listArticles();
+          const { folder, maxArticles } = request.params.arguments as { folder: string; maxArticles?: number };
+          
+          // If folder is empty string, treat as undefined (all folders)
+          // If folder is "/", pass it as is (service handles it as root)
+          const folderParam = folder === '' ? undefined : folder;
+          const limit = maxArticles || 100;
+
+          const articles = await listArticles(folderParam, limit);
 
           return {
             content: [
@@ -330,8 +405,12 @@ function createConfiguredMCPServer() {
         }
 
         case 'searchArticles': {
-          const { query } = request.params.arguments as { query: string };
-          const results = await searchArticles(query);
+          const { query, folder } = request.params.arguments as { query: string; folder?: string };
+          
+          // If folder is empty string, treat as undefined (all folders)
+          const folderParam = folder === '' ? undefined : folder;
+          
+          const results = await searchArticles(query, folderParam);
           return {
             content: [
               {
@@ -342,17 +421,105 @@ function createConfiguredMCPServer() {
           };
         }
 
+        case 'multiSearchArticles': {
+          const { titles, folder } = request.params.arguments as { titles: string[]; folder?: string };
+          
+          // Validate array size
+          if (!Array.isArray(titles)) {
+            throw new Error('titles must be an array');
+          }
+          if (titles.length === 0) {
+            throw new Error('titles array cannot be empty');
+          }
+          if (titles.length > MCP_MULTI_SEARCH_LIMIT) {
+            throw new Error(`titles array cannot exceed ${MCP_MULTI_SEARCH_LIMIT} items`);
+          }
+
+          // Perform searches and aggregate results
+          const allResults = await Promise.all(
+            titles.map(title => searchArticles(title, folder))
+          );
+
+          // Flatten results and remove duplicates based on filename
+          const uniqueResults = Array.from(
+            new Map(
+              allResults.flat().map(article => [article.filename, article])
+            ).values()
+          );
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(uniqueResults, null, 2),
+              },
+            ],
+          };
+        }
+
         case 'semanticSearch': {
           if (!SEMANTIC_SEARCH_ENABLED) {
             throw new Error('Semantic search is not enabled');
           }
-          const { query, k } = request.params.arguments as { query: string; k?: number };
-          const results = await semanticSearch(query, k || 5);
+          const { query, k, folder } = request.params.arguments as { query: string; k?: number; folder?: string };
+          
+          // If folder is empty string, treat as undefined (all folders)
+          const folderParam = folder === '' ? undefined : folder;
+          
+          const results = await semanticSearch(query, k || 5, folderParam);
           return {
             content: [
               {
                 type: 'text',
                 text: JSON.stringify(results, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'multiSemanticSearch': {
+          if (!SEMANTIC_SEARCH_ENABLED) {
+            throw new Error('Semantic search is not enabled');
+          }
+          const { queries, k, folder } = request.params.arguments as { queries: string[]; k?: number; folder?: string };
+          
+          // Validate array size
+          if (!Array.isArray(queries)) {
+            throw new Error('queries must be an array');
+          }
+          if (queries.length === 0) {
+            throw new Error('queries array cannot be empty');
+          }
+          if (queries.length > MCP_MULTI_SEARCH_LIMIT) {
+            throw new Error(`queries array cannot exceed ${MCP_MULTI_SEARCH_LIMIT} items`);
+          }
+
+          const resultsPerQuery = k || 5;
+
+          // Perform searches and aggregate results
+          const allResults = await Promise.all(
+            queries.map(query => semanticSearch(query, resultsPerQuery, folder))
+          );
+
+          // Flatten results and remove duplicates based on chunk filename + chunkIndex
+          const seenChunks = new Map<string, SearchResult>();
+          const uniqueResults: SearchResult[] = [];
+
+          for (const results of allResults) {
+            for (const result of results) {
+              const key = `${result.chunk.filename}:${result.chunk.chunkIndex}`;
+              if (!seenChunks.has(key)) {
+                seenChunks.set(key, result);
+                uniqueResults.push(result);
+              }
+            }
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(uniqueResults, null, 2),
               },
             ],
           };

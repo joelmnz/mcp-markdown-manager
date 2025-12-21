@@ -182,8 +182,8 @@ async function createVersionSnapshot(
 }
 
 // List all articles with metadata
-export async function listArticles(folder?: string): Promise<ArticleMetadata[]> {
-  const dbArticles = await databaseArticleService.listArticles(folder);
+export async function listArticles(folder?: string, limit?: number): Promise<ArticleMetadata[]> {
+  const dbArticles = await databaseArticleService.listArticles(folder, limit);
   return dbArticles.map(convertToLegacyMetadata);
 }
 
