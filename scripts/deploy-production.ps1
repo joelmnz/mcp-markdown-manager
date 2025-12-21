@@ -9,6 +9,8 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+$Port = if ($env:PORT) { $env:PORT } else { "5000" }
+
 Write-Host "🚀 Starting Article Manager production deployment..." -ForegroundColor Green
 
 # Check if required environment variables are set
@@ -113,7 +115,7 @@ function Start-Application {
     
     while ($attempt -le $maxAttempts) {
         try {
-            $response = Invoke-WebRequest -Uri "http://localhost:5000/health" -TimeoutSec 5 -ErrorAction SilentlyContinue
+            $response = Invoke-WebRequest -Uri "http://localhost:$Port/health" -TimeoutSec 5 -ErrorAction SilentlyContinue
             if ($response.StatusCode -eq 200) {
                 Write-Host "✅ Application is ready and healthy" -ForegroundColor Green
                 return
@@ -148,8 +150,8 @@ function Show-DeploymentSummary {
     Write-Host "🎉 Deployment completed successfully!" -ForegroundColor Green
     Write-Host ""
     Write-Host "📊 Application Status:" -ForegroundColor Cyan
-    Write-Host "   - Web UI: http://localhost:5000" -ForegroundColor White
-    Write-Host "   - Health Check: http://localhost:5000/health" -ForegroundColor White
+    Write-Host "   - Web UI: http://localhost:$Port" -ForegroundColor White
+    Write-Host "   - Health Check: http://localhost:$Port/health" -ForegroundColor White
     Write-Host "   - Database: PostgreSQL on localhost:5432" -ForegroundColor White
     Write-Host ""
     Write-Host "🔧 Management Commands:" -ForegroundColor Cyan
@@ -161,7 +163,7 @@ function Show-DeploymentSummary {
     Write-Host "   - Health check: bun run db:health" -ForegroundColor White
     Write-Host ""
     Write-Host "📚 Next Steps:" -ForegroundColor Cyan
-    Write-Host "   1. Test the application at http://localhost:5000" -ForegroundColor White
+    Write-Host "   1. Test the application at http://localhost:$Port" -ForegroundColor White
     Write-Host "   2. Import existing data: bun run import import ./data" -ForegroundColor White
     Write-Host "   3. Set up regular backups" -ForegroundColor White
     Write-Host "   4. Configure monitoring and alerts" -ForegroundColor White
