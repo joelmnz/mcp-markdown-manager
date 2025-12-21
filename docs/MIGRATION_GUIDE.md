@@ -93,11 +93,11 @@ cp .env.example .env
 
 ```bash
 # Start PostgreSQL container
-docker-compose up -d postgres
+docker compose up -d postgres
 
 # Wait for database to be ready
 echo "Waiting for database to start..."
-until docker-compose exec postgres pg_isready -U article_user -d article_manager; do
+until docker compose exec postgres pg_isready -U article_user -d article_manager; do
   sleep 2
 done
 echo "Database is ready!"
@@ -245,16 +245,19 @@ export DB_MAX_CONNECTIONS=50
 export DB_IDLE_TIMEOUT=60000
 
 # Use production Docker Compose
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
 #### 7.2 Setup Automated Backups
 
 ```bash
-# Enable automated backups
+# Run a backup manually to verify it works
 bun run db:backup:auto
 
-# Verify backup configuration
+# To automate, add to crontab (e.g., every day at 2 AM)
+# 0 2 * * * cd /path/to/app && PGPASSWORD=your-password ./scripts/backup-automation.sh backup
+
+# Verify backup files
 ls -la ./backups/
 ```
 

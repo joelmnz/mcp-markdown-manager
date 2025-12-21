@@ -62,7 +62,13 @@ export interface ParsedMarkdownFile {
  * Parse frontmatter from markdown content
  * Reuses the same logic as the existing articles service
  */
-function parseFrontmatter(content: string): { title?: string; created?: string; body: string } {
+function parseFrontmatter(content: string): { 
+  title?: string; 
+  created?: string; 
+  folder?: string;
+  isPublic?: boolean;
+  body: string 
+} {
   const frontmatterRegex = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/;
   const match = content.match(frontmatterRegex);
   
@@ -73,13 +79,27 @@ function parseFrontmatter(content: string): { title?: string; created?: string; 
   const frontmatter = match[1];
   // Remove leading newlines from body to prevent accumulation
   const body = match[2].replace(/^[\n\r]+/, '');
-  const result: { title?: string; created?: string; body: string } = { body };
+  const result: { 
+    title?: string; 
+    created?: string; 
+    folder?: string;
+    isPublic?: boolean;
+    body: string 
+  } = { body };
   
   frontmatter.split('\n').forEach(line => {
     const [key, ...valueParts] = line.split(':');
+    if (!key) return;
+    
     const value = valueParts.join(':').trim();
-    if (key === 'title') result.title = value;
-    if (key === 'created') result.created = value;
+    const lowerKey = key.trim().toLowerCase();
+    
+    if (lowerKey === 'title') result.title = value;
+    if (lowerKey === 'created') result.created = value;
+    if (lowerKey === 'folder') result.folder = value;
+    if (lowerKey === 'public' || lowerKey === 'ispublic') {
+      result.isPublic = value.toLowerCase() === 'true';
+    }
   });
   
   return result;
@@ -164,8 +184,8 @@ async function parseMarkdownFile(
     : databaseArticleService.generateSlug(title);
   
   // Determine folder path
-  let folder = '';
-  if (options.preserveFolderStructure) {
+  let folder = parsed.folder || '';
+  if (!folder && options.preserveFolderStructure) {
     const dirPath = relativePath.replace(filename, '').replace(/[/\\]+$/, '');
     if (dirPath) {
       folder = dirPath.replace(/\\/g, '/'); // Normalize to forward slashes
@@ -186,7 +206,7 @@ async function parseMarkdownFile(
     folder,
     slug,
     created,
-    isPublic: false // Default to private
+    isPublic: parsed.isPublic ?? false // Use frontmatter or default to private
   };
 }
 
@@ -404,8 +424,28 @@ export class ImportService {
                     `Imported from ${file.sourceFilename}`
                   );
                   result.imported++;
+                } else if (options.conflictResolution === 'rename') {
+                  // Generate a unique slug and title
+                  let newTitle = file.title;
+                  let newSlug = file.slug;
+                  let counter = 1;
+                  
+                  // Keep trying until we find a unique slug
+                  while (await databaseArticleService.readArticle(newSlug)) {
+                    newSlug = `${file.slug}-${counter}`;
+                    newTitle = `${file.title} (${counter})`;
+                    counter++;
+                  }
+                  
+                  await databaseArticleService.createArticle(
+                    newTitle,
+                    file.content,
+                    file.folder,
+                    `Imported from ${file.sourceFilename} (renamed from ${file.title})`
+                  );
+                  result.imported++;
                 } else {
-                  // Default to skip for now - rename logic would need additional input
+                  // Default to skip for now
                   result.skipped++;
                   continue;
                 }

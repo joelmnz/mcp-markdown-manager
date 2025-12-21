@@ -158,7 +158,8 @@ bun run import import ./articles --conflict interactive
 # How would you like to handle these conflicts?
 # 1. Skip conflicting files (recommended for safety)
 # 2. Overwrite existing articles (WARNING: will replace existing content)
-# 3. Cancel import
+# 3. Rename new articles (append number to title and slug)
+# 4. Cancel import
 ```
 
 ## File Processing

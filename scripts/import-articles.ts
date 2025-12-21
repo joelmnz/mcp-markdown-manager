@@ -247,6 +247,7 @@ async function importCommand(options: CliOptions) {
       [
         'Skip conflicting files (recommended for safety)',
         'Overwrite existing articles (WARNING: will replace existing content)',
+        'Rename new articles (append number to title and slug)',
         'Cancel import'
       ],
       0
@@ -270,6 +271,9 @@ async function importCommand(options: CliOptions) {
         conflictResolution = 'overwrite';
         break;
       case 2:
+        conflictResolution = 'rename';
+        break;
+      case 3:
       default:
         console.log('Import cancelled.');
         return;
