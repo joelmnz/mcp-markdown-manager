@@ -83,14 +83,14 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 ### 3. Initialize Schema
 
-```bash
-# Automated setup (recommended)
-bun run setup --env=production
+The application automatically initializes the database schema on startup. You can verify the schema integrity manually if needed:
 
-# Or manual setup
-bun run db:init
+```bash
+# Verify schema integrity
 bun run db:verify
 ```
+
+Note: `bun run db:init` is available for manual schema updates but is not required for standard deployment.
 
 ## Migration from File-Based Storage
 
@@ -139,11 +139,10 @@ docker-compose up -d postgres
 # Wait for database to be ready
 docker-compose exec postgres pg_isready -U article_user -d article_manager
 
-# Initialize database schema
-bun run db:init
-
 # Verify database health
 bun run db:health
+
+Note: The application automatically initializes the schema on startup.
 ```
 
 #### 4. Import Articles
@@ -332,11 +331,7 @@ If you prefer manual control:
    docker-compose up -d
    ```
 
-3. **Initialize database:**
-   ```bash
-   bun run db:init
-   bun run db:health
-   ```
+   Note: The application automatically initializes the database schema on startup. You can verify health with `bun run db:health`.
 
 ### Manual Deployment
 

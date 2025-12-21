@@ -72,18 +72,17 @@ cp .env.example .env
 # Edit .env and set your AUTH_TOKEN
 ```
 
-#### 3. Start database and initialize
+#### 3. Start database
 
 ```bash
 # Start PostgreSQL with Docker
 docker-compose up -d postgres
 
-# Initialize database schema
-bun run db:init
-
 # Verify database health
 bun run db:health
 ```
+
+Note: The application automatically initializes the database schema on startup.
 
 #### 4. Run development servers
 
@@ -426,8 +425,10 @@ The system uses PostgreSQL with pgvector extension for structured storage and se
 
 ### Database Commands
 
+Note: The application automatically initializes the schema on startup. These commands are for manual management.
+
 ```bash
-# Initialize database schema
+# Manually initialize/update database schema
 bun run db:init
 
 # Check database health and connectivity

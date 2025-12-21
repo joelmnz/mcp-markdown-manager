@@ -117,22 +117,18 @@ All other settings have sensible defaults. Uncomment and modify in `.env` if nee
    docker-compose up -d postgres
    ```
 
-3. **Initialize Database**:
-   ```bash
-   bun run db:init
-   ```
-
-4. **Start Development Servers**:
+3. **Start Development Servers**:
    ```bash
    bun run dev
    ```
+   Note: The application automatically initializes the database schema on startup.
 
 ### Development Commands
 
 ```bash
 # Database operations
-bun run db:init          # Initialize database schema
 bun run db:health        # Check database health
+bun run db:init          # Manually initialize/update schema
 bun run db:backup        # Create manual backup
 
 # Application
@@ -185,8 +181,10 @@ For production environments requiring custom configuration:
 
 ### Schema Operations
 
+Note: The application automatically initializes the schema on startup.
+
 ```bash
-# Initialize database (first time setup)
+# Manually initialize/update schema
 bun run db:init
 
 # Verify schema integrity

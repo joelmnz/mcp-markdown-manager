@@ -105,16 +105,17 @@ echo "Database is ready!"
 
 #### 2.3 Initialize Database Schema
 
-```bash
-# Initialize database tables and indexes
-bun run db:init
+The application automatically initializes the database schema on startup. You can verify the setup with:
 
+```bash
 # Verify database health
 bun run db:health
 
 # Check database information
 bun run db:info
 ```
+
+Note: `bun run db:init` is available for manual schema updates but is not required for standard migration.
 
 ### Step 3: Migration Validation
 

@@ -36,8 +36,8 @@ bun run dev:frontend   # Start frontend watcher
 bun run dev           # Start both (parallel)
 
 # Database
-bun run db:init       # Initialize schema
 bun run db:health     # Check connectivity
+bun run db:init       # Manual schema initialization (automated on startup)
 
 # Building
 bun run build         # Build frontend with hashed assets
