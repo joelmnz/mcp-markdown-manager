@@ -176,6 +176,19 @@ export function ImportFiles({ token, onNavigate }: ImportFilesProps) {
             </div>
           )}
 
+          {status.result.errors && status.result.errors.length > 0 && (
+            <div className="conflicts-list" style={{ borderLeft: '4px solid var(--danger-color)' }}>
+              <h4 style={{ color: 'var(--danger-color)' }}>Errors</h4>
+              <ul>
+                {status.result.errors.map((e: any, i: number) => (
+                  <li key={i}>
+                    <strong>{e.sourceFilename}</strong>: {e.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="actions">
             <button className="secondary-button" onClick={handleValidate}>
               Rescan
@@ -213,6 +226,20 @@ export function ImportFiles({ token, onNavigate }: ImportFilesProps) {
               <span>{status.result.errors?.length || 0}</span>
             </div>
           </div>
+
+          {status.result.errors && status.result.errors.length > 0 && (
+            <div className="conflicts-list" style={{ borderLeft: '4px solid var(--danger-color)' }}>
+              <h4 style={{ color: 'var(--danger-color)' }}>Errors</h4>
+              <ul>
+                {status.result.errors.map((e: any, i: number) => (
+                  <li key={i}>
+                    <strong>{e.sourceFilename}</strong>: {e.error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <button className="primary-button" onClick={() => onNavigate('/')}>
             Go to Home
           </button>
