@@ -113,4 +113,7 @@ async function testMCPEmbeddingIntegration() {
 }
 
 // Run the test
-testMCPEmbeddingIntegration().catch(console.error);
+testMCPEmbeddingIntegration().catch((error) => {
+  console.error('❌ Test failed during top-level execution:', error);
+  process.exit(1);
+});
