@@ -79,7 +79,6 @@ export async function getDetailedIndexStats(): Promise<{
   indexedArticles: number;
   totalArticles: number;
   unindexedFiles: string[];
-  indexedFiles: Array<{ filename: string; chunks: number }>;
 }> {
   const stats = await databaseEmbeddingService.getIndexStats();
   const detailed = await databaseEmbeddingService.getDetailedStats();
@@ -89,10 +88,6 @@ export async function getDetailedIndexStats(): Promise<{
     indexedArticles: stats.indexedArticles,
     totalArticles: stats.totalArticles,
     unindexedFiles: detailed.unindexedSlugs.map(slug => `${slug}.md`),
-    indexedFiles: detailed.indexedSlugs.map(item => ({
-      filename: `${item.slug}.md`,
-      chunks: item.chunks
-    })),
   };
 }
 

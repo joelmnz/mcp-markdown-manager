@@ -15,7 +15,7 @@ import {
   restoreArticleVersion,
   deleteArticleVersions
 } from '../services/articles';
-import { semanticSearch, hybridSearch, getDetailedIndexStats, rebuildIndex, indexUnindexedArticles } from '../services/vectorIndex';
+import { semanticSearch, hybridSearch, getDetailedIndexStats, indexUnindexedArticles } from '../services/vectorIndex';
 import { databaseHealthService } from '../services/databaseHealth.js';
 import { databaseInit } from '../services/databaseInit.js';
 import { backgroundWorkerService } from '../services/backgroundWorker.js';
@@ -238,11 +238,13 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
 
       try {
-        await rebuildIndex();
+        const result = await embeddingQueueService.resetAndReindexAll();
         const stats = await getDetailedIndexStats();
+        
         return new Response(JSON.stringify({
           success: true,
-          message: 'Index rebuilt successfully',
+          message: `Reindexing started. Queued ${result.queuedTasks} articles.`,
+          queuedTasks: result.queuedTasks,
           ...stats
         }), {
           headers: { 'Content-Type': 'application/json' }

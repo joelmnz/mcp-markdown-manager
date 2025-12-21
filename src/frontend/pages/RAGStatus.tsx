@@ -7,7 +7,6 @@ interface RAGStatusData {
   indexedArticles: number;
   totalArticles: number;
   unindexedFiles: string[];
-  indexedFiles: Array<{ filename: string; chunks: number }>;
   message?: string;
 }
 
@@ -127,7 +126,11 @@ export function RAGStatus({ token, onNavigate }: RAGStatusProps) {
       if (response.ok) {
         const data = await response.json();
         setStatus(data);
-        setIndexMessage(`Successfully indexed ${data.indexedArticles} articles with ${data.totalChunks} chunks`);
+        setIndexMessage(data.message || `Successfully queued ${data.queuedTasks} articles for reindexing`);
+        
+        // Force reload queue status immediately
+        await loadQueueStatus(false);
+        
         setTimeout(() => setIndexMessage(''), 5000);
       } else {
         const data = await response.json();
@@ -354,21 +357,6 @@ export function RAGStatus({ token, onNavigate }: RAGStatusProps) {
                   <span className="file-icon">📄</span>
                   <span className="file-name">{filename}</span>
                   <span className="file-status">Not indexed</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {status.indexedFiles.length > 0 && (
-          <div className="rag-section">
-            <h2>Indexed Articles</h2>
-            <div className="rag-file-list">
-              {status.indexedFiles.map(file => (
-                <div key={file.filename} className="rag-file-item indexed">
-                  <span className="file-icon">✓</span>
-                  <span className="file-name">{file.filename}</span>
-                  <span className="file-chunks">{file.chunks} chunks</span>
                 </div>
               ))}
             </div>

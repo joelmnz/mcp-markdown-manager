@@ -124,6 +124,7 @@ export interface QueueManager {
       error?: string;
     }>;
   }>;
+  resetAndReindexAll(priority?: 'high' | 'normal' | 'low'): Promise<BulkOperationResult>;
 }
 
 class EmbeddingQueueService implements QueueManager {
@@ -765,6 +766,102 @@ class EmbeddingQueueService implements QueueManager {
         DatabaseErrorType.QUERY_ERROR,
         `Failed to identify articles needing embedding: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'Unable to identify articles that need embedding updates. Please try again.',
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  /**
+   * Reset the queue and reindex all articles
+   */
+  async resetAndReindexAll(
+    priority: 'high' | 'normal' | 'low' = 'normal'
+  ): Promise<BulkOperationResult> {
+    const startTime = Date.now();
+    const operationId = `reindex_${Date.now()}`;
+    
+    try {
+      // Log operation start
+      await loggingService.logBulkOperation('started', operationId, {
+        metadata: { priority, type: 'full_reindex' }
+      });
+
+      // 1. Delete all embeddings
+      await database.query('DELETE FROM embeddings');
+      
+      // 2. Clear task history
+      await database.query('DELETE FROM embedding_tasks');
+
+      // 3. Get all articles
+      const articlesResult = await database.query('SELECT id, slug, title FROM articles');
+      const articles = articlesResult.rows;
+
+      const result: BulkOperationResult = {
+        totalArticles: articles.length,
+        queuedTasks: 0,
+        skippedArticles: 0,
+        errors: [],
+        taskIds: []
+      };
+
+      // 4. Queue tasks for all articles
+      for (const article of articles) {
+        try {
+           const taskId = await this.enqueueTask({
+              articleId: article.id,
+              slug: article.slug,
+              operation: 'create',
+              priority,
+              maxAttempts: 3,
+              scheduledAt: new Date(),
+              metadata: {
+                title: article.title,
+                reason: 'full_reindex',
+                bulkOperationId: operationId
+              }
+            });
+
+            result.queuedTasks++;
+            result.taskIds.push(taskId);
+        } catch (error) {
+           const errorMessage = `Failed to queue task for article ${article.slug}: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`;
+          result.errors.push(errorMessage);
+          console.error(`Reindex error for article ${article.slug}:`, error);
+        }
+      }
+
+      const duration = Date.now() - startTime;
+
+      // Log completion
+      await loggingService.logBulkOperation('completed', operationId, {
+        totalTasks: result.totalArticles,
+        completedTasks: result.queuedTasks,
+        failedTasks: result.errors.length,
+        duration,
+        metadata: {
+          priority,
+          taskIds: result.taskIds
+        }
+      });
+
+      return result;
+
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      
+      // Log failure
+      await loggingService.logBulkOperation('failed', operationId, {
+        duration,
+        error: error instanceof Error ? error : new Error('Unknown error'),
+        metadata: { priority }
+      });
+
+      throw new DatabaseServiceError(
+        DatabaseErrorType.QUERY_ERROR,
+        `Failed to reset and reindex: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'Unable to reset and reindex. Please try again.',
         error instanceof Error ? error : undefined
       );
     }
