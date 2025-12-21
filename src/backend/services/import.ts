@@ -313,6 +313,7 @@ export class ImportService {
    * Import markdown files from directory with batch processing
    */
   async importFromDirectory(directoryPath: string, options: BatchImportOptions = {}): Promise<ImportResult> {
+    const continueOnError = options.continueOnError ?? true;
     const result: ImportResult = {
       imported: 0,
       skipped: 0,
@@ -361,7 +362,7 @@ export class ImportService {
             type: 'parse'
           });
           
-          if (!options.continueOnError) {
+          if (!continueOnError) {
             throw error;
           }
         }
@@ -466,7 +467,7 @@ export class ImportService {
                 type: 'database'
               });
               
-              if (!options.continueOnError) {
+              if (!continueOnError) {
                 throw error; // This will rollback the transaction
               }
             }
@@ -552,6 +553,7 @@ export class ImportService {
     directories: string[], 
     options: BatchImportOptions = {}
   ): Promise<ImportResult[]> {
+    const continueOnError = options.continueOnError ?? true;
     const results: ImportResult[] = [];
     
     for (let i = 0; i < directories.length; i++) {
@@ -574,7 +576,7 @@ export class ImportService {
       results.push(result);
       
       // Stop if there are critical errors and continueOnError is false
-      if (!options.continueOnError && result.errors.length > 0) {
+      if (!continueOnError && result.errors.length > 0) {
         break;
       }
     }
