@@ -136,6 +136,13 @@ export function buildRagStatusUrl(): string {
 }
 
 /**
+ * Build an import files URL with base path
+ */
+export function buildImportFilesUrl(): string {
+  return buildRouteUrl('/import-files');
+}
+
+/**
  * Build a static asset URL with base path
  */
 export function buildAssetUrl(assetPath: string): string {

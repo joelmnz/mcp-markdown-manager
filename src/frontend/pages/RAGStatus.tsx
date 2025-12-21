@@ -51,6 +51,7 @@ export function RAGStatus({ token, onNavigate }: RAGStatusProps) {
   const [error, setError] = useState('');
   const [indexing, setIndexing] = useState(false);
   const [indexMessage, setIndexMessage] = useState('');
+  const [importStatus, setImportStatus] = useState<{ dataDirAvailable: boolean } | null>(null);
 
   useEffect(() => {
     loadStatus();
@@ -67,8 +68,20 @@ export function RAGStatus({ token, onNavigate }: RAGStatusProps) {
   const loadStatus = async () => {
     setLoading(true);
     setError('');
-    await Promise.all([loadIndexStatus(), loadQueueStatus(true)]);
+    await Promise.all([loadIndexStatus(), loadQueueStatus(true), loadImportStatus()]);
     setLoading(false);
+  };
+
+  const loadImportStatus = async () => {
+    try {
+      const response = await apiClient.get('/api/import/status', token);
+      if (response.ok) {
+        const data = await response.json();
+        setImportStatus(data);
+      }
+    } catch (err) {
+      console.error('Failed to load import status:', err);
+    }
   };
 
   const loadIndexStatus = async () => {
@@ -203,9 +216,16 @@ export function RAGStatus({ token, onNavigate }: RAGStatusProps) {
     <div className="page">
       <div className="page-header">
         <h1>RAG Status</h1>
-        <button className="button" onClick={() => onNavigate('/')}>
-          ← Back to Articles
-        </button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          {importStatus?.dataDirAvailable && (
+            <button className="button" onClick={() => onNavigate('/import-files')} style={{ backgroundColor: 'var(--text-secondary)' }}>
+              Import from Disk
+            </button>
+          )}
+          <button className="button" onClick={() => onNavigate('/')}>
+            ← Back to Articles
+          </button>
+        </div>
       </div>
 
       {error && <div className="error-message">{error}</div>}

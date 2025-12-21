@@ -21,6 +21,7 @@ import { databaseInit } from '../services/databaseInit.js';
 import { backgroundWorkerService } from '../services/backgroundWorker.js';
 import { embeddingQueueService } from '../services/embeddingQueue.js';
 import { embeddingQueueConfigService } from '../services/embeddingQueueConfig.js';
+import { importStatusService } from '../services/importStatus.js';
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 
@@ -495,6 +496,48 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       return new Response(JSON.stringify({ success: true, isPublic }), {
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+
+    // GET /api/import/status - Get import status
+    if (path === '/api/import/status' && request.method === 'GET') {
+      const status = importStatusService.getStatus();
+      return new Response(JSON.stringify(status), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // POST /api/import/validate - Start validation
+    if (path === '/api/import/validate' && request.method === 'POST') {
+      try {
+        const result = await importStatusService.validate();
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({ 
+          error: error instanceof Error ? error.message : 'Validation failed' 
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // POST /api/import/start - Start import
+    if (path === '/api/import/start' && request.method === 'POST') {
+      try {
+        await importStatusService.startImport();
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({ 
+          error: error instanceof Error ? error.message : 'Import failed to start' 
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     // Route not found
