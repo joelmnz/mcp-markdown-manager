@@ -42,11 +42,28 @@ export function Home({ token, onNavigate }: HomeProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [folders, setFolders] = useState<string[]>([]);
-  const [selectedFolder, setSelectedFolder] = useState<string>('');
+  const [selectedFolder, setSelectedFolder] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlFolder = params.get('folder');
+    if (urlFolder) return urlFolder;
+    try {
+      return localStorage.getItem('selected_folder') || '';
+    } catch {
+      return '';
+    }
+  });
 
   useEffect(() => {
-    loadArticles();
-  }, []);
+    const url = new URL(window.location.href);
+    if (selectedFolder) {
+      url.searchParams.set('folder', selectedFolder);
+      try { localStorage.setItem('selected_folder', selectedFolder); } catch {}
+    } else {
+      url.searchParams.delete('folder');
+      try { localStorage.removeItem('selected_folder'); } catch {}
+    }
+    window.history.replaceState({}, '', url.toString());
+  }, [selectedFolder]);
 
   const loadArticles = async () => {
     try {
@@ -136,6 +153,10 @@ export function Home({ token, onNavigate }: HomeProps) {
     onNavigate(`/article/${filename.replace('.md', '')}`);
   };
 
+  const handleEditClick = (filename: string) => {
+    onNavigate(`/edit/${filename.replace('.md', '')}`);
+  };
+
   // Calculate pagination for articles
   const totalPages = Math.ceil(articles.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
@@ -165,6 +186,15 @@ export function Home({ token, onNavigate }: HomeProps) {
     setSelectedFolder(folder);
     // Reload articles will be triggered by useEffect logic if we separate effects, 
     // but here we call it manually to keep it simple or add it to dependencies
+  };
+
+  const handleLinkClick = (e: React.MouseEvent, callback: () => void) => {
+    if (e.ctrlKey || e.metaKey || e.button === 1) {
+      // Allow default behavior (open in new tab)
+      return;
+    }
+    e.preventDefault();
+    callback();
   };
 
   // Reload when folder changes
@@ -216,7 +246,7 @@ export function Home({ token, onNavigate }: HomeProps) {
                 checked={searchMode === 'title'}
                 onChange={() => handleSearchModeChange('title')}
               />
-              Title Search
+              Title
             </label>
             <label>
               <input
@@ -225,7 +255,7 @@ export function Home({ token, onNavigate }: HomeProps) {
                 checked={searchMode === 'semantic'}
                 onChange={() => handleSearchModeChange('semantic')}
               />
-              Semantic Search
+              Semantic
             </label>
           </div>
           <div className="search-input-row">
@@ -260,17 +290,31 @@ export function Home({ token, onNavigate }: HomeProps) {
       ) : searchResults.length > 0 ? (
         <div className="search-results">
           {searchResults.map((result, index) => (
-            <div key={index} className="search-result-item" onClick={() => handleArticleClick(result.chunk.filename)}>
-              <div className="search-result-header">
-                <h3>{result.chunk.title}</h3>
-                <span className="search-result-score">{(result.score * 100).toFixed(1)}%</span>
-              </div>
-              {result.chunk.headingPath.length > 0 && (
-                <div className="search-result-path">
-                  {result.chunk.headingPath.join(' > ')}
+            <div key={index} className="article-item">
+              <a
+                href={`/article/${result.chunk.filename.replace('.md', '')}`}
+                className="article-item-link"
+                onClick={(e) => handleLinkClick(e, () => handleArticleClick(result.chunk.filename))}
+              >
+                <div className="search-result-header">
+                  <h3>{result.chunk.title}</h3>
+                  <span className="search-result-score">{(result.score * 100).toFixed(1)}%</span>
                 </div>
-              )}
-              <p className="search-result-snippet">{result.snippet}</p>
+                {result.chunk.headingPath.length > 0 && (
+                  <div className="search-result-path">
+                    {result.chunk.headingPath.join(' > ')}
+                  </div>
+                )}
+                <p className="search-result-snippet">{result.snippet}</p>
+              </a>
+              <a
+                href={`/edit/${result.chunk.filename.replace('.md', '')}`}
+                className="article-item-action"
+                onClick={(e) => handleLinkClick(e, () => handleEditClick(result.chunk.filename))}
+                title="Edit article"
+              >
+                ✏️
+              </a>
             </div>
           ))}
         </div>
@@ -279,6 +323,7 @@ export function Home({ token, onNavigate }: HomeProps) {
           <ArticleList
             articles={paginatedArticles}
             onArticleClick={handleArticleClick}
+            onEditClick={handleEditClick}
           />
           {articles.length > 0 && (
             <div className="pagination-controls">
