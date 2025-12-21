@@ -2,6 +2,8 @@ import { authenticate, requireAuth } from '../middleware/auth';
 import {
   listArticles,
   getFolders,
+  renameFolder,
+  deleteFolder,
   searchArticles,
   readArticle,
   createArticle,
@@ -320,6 +322,62 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       } catch (error) {
         return new Response(JSON.stringify({
           error: error instanceof Error ? error.message : 'Failed to retrieve folders'
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // PUT /api/folders/:oldName - Rename a folder
+    if (path.startsWith('/api/folders/') && request.method === 'PUT') {
+      try {
+        const oldFolderName = decodeURIComponent(path.replace('/api/folders/', ''));
+        const body = await request.json();
+        const { newName } = body;
+
+        if (!newName || !newName.trim()) {
+          return new Response(JSON.stringify({
+            error: 'New folder name is required'
+          }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const result = await renameFolder(oldFolderName, newName);
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Folder renamed successfully. ${result.updatedCount} articles updated.`,
+          updatedCount: result.updatedCount
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          error: error instanceof Error ? error.message : 'Failed to rename folder'
+        }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // DELETE /api/folders/:folderName - Delete a folder
+    if (path.startsWith('/api/folders/') && request.method === 'DELETE') {
+      try {
+        const folderName = decodeURIComponent(path.replace('/api/folders/', ''));
+        const result = await deleteFolder(folderName);
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Folder deleted successfully. ${result.updatedCount} articles updated.`,
+          updatedCount: result.updatedCount
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          error: error instanceof Error ? error.message : 'Failed to delete folder'
         }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' }
