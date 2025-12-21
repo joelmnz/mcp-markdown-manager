@@ -53,6 +53,7 @@ function buildHtml() {
   <meta name="theme-color" content="#4a9eff">
   <title>MCP Markdown Manager</title>
   <link rel="manifest" href="{{BASE_PATH}}/manifest.json">
+  <link rel="icon" type="image/png" href="{{BASE_PATH}}/favicon.png">
   <link rel="icon" type="image/png" sizes="192x192" href="{{BASE_PATH}}/icon-192.png">
   <link rel="apple-touch-icon" href="{{BASE_PATH}}/icon-192.png">
   <link rel="stylesheet" href="{{BASE_PATH}}/${cssFiles[0]}">

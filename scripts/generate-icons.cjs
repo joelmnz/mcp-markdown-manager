@@ -31,6 +31,7 @@ if (!fs.existsSync(publicDir)) {
 }
 
 // Create icons
+createIcon(32, path.join(publicDir, 'favicon.png'));
 createIcon(192, path.join(publicDir, 'icon-192.png'));
 createIcon(512, path.join(publicDir, 'icon-512.png'));
 
