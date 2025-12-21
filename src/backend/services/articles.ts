@@ -263,7 +263,7 @@ export async function updateArticle(filename: string, title: string, content: st
   // Get existing article to preserve creation date
   const existing = await databaseArticleService.readArticle(slug);
   if (!existing) {
-    throw new Error(`Article ${filename} not found`);
+    throw new Error(`Article '${filename}' not found`);
   }
 
   // Use existing folder if not provided
