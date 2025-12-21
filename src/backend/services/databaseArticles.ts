@@ -116,7 +116,7 @@ export class DatabaseArticleService {
   /**
    * List all articles with optional folder filtering (includes subfolders)
    */
-  async listArticles(folder?: string): Promise<ArticleMetadata[]> {
+  async listArticles(folder?: string, limit?: number): Promise<ArticleMetadata[]> {
     try {
       let query = `
         SELECT slug, title, folder, is_public, created_at, updated_at
@@ -141,6 +141,11 @@ export class DatabaseArticleService {
       }
 
       query += ' ORDER BY updated_at DESC';
+
+      if (limit !== undefined) {
+        params.push(limit);
+        query += ` LIMIT $${params.length}`;
+      }
 
       const result = await database.query(query, params);
       return result.rows.map(row => this.dbRowToMetadata(row));

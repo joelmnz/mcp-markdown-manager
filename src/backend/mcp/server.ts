@@ -173,7 +173,17 @@ function createConfiguredMCPServer() {
         description: 'List all articles with metadata (title, filename, creation date)',
         inputSchema: {
           type: 'object',
-          properties: {},
+          properties: {
+            folder: {
+              type: 'string',
+              description: 'Folder to list articles from. Use "" for all folders, "/" for root folder only.',
+            },
+            maxArticles: {
+              type: 'number',
+              description: 'Maximum number of articles to return (default: 100)',
+            },
+          },
+          required: ['folder'],
         },
       },
       {
@@ -193,6 +203,10 @@ function createConfiguredMCPServer() {
             query: {
               type: 'string',
               description: 'Search query to match against article titles',
+            },
+            folder: {
+              type: 'string',
+              description: 'Optional folder path. Use "" (default) for all folders, "/" for root folder only.',
             },
           },
           required: ['query'],
@@ -314,6 +328,10 @@ function createConfiguredMCPServer() {
               type: 'number',
               description: 'Number of results to return (default: 5)',
             },
+            folder: {
+              type: 'string',
+              description: 'Optional folder path. Use "" (default) for all folders, "/" for root folder only.',
+            },
           },
           required: ['query'],
         },
@@ -355,7 +373,14 @@ function createConfiguredMCPServer() {
     try {
       switch (request.params.name) {
         case 'listArticles': {
-          const articles = await listArticles();
+          const { folder, maxArticles } = request.params.arguments as { folder: string; maxArticles?: number };
+          
+          // If folder is empty string, treat as undefined (all folders)
+          // If folder is "/", pass it as is (service handles it as root)
+          const folderParam = folder === '' ? undefined : folder;
+          const limit = maxArticles || 100;
+
+          const articles = await listArticles(folderParam, limit);
 
           return {
             content: [
@@ -380,8 +405,12 @@ function createConfiguredMCPServer() {
         }
 
         case 'searchArticles': {
-          const { query } = request.params.arguments as { query: string };
-          const results = await searchArticles(query);
+          const { query, folder } = request.params.arguments as { query: string; folder?: string };
+          
+          // If folder is empty string, treat as undefined (all folders)
+          const folderParam = folder === '' ? undefined : folder;
+          
+          const results = await searchArticles(query, folderParam);
           return {
             content: [
               {
@@ -432,8 +461,12 @@ function createConfiguredMCPServer() {
           if (!SEMANTIC_SEARCH_ENABLED) {
             throw new Error('Semantic search is not enabled');
           }
-          const { query, k } = request.params.arguments as { query: string; k?: number };
-          const results = await semanticSearch(query, k || 5);
+          const { query, k, folder } = request.params.arguments as { query: string; k?: number; folder?: string };
+          
+          // If folder is empty string, treat as undefined (all folders)
+          const folderParam = folder === '' ? undefined : folder;
+          
+          const results = await semanticSearch(query, k || 5, folderParam);
           return {
             content: [
               {
