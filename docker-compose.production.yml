@@ -45,7 +45,6 @@ services:
       - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
     volumes:
       - postgres_data_prod:/var/lib/postgresql/data
-      - ./scripts/postgres-init:/docker-entrypoint-initdb.d
       - ./backups:/backups
     restart: unless-stopped
     healthcheck:

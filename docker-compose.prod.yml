@@ -32,7 +32,6 @@ services:
       # Add backup volume for automated backups
       - postgres_data:/var/lib/postgresql/data
       - ${BACKUP_DIR:-./backups}:/backups
-      - ./scripts/postgres-init:/docker-entrypoint-initdb.d
     # Remove port exposure for security (access through application only)
     ports: []
     restart: always

@@ -9,7 +9,6 @@ services:
       - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/postgres-init:/docker-entrypoint-initdb.d
     ports:
       - "5432:5432"
     restart: unless-stopped

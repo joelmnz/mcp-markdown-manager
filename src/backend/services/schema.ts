@@ -1,4 +1,4 @@
-import { database } from './database.js';
+import { database, getDatabaseConfig } from './database.js';
 
 /**
  * Database schema initialization and migration service
@@ -40,6 +40,12 @@ export class SchemaService {
     // Create vector extension for embeddings (if available)
     try {
       await database.query('CREATE EXTENSION IF NOT EXISTS vector');
+      
+      // Configure vector extension
+      const config = getDatabaseConfig();
+      // Use double quotes for database name to handle special characters/case sensitivity
+      await database.query(`ALTER DATABASE "${config.database}" SET vector.max_dimensions = 2048`);
+      
       console.log('Vector extension created/verified');
     } catch (error) {
       console.warn('Vector extension not available - semantic search will be disabled');
