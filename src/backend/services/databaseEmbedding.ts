@@ -458,6 +458,40 @@ export class DatabaseEmbeddingService {
   }
 
   /**
+   * Get detailed statistics including lists of files
+   */
+  async getDetailedStats(): Promise<{
+    unindexedSlugs: string[];
+    indexedSlugs: Array<{ slug: string; chunks: number }>;
+  }> {
+    // Get unindexed slugs
+    const unindexedResult = await database.query(`
+      SELECT a.slug
+      FROM articles a
+      LEFT JOIN embeddings e ON a.id = e.article_id
+      WHERE e.id IS NULL
+    `);
+    const unindexedSlugs = unindexedResult.rows.map(row => row.slug);
+
+    // Get indexed slugs with chunk counts
+    const indexedResult = await database.query(`
+      SELECT a.slug, COUNT(e.id) as chunks
+      FROM articles a
+      JOIN embeddings e ON a.id = e.article_id
+      GROUP BY a.slug
+    `);
+    const indexedSlugs = indexedResult.rows.map(row => ({
+      slug: row.slug,
+      chunks: parseInt(row.chunks, 10)
+    }));
+
+    return {
+      unindexedSlugs,
+      indexedSlugs
+    };
+  }
+
+  /**
    * Index unindexed articles only
    */
   async indexUnindexedArticles(): Promise<{ indexed: number; failed: string[] }> {

@@ -82,17 +82,17 @@ export async function getDetailedIndexStats(): Promise<{
   indexedFiles: Array<{ filename: string; chunks: number }>;
 }> {
   const stats = await databaseEmbeddingService.getIndexStats();
-  
-  // For backward compatibility, we need to provide filename-based information
-  // This is a simplified implementation that doesn't provide detailed per-file stats
-  // but maintains the interface
+  const detailed = await databaseEmbeddingService.getDetailedStats();
   
   return {
     totalChunks: stats.totalChunks,
     indexedArticles: stats.indexedArticles,
     totalArticles: stats.totalArticles,
-    unindexedFiles: [], // Would require complex query to maintain exact compatibility
-    indexedFiles: [], // Would require complex query to maintain exact compatibility
+    unindexedFiles: detailed.unindexedSlugs.map(slug => `${slug}.md`),
+    indexedFiles: detailed.indexedSlugs.map(item => ({
+      filename: `${item.slug}.md`,
+      chunks: item.chunks
+    })),
   };
 }
 
