@@ -346,5 +346,8 @@ function showUsage() {
 
 // Run CLI if this file is executed directly
 if (import.meta.main) {
-  main().catch(console.error);
+  main().catch((error) => {
+    console.error('Unhandled error in migration script:', error);
+    process.exit(1);
+  });
 }
