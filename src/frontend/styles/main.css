@@ -11,6 +11,7 @@
   --accent-hover: #3a8eef;
   --danger-color: #ff4a4a;
   --danger-hover: #ef3a3a;
+  --danger-light: rgba(255, 74, 74, 0.1);
   --success-color: #4aff4a;
   --shadow: rgba(0, 0, 0, 0.3);
 }
@@ -27,6 +28,7 @@
   --accent-hover: #1d4ed8;
   --danger-color: #dc2626;
   --danger-hover: #b91c1c;
+  --danger-light: rgba(220, 38, 38, 0.1);
   --success-color: #16a34a;
   --shadow: rgba(0, 0, 0, 0.1);
 }
@@ -2172,6 +2174,23 @@ body {
   color: var(--text-primary);
 }
 
+.form-group .input,
+.form-group input[type="text"] {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.form-group .input:focus,
+.form-group input[type="text"]:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
 .modal-actions {
   display: flex;
   flex-direction: column;
@@ -2183,7 +2202,7 @@ body {
   border: 1px solid var(--danger-color);
   border-radius: 4px;
   padding: 1rem;
-  background-color: rgba(220, 38, 38, 0.1);
+  background-color: var(--danger-light);
 }
 
 .delete-confirm-text {
