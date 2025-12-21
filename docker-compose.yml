@@ -30,7 +30,7 @@ services:
       - "${PORT:-5000}:5000"
     environment:
       - AUTH_TOKEN=${AUTH_TOKEN}
-      - DATA_DIR=/data
+      - DATA_DIR=${DATA_DIR}
       - PORT=5000
       - NODE_ENV=${NODE_ENV:-production}
       - MCP_SERVER_ENABLED=${MCP_SERVER_ENABLED:-true}
