@@ -11,7 +11,8 @@ import {
   readArticle,
   createArticle,
   updateArticle,
-  deleteArticle
+  deleteArticle,
+  getFolders
 } from '../services/articles';
 import { semanticSearch } from '../services/vectorIndex';
 import { embeddingQueueService } from '../services/embeddingQueue';
@@ -171,6 +172,14 @@ function createConfiguredMCPServer() {
       {
         name: 'listArticles',
         description: 'List all articles with metadata (title, filename, creation date)',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'listFolders',
+        description: 'Get a unique list of all article folders to understand the knowledge repository structure',
         inputSchema: {
           type: 'object',
           properties: {},
@@ -382,6 +391,18 @@ function createConfiguredMCPServer() {
               {
                 type: 'text',
                 text: JSON.stringify(articlesWithEmbeddingStatus, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'listFolders': {
+          const folders = await getFolders();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(folders, null, 2),
               },
             ],
           };
