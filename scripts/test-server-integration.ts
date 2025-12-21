@@ -18,7 +18,8 @@ async function testServerIntegration() {
   process.env.DB_PASSWORD = 'test-password';
   process.env.EMBEDDING_QUEUE_ENABLED = 'true';
   process.env.EMBEDDING_QUEUE_WORKER_INTERVAL = '10000';
-  process.env.PORT = '5001'; // Use different port to avoid conflicts
+  const PORT = process.env.PORT || '5001';
+  process.env.PORT = PORT; // Use configured port or default to 5001 to avoid conflicts
 
   console.log('\n1. Starting server with embedding queue enabled...');
   
@@ -73,7 +74,7 @@ async function testServerIntegration() {
   console.log('\n3. Testing health endpoint...');
   
   try {
-    const response = await fetch('http://localhost:5001/health');
+    const response = await fetch(`http://localhost:${PORT}/health`);
     const healthData = await response.json();
     
     console.log('✅ Health endpoint responded');
@@ -158,7 +159,7 @@ async function testServerIntegration() {
 
   // Test health endpoint with disabled queue
   try {
-    const response = await fetch('http://localhost:5001/health');
+    const response = await fetch(`http://localhost:${PORT}/health`);
     const healthData = await response.json();
     
     console.log('✅ Health endpoint responded with disabled queue');

@@ -9,7 +9,8 @@ import { existsSync } from 'fs';
 
 // Configuration
 const TEST_DIR = join(process.cwd(), 'temp_property_test_data');
-const BASE_URL = 'http://localhost:5000';
+const PORT = process.env.PORT || '5000';
+const BASE_URL = `http://localhost:${PORT}`;
 const TEST_AUTH_TOKEN = 'test-token-123';
 
 /**

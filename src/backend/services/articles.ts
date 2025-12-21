@@ -192,6 +192,16 @@ export async function getFolders(): Promise<string[]> {
   return await databaseArticleService.getFolderHierarchy();
 }
 
+// Rename a folder
+export async function renameFolder(oldFolderName: string, newFolderName: string): Promise<{ updatedCount: number }> {
+  return await databaseArticleService.renameFolder(oldFolderName, newFolderName);
+}
+
+// Delete a folder
+export async function deleteFolder(folderName: string): Promise<{ updatedCount: number }> {
+  return await databaseArticleService.deleteFolder(folderName);
+}
+
 // Search articles by title
 export async function searchArticles(query: string, folder?: string): Promise<ArticleMetadata[]> {
   const dbArticles = await databaseArticleService.searchArticles(query, folder);
@@ -253,7 +263,7 @@ export async function updateArticle(filename: string, title: string, content: st
   // Get existing article to preserve creation date
   const existing = await databaseArticleService.readArticle(slug);
   if (!existing) {
-    throw new Error(`Article ${filename} not found`);
+    throw new Error(`Article '${filename}' not found`);
   }
 
   // Use existing folder if not provided

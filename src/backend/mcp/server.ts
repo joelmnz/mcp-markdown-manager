@@ -11,11 +11,10 @@ import {
   readArticle,
   createArticle,
   updateArticle,
-  deleteArticle
+  deleteArticle,
+  getFolders
 } from '../services/articles';
-import { semanticSearch, SearchResult } from '../services/vectorIndex';
-import { embeddingQueueService } from '../services/embeddingQueue';
-import { databaseArticleService } from '../services/databaseArticles';
+import { semanticSearch } from '../services/vectorIndex';
 import { randomUUID } from 'crypto';
 
 type McpSessionEntry = {
@@ -172,6 +171,14 @@ function createConfiguredMCPServer() {
       {
         name: 'listArticles',
         description: 'List all articles with metadata (title, filename, creation date)',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'listFolders',
+        description: 'Get a unique list of all article folders to understand the knowledge repository structure',
         inputSchema: {
           type: 'object',
           properties: {},
@@ -389,49 +396,23 @@ function createConfiguredMCPServer() {
         case 'listArticles': {
           const articles = await listArticles();
 
-          // Add embedding status if semantic search is enabled
-          let articlesWithEmbeddingStatus = articles;
-          if (SEMANTIC_SEARCH_ENABLED) {
-            try {
-              articlesWithEmbeddingStatus = await Promise.all(
-                articles.map(async (article) => {
-                  try {
-                    const slug = article.filename.replace(/\.md$/, '');
-                    const articleId = await databaseArticleService.getArticleId(slug);
-
-                    if (articleId) {
-                      const tasks = await embeddingQueueService.getTasksForArticle(articleId);
-                      const latestTask = tasks.length > 0 ? tasks[0] : null;
-
-                      return {
-                        ...article,
-                        embeddingStatus: {
-                          status: latestTask?.status || 'no_tasks',
-                          hasEmbedding: latestTask?.status === 'completed',
-                          isPending: latestTask?.status === 'pending' || latestTask?.status === 'processing',
-                          lastUpdated: latestTask?.completedAt || latestTask?.createdAt
-                        }
-                      };
-                    }
-                    return article;
-                  } catch (error) {
-                    // Don't fail the entire list if one article's embedding status check fails
-                    console.warn(`Failed to get embedding status for article ${article.filename}:`, error);
-                    return article;
-                  }
-                })
-              );
-            } catch (error) {
-              // Don't fail the article list if embedding status checks fail
-              console.warn('Failed to get embedding status for articles:', error);
-            }
-          }
-
           return {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(articlesWithEmbeddingStatus, null, 2),
+                text: JSON.stringify(articles, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'listFolders': {
+          const folders = await getFolders();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(folders, null, 2),
               },
             ],
           };
@@ -675,41 +656,11 @@ function createConfiguredMCPServer() {
             throw new Error(`Article ${filename} not found`);
           }
 
-          // Add embedding status if semantic search is enabled
-          let embeddingStatus = undefined;
-          if (SEMANTIC_SEARCH_ENABLED) {
-            try {
-              const slug = filename.replace(/\.md$/, '');
-              const articleId = await databaseArticleService.getArticleId(slug);
-
-              if (articleId) {
-                const tasks = await embeddingQueueService.getTasksForArticle(articleId);
-                const latestTask = tasks.length > 0 ? tasks[0] : null;
-
-                embeddingStatus = {
-                  status: latestTask?.status || 'no_tasks',
-                  lastUpdated: latestTask?.completedAt || latestTask?.createdAt,
-                  hasEmbedding: latestTask?.status === 'completed',
-                  isPending: latestTask?.status === 'pending' || latestTask?.status === 'processing',
-                  errorMessage: latestTask?.errorMessage
-                };
-              }
-            } catch (error) {
-              // Don't fail the article read if embedding status check fails
-              console.warn('Failed to get embedding status for article:', error);
-            }
-          }
-
-          const response = {
-            ...article,
-            ...(embeddingStatus && { embeddingStatus })
-          };
-
           return {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify(response, null, 2),
+                text: JSON.stringify(article, null, 2),
               },
             ],
           };
