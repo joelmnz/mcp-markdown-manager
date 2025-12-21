@@ -34,7 +34,8 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
           const DOMPurify = createDOMPurify(window);
           sanitizedSvg = DOMPurify.sanitize(svg, {
             USE_PROFILES: { svg: true, svgFilters: true },
-            FORBID_TAGS: ['script', 'foreignObject'],
+            ADD_TAGS: ['foreignObject'],
+            FORBID_TAGS: ['script'],
           });
         } catch (sanitizeError) {
           console.error('Failed to sanitize Mermaid SVG:', sanitizeError);
