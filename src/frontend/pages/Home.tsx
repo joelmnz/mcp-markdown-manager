@@ -178,13 +178,6 @@ export function Home({ token, onNavigate }: HomeProps) {
         <h1>Articles</h1>
         <div className="page-header-actions">
           <button
-            className="button"
-            onClick={() => onNavigate('/rag-status')}
-            title="View RAG index status"
-          >
-            🔍 RAG Status
-          </button>
-          <button
             className="button button-primary"
             onClick={() => onNavigate('/new')}
           >

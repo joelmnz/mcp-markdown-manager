@@ -4,9 +4,10 @@ interface HeaderProps {
   theme: 'light' | 'dark';
   onThemeToggle: () => void;
   onLogout: () => void;
+  onNavigate: (path: string) => void;
 }
 
-export function Header({ theme, onThemeToggle, onLogout }: HeaderProps) {
+export function Header({ theme, onThemeToggle, onLogout, onNavigate }: HeaderProps) {
   const [showInfo, setShowInfo] = useState(false);
   const apiBaseUrl = window.location.origin;
   
@@ -43,6 +44,12 @@ export function Header({ theme, onThemeToggle, onLogout }: HeaderProps) {
       <div className="header-content">
         <a href="/" className="header-title">MCP Markdown Manager</a>
         <div className="header-actions">
+          <button onClick={() => onNavigate('/rag-status')} className="icon-button" title="RAG Status">
+            🔍
+          </button>
+          <button onClick={() => onNavigate('/import-files')} className="icon-button" title="Import Files">
+            📥
+          </button>
           <button onClick={() => setShowInfo(!showInfo)} className="icon-button" title="API & MCP Info">
             ℹ️
           </button>

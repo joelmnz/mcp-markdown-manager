@@ -363,7 +363,12 @@ function App() {
 
   return (
     <div className="app">
-      <Header theme={theme} onThemeToggle={handleThemeToggle} onLogout={handleLogout} />
+      <Header 
+        theme={theme} 
+        onThemeToggle={handleThemeToggle} 
+        onLogout={handleLogout} 
+        onNavigate={navigate}
+      />
       <main className="main">
         {route.type === 'home' && (
           <Home token={token} onNavigate={navigate} />
