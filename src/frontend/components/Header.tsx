@@ -42,13 +42,13 @@ export function Header({ theme, onThemeToggle, onLogout, onNavigate }: HeaderPro
   return (
     <header className="header">
       <div className="header-content">
-        <a href="/" className="header-title">MCP Markdown Manager</a>
+        <a href="/" className="header-title">
+          <span className="title-desktop">MCP Markdown Manager</span>
+          <span className="title-mobile">Md</span>
+        </a>
         <div className="header-actions">
           <button onClick={() => onNavigate('/rag-status')} className="icon-button" title="RAG Status">
             🔍
-          </button>
-          <button onClick={() => onNavigate('/import-files')} className="icon-button" title="Import Files">
-            📥
           </button>
           <button onClick={() => setShowInfo(!showInfo)} className="icon-button" title="API & MCP Info">
             ℹ️

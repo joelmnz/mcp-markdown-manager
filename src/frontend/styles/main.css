@@ -97,6 +97,19 @@ body {
   color: var(--accent-color);
 }
 
+.title-mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .title-desktop {
+    display: none;
+  }
+  .title-mobile {
+    display: inline;
+  }
+}
+
 .header-actions {
   display: flex;
   gap: 0.5rem;
