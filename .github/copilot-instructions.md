@@ -1,7 +1,8 @@
 # MCP Markdown Manager - AI Coding Instructions
 
 ## Project Overview
-This is a **monolithic TypeScript full-stack application** for AI-powered markdown article management with three interfaces: Web UI, REST API, and MCP server. Built with Bun runtime for fast TypeScript execution.
+This is a **monolithic TypeScript full-stack application** for AI-powered markdown article management.
+**Stack**: Bun runtime, React frontend, Node.js backend (API + MCP), PostgreSQL + pgvector database.
 
 ## Quick Start Commands
 
@@ -10,6 +11,10 @@ This is a **monolithic TypeScript full-stack application** for AI-powered markdo
 # Install dependencies
 bun install
 
+# Start Database (Required)
+bun run dc:db        # Starts Postgres container
+bun run db:health    # Verify DB connection
+
 # Development (requires two terminals)
 bun run dev:backend    # Terminal 1 - Backend with auto-reload
 bun run dev:frontend   # Terminal 2 - Frontend dev server
@@ -17,233 +22,78 @@ bun run dev:frontend   # Terminal 2 - Frontend dev server
 # Build
 bun run build          # Builds frontend with hashed assets
 
-# Production
-bun run start          # Run production server
-
 # Type checking
 bun run typecheck      # TypeScript validation
+
+# Testing (Individual scripts)
+bun scripts/test-parsing.ts
+bun scripts/test-import.ts
+bun scripts/test-error-handling.ts
 ```
 
 ### Environment Setup
 Required environment variables (see `.env.example`):
-- `AUTH_TOKEN` - Authentication token for all interfaces (required)
-- `DB_PASSWORD` - Database password
-- `DATA_DIR` - Optional, only required if you want to import markdown articles
-- `PORT` - Server port (default: `5000`)
-- `MCP_SERVER_ENABLED` - Enable/disable MCP server (default: `true`)
-
-### Testing
-No formal test suite. When adding features, manually test:
-1. Web UI at `http://localhost:5000`
-2. REST API at `http://localhost:5000/api/*`
-3. MCP endpoint at `http://localhost:5000/mcp`
+- `AUTH_TOKEN`: Bearer token for all interfaces (Web, API, MCP)
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`: PostgreSQL config
+- `SEMANTIC_SEARCH_ENABLED`: Enable/disable vector embeddings (default: `false`)
+- `MCP_SERVER_ENABLED`: Enable/disable MCP server (default: `true`)
 
 ## Architecture Patterns
 
-### Monolithic Structure with Clear Boundaries
+### Monolithic Structure
 ```
 src/backend/
-├── server.ts        # Single entry point - handles all routing (API, MCP, static)
-├── services/        # Shared business logic (articles CRUD)
-├── mcp/            # MCP protocol implementation
-├── routes/         # REST API endpoints  
-└── middleware/     # Authentication layer
+├── server.ts        # Entry point (API, MCP, static)
+├── services/        # Business logic
+│   ├── articles.ts         # Main facade (CRUD + Embeddings)
+│   ├── databaseArticles.ts # DB operations
+│   └── database.ts         # DB connection pool
+├── mcp/             # MCP protocol implementation
+└── routes/          # REST API endpoints
 ```
 
-**Key Insight**: One server handles everything - API requests, MCP protocol, and static file serving. The routing logic in `server.ts` determines which handler processes each request based on URL patterns.
+### Database-First with Compatibility Layer
+- **Storage**: PostgreSQL is the source of truth.
+- **Compatibility**: `services/articles.ts` maintains a file-like interface (`Article` type) for backward compatibility.
+- **Filenames**: Virtual concept derived from `slug` + `.md`.
+- **Vector Search**: Uses `pgvector` for semantic search. Handled via `embedding.ts` and `vectorIndex.ts`.
 
-### File-Based Storage with Frontmatter
-Articles are stored as markdown files with YAML frontmatter:
-```markdown
----
-title: Article Title
-created: 2025-01-15T10:30:00Z  
----
-# Article content...
-```
-
-**Critical Pattern**: Title extraction follows a hierarchy: frontmatter `title` → first `#` heading → "Untitled". Filename generation is automatic from titles using `generateFilename()` in `services/articles.ts`.
-
-### Authentication Strategy
-**Single Bearer Token** across all interfaces (Web, API, MCP). Token validation happens in:
-- `middleware/auth.ts` - Core auth functions
-- Individual handlers check `Authorization: Bearer <token>` header
-- Frontend stores token in localStorage
+### Authentication
+**Single Bearer Token** across all interfaces.
+- Middleware: `middleware/auth.ts`
+- Frontend: Stored in localStorage, injected via `apiClient`.
 
 ## Development Workflows
 
-### Development Setup (Two Terminals Required)
-```bash
-# Terminal 1 - Backend with auto-reload
-bun run dev:backend
+### Database Management
+Use the provided scripts for DB operations:
+- `bun run db:init`: Initialize schema (optional, app will auto setup as needed)
+- `bun run db:reset`: Reset database (destructive)
+- `bun run db:migrate`: Run migrations
 
-# Terminal 2 - Frontend dev server  
-bun run dev:frontend
-```
-
-If using Docker:
-
-```bash
-bun run dc:db        # Start Postgres DB
-bun run dc:ui        # Build and start the app container
-```
-
-### Build Process (Multi-stage)
-```bash
-bun run build  # Builds frontend with hash-named chunks
-# Generates: public/App.[hash].js, App.[hash].css, index.html
-```
-
-**Important**: Build script dynamically generates `index.html` with correct hash-named asset references via Node.js inline script.
-
-### Docker Patterns
-Multi-stage build separates frontend compilation from runtime:
-1. Stage 1: Build frontend assets
-2. Stage 2: Copy backend + built assets, run production
+### Frontend
+- **No external state library**: Uses React state + Context.
+- **API Client**: ALWAYS use `src/frontend/utils/apiClient.ts` for backend requests. It handles auth and base URLs.
+- **Theming**: CSS variables with `data-theme` attribute.
 
 ## Project-Specific Conventions
 
-### MCP Integration (Unique Pattern)
-The project implements **dual MCP interfaces**:
-- HTTP endpoint (`/mcp`) for web-based AI agents
-- Stdio transport for command-line MCP clients
-
-Both share the same tool definitions in `mcp/server.ts` but handle transport differently.
-
-### Frontend State Management
-**No external state library** - uses built-in React patterns:
-- Route state via custom router in `App.tsx`
-- localStorage for persistence (token, theme)
-- Props drilling for simple data flow
-
-### CSS Architecture
-**CSS Custom Properties** for theming with `data-theme` attribute:
-```css
-:root[data-theme="dark"] { --bg-primary: #1a1a1a; }
-:root[data-theme="light"] { --bg-primary: #ffffff; }
-```
-
-Theme switching updates `document.documentElement.setAttribute('data-theme', theme)`.
-
-### Frontend API Client
-**Always use `apiClient`** for backend requests instead of raw `fetch`.
-- Handles base URL configuration automatically (critical for subpath deployments)
-- Automatically injects authentication headers
-- Provides consistent error handling
-
-```typescript
-import { apiClient } from '../utils/apiClient';
-// ...
-const response = await apiClient.get('/api/articles', token);
-```
-
-## Integration Patterns
-
 ### Service Layer Pattern
-`services/articles.ts` contains all business logic:
-- File I/O operations
-- Frontmatter parsing/generation
-- Title extraction and filename generation
-- Error handling
+- **Entry Point**: `services/articles.ts` is the high-level service. Use this for all article operations.
+- **Delegation**: It delegates storage to `databaseArticles.ts` and search to `vectorIndex.ts`.
+- **Error Handling**: Services throw typed errors. Handlers catch and format responses.
 
-Both REST API and MCP server import and use these services directly - **no duplication**.
+### MCP Integration
+- **Dual Interface**: HTTP (`/mcp`) and Stdio.
+- **Tools**: Defined in `mcp/server.ts`, using `services/articles.ts`.
 
-### Error Handling Strategy
-- Services throw errors with descriptive messages
-- HTTP handlers catch and return appropriate status codes
-- MCP handlers catch and return `isError: true` responses
-- Frontend shows user-friendly error messages
+### Code Style
+- **Runtime**: Bun (use `bun run`).
+- **Imports**: ESM with `.ts` extensions (e.g., `import { x } from './file.ts'`).
+- **Types**: Strict TypeScript. Define interfaces for all data structures.
 
-### File System Integration
-Articles stored in configurable `DATA_DIR` (default `/data`):
-- Server ensures directory exists at startup
-- All file operations go through Node.js `fs/promises`
-- Frontmatter parsing handles missing metadata gracefully
-
-## Key Files for Understanding
-
-- `src/backend/server.ts` - Main routing and server setup
-- `src/backend/services/articles.ts` - Core business logic and file patterns
-- `src/frontend/App.tsx` - Client-side routing and state management
-- `src/frontend/styles/main.css` - CSS architecture and theming
-- `package.json` - Build scripts and Bun-specific patterns
-
-## Development Notes
-
-- **Bun Runtime**: Use `bun run` for all scripts, not `npm`
-- **TypeScript**: ESM modules with `"type": "module"` in package.json
-- **No Database**: Intentionally file-based for simplicity
-- **Single User**: No multi-tenancy - designed for personal/AI agent use
-- **Mobile-First**: Responsive design starts with mobile styles
-
-## Code Style and Conventions
-
-### TypeScript Standards
-- Strict mode enabled (`strict: true` in tsconfig.json)
-- Explicit interfaces for data structures (e.g., `Article`, `ArticleMetadata`)
-- ESM imports only - `.ts` extensions allowed in imports
-- Node built-ins from `fs/promises`, `path`
-
-### Naming Conventions
-- `camelCase` for functions and variables
-- `PascalCase` for React components and TypeScript interfaces
-- Descriptive names that reflect purpose
-
-### Import Organization
-```typescript
-// 1. Node built-ins
-import { readFile } from 'fs/promises';
-import path from 'path';
-
-// 2. External dependencies
-import { Server } from '@modelcontextprotocol/sdk';
-
-// 3. Internal modules
-import { validateAuth } from './middleware/auth';
-```
-
-### Error Handling
-- Services throw errors with descriptive messages
-- HTTP handlers catch and return appropriate status codes (400, 401, 404, 500)
-- MCP handlers catch and return `{ isError: true, content: [...] }` responses
-- Frontend shows user-friendly error messages via alert/notification
-
-## Testing Philosophy
-This app has no formal testing framework yet. When adding tests:
-- Test business logic in `services/articles.ts`
-- Mock file system operations
-- Test MCP tool schemas and responses
-- Test frontend component rendering and interactions
-
-## Common Development Tasks
-
-### Adding a New REST API Endpoint
-1. Define route handler in `src/backend/routes/api.ts`
-2. Add authentication check using `validateAuth()` from middleware
-3. Use service functions from `services/articles.ts` for business logic
-4. Return appropriate HTTP status codes and JSON responses
-
-### Adding a New MCP Tool
-1. Add tool definition to `mcp/server.ts` in the tools list
-2. Implement handler in the switch statement
-3. Use same service functions from `services/articles.ts`
-4. Return MCP-formatted responses with `content` array
-
-### Modifying the Frontend
-1. React components in `src/frontend/components/`
-2. Page components in `src/frontend/pages/`
-3. All styles in `src/frontend/styles/main.css`
-4. Update `App.tsx` for routing changes
-5. Use `apiClient` for all API calls (handles auth and base path automatically)
-
-### Working with Articles
-- All article operations go through `services/articles.ts`
-- Articles are markdown files with YAML frontmatter
-- Title extraction: frontmatter `title` → first `#` heading → "Untitled"
-- Filenames auto-generated via `generateFilename()` - no manual naming
-
-## Deployment
-- Docker multi-stage build via `Dockerfile`
-- Production uses `bun run start`
-- See `DEPLOYMENT.md` for detailed deployment instructions
-- All interfaces (Web, API, MCP) use same `AUTH_TOKEN` for security
+## Key Files
+- `src/backend/server.ts`: Main server setup.
+- `src/backend/services/articles.ts`: Core business logic facade.
+- `src/backend/services/database.ts`: Database connection.
+- `src/frontend/App.tsx`: Frontend routing and layout.

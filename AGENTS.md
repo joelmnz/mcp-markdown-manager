@@ -1,37 +1,27 @@
 # Agent Instructions for MCP Markdown Manager
 
-## Agent Steering
-- Always check `.kiro/steering` dir for additional project documentation and rules before starting complex tasks.
-
 ## Commands
 - **Build**: `bun run build` (builds frontend with hashed assets)
-- **Typecheck**: `bun run typecheck`
+- **Typecheck**: `bun run typecheck` (run this after changes)
 - **Dev**: `bun run dev:backend` (backend) and `bun run dev:frontend` (frontend, separate terminals)
-- **Tests**: Manual test scripts in `scripts/` directory (no formal test framework)
-  - `bun scripts/test-parsing.ts` - Test markdown parsing functions
-  - `bun scripts/test-import.ts` - Test article import functionality  
-  - `bun scripts/test-import-logic.ts` - Test import logic without database
-  - `bun scripts/test-error-handling.ts` - Test database error handling
+- **Tests**: No formal test runner. Run individual scripts in `scripts/`:
+  - `bun scripts/test-parsing.ts` - Markdown parsing
+  - `bun scripts/test-import.ts` - Import functionality
+  - `bun scripts/test-error-handling.ts` - DB error handling
+  - `bun scripts/test-api-client-runtime.ts` - API Client tests
 
-## Environment Variables
-- **AUTH_TOKEN**: Authentication token for all interfaces (required)
-- **DATA_DIR**: Directory where markdown articles are stored (default: ./data)
-- **PORT**: Server port (default: 5000)
-- **MCP_SERVER_ENABLED**: Enable/disable MCP server (case insensitive: true/True/TRUE, default: true)
+## Code Style & Conventions
+- **Runtime**: Bun (`bun run`). ESM only (`"type": "module"`).
+- **Imports**: Use `.ts` extensions. Node built-ins (`fs/promises`, `path`). React for frontend.
+- **Types**: Strict TypeScript. Define explicit interfaces for data structures.
+- **Naming**: `camelCase` for functions/vars, `PascalCase` for Components/Interfaces.
+- **Error Handling**: Services throw descriptive errors. API/MCP handlers catch & return appropriate errors.
+- **Architecture**: Monolithic. Single server (`src/backend/server.ts`) handles API, MCP, static.
+- **Articles**: Stored as markdown with frontmatter. Operations via `services/articles.ts`.
+- **Frontend**: No state lib. `apiClient` for requests. `data-theme` for CSS theming.
 
-## Code Style
-- **Runtime**: Bun (use `bun run`, not `npm`)
-- **Modules**: ESM only (`"type": "module"` in package.json, `.ts` extensions in imports allowed)
-- **Imports**: Node built-ins from `fs/promises`, `path`; React imports for frontend; MCP SDK for backend
-- **Types**: Strict TypeScript (`strict: true`), explicit interfaces for data structures (e.g., `Article`, `ArticleMetadata`)
-- **Naming**: camelCase for functions/variables, PascalCase for React components and interfaces
-- **Error Handling**: Services throw descriptive errors; HTTP handlers return status codes; MCP handlers return `isError: true`
-- **File System**: All article operations through `services/articles.ts` (DB-backed); `fs` used for imports/backups
-- **Frontend**: No state library; localStorage for persistence; props drilling; custom routing in `App.tsx`
-- **CSS**: Custom properties with `data-theme` attribute for theming; mobile-first responsive design
-
-## Key Patterns
-- **Monolithic**: Single server (`src/backend/server.ts`) handles API, MCP, and static serving
-- **Auth**: Single bearer token validated in `middleware/auth.ts`, stored in localStorage on frontend
-- **Title Hierarchy**: frontmatter `title` → first `#` heading → "Untitled"
-- **Filename Generation**: Auto-generated from title via `generateFilename()` in `services/articles.ts`
+## Key Rules (from Copilot/Steering)
+- **Auth**: Single `AUTH_TOKEN` (Bearer) for all interfaces.
+- **MCP**: Dual interface (HTTP `/mcp` + Stdio).
+- **Filenames**: Auto-generated from titles via `services/articles.ts`.
+- Check `.kiro/steering` for deeper docs.
