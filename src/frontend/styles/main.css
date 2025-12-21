@@ -477,7 +477,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .page-header h1 {
@@ -486,10 +486,18 @@ body {
 
 /* Filter and Search Controls */
 .filter-controls-container {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+@media (min-width: 769px) {
+  .filter-controls-container {
+    flex-direction: row;
+    align-items: center;
+    gap: 1.5rem;
+  }
 }
 
 .folder-filter-section {
@@ -497,6 +505,12 @@ body {
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
+}
+
+@media (min-width: 769px) {
+  .folder-filter-section {
+    flex-wrap: nowrap;
+  }
 }
 
 .filter-label {
@@ -537,10 +551,25 @@ body {
   gap: 0.75rem;
 }
 
+@media (min-width: 769px) {
+  .search-form {
+    flex-direction: row;
+    align-items: center;
+    flex: 1;
+    gap: 1.5rem;
+  }
+}
+
 .search-input-row {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+}
+
+@media (min-width: 769px) {
+  .search-input-row {
+    flex: 1;
+  }
 }
 
 .search-input {
@@ -1151,6 +1180,12 @@ body {
   margin-bottom: 0.75rem;
 }
 
+@media (min-width: 769px) {
+  .search-mode-toggle {
+    margin-bottom: 0;
+  }
+}
+
 .search-mode-toggle label {
   display: flex;
   align-items: center;
@@ -1158,6 +1193,7 @@ body {
   cursor: pointer;
   font-size: 0.9rem;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .search-mode-toggle input[type="radio"] {
