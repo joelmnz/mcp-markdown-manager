@@ -42,11 +42,28 @@ export function Home({ token, onNavigate }: HomeProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [folders, setFolders] = useState<string[]>([]);
-  const [selectedFolder, setSelectedFolder] = useState<string>('');
+  const [selectedFolder, setSelectedFolder] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlFolder = params.get('folder');
+    if (urlFolder) return urlFolder;
+    try {
+      return localStorage.getItem('selected_folder') || '';
+    } catch {
+      return '';
+    }
+  });
 
   useEffect(() => {
-    loadArticles();
-  }, []);
+    const url = new URL(window.location.href);
+    if (selectedFolder) {
+      url.searchParams.set('folder', selectedFolder);
+      try { localStorage.setItem('selected_folder', selectedFolder); } catch {}
+    } else {
+      url.searchParams.delete('folder');
+      try { localStorage.removeItem('selected_folder'); } catch {}
+    }
+    window.history.replaceState({}, '', url.toString());
+  }, [selectedFolder]);
 
   const loadArticles = async () => {
     try {
