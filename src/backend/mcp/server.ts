@@ -11,11 +11,7 @@ import {
   readArticle,
   createArticle,
   updateArticle,
-  deleteArticle,
-  listArticleVersions,
-  getArticleVersion,
-  restoreArticleVersion,
-  deleteArticleVersions
+  deleteArticle
 } from '../services/articles';
 import { semanticSearch } from '../services/vectorIndex';
 import { embeddingQueueService } from '../services/embeddingQueue';
@@ -99,10 +95,6 @@ function createConfiguredMCPServer() {
               type: 'string',
               description: 'Optional folder path (e.g., "projects/web-dev")'
             },
-            message: {
-              type: 'string',
-              description: 'Optional message describing this version',
-            },
           },
           required: ['title', 'content'],
         },
@@ -129,10 +121,6 @@ function createConfiguredMCPServer() {
               type: 'string',
               description: 'New folder path (e.g., "projects/web-dev")'
             },
-            message: {
-              type: 'string',
-              description: 'Optional message describing this version',
-            },
           },
           required: ['filename', 'title', 'content'],
         },
@@ -146,81 +134,6 @@ function createConfiguredMCPServer() {
             filename: {
               type: 'string',
               description: 'Filename of the article to delete',
-            },
-          },
-          required: ['filename'],
-        },
-      },
-      {
-        name: 'listArticleVersions',
-        description: 'List all versions of an article (newest first)',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            filename: {
-              type: 'string',
-              description: 'Filename of the article',
-            },
-          },
-          required: ['filename'],
-        },
-      },
-      {
-        name: 'getArticleVersion',
-        description: 'Get a specific version of an article',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            filename: {
-              type: 'string',
-              description: 'Filename of the article',
-            },
-            versionId: {
-              type: 'string',
-              description: 'Version ID (e.g., v1, v2, v3)',
-            },
-          },
-          required: ['filename', 'versionId'],
-        },
-      },
-      {
-        name: 'restoreArticleVersion',
-        description: 'Restore an article to a specific version (automatically reindexes for semantic search)',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            filename: {
-              type: 'string',
-              description: 'Filename of the article',
-            },
-            versionId: {
-              type: 'string',
-              description: 'Version ID to restore (e.g., v1, v2, v3)',
-            },
-            message: {
-              type: 'string',
-              description: 'Optional message describing this restore operation',
-            },
-          },
-          required: ['filename', 'versionId'],
-        },
-      },
-      {
-        name: 'deleteArticleVersions',
-        description: 'Delete specific versions or all versions of an article',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            filename: {
-              type: 'string',
-              description: 'Filename of the article',
-            },
-            versionIds: {
-              type: 'array',
-              items: {
-                type: 'string',
-              },
-              description: 'Array of version IDs to delete (e.g., ["v1", "v2"]). If omitted, deletes all versions.',
             },
           },
           required: ['filename'],
@@ -542,14 +455,13 @@ function createConfiguredMCPServer() {
         }
 
         case 'createArticle': {
-          const { title, content, folder, message } = request.params.arguments as {
+          const { title, content, folder } = request.params.arguments as {
             title: string;
             content: string;
             folder?: string;
-            message?: string;
           };
           // Use background embedding for immediate response without waiting for embedding completion
-          const article = await createArticle(title, content, folder, message, {
+          const article = await createArticle(title, content, folder, undefined, {
             embeddingPriority: 'normal'
           });
           return {
@@ -563,15 +475,14 @@ function createConfiguredMCPServer() {
         }
 
         case 'updateArticle': {
-          const { filename, title, content, folder, message } = request.params.arguments as {
+          const { filename, title, content, folder } = request.params.arguments as {
             filename: string;
             title: string;
             content: string;
             folder?: string;
-            message?: string;
           };
           // Use background embedding for immediate response without waiting for embedding completion
-          const article = await updateArticle(filename, title, content, folder, message, {
+          const article = await updateArticle(filename, title, content, folder, undefined, {
             embeddingPriority: 'normal'
           });
           return {
@@ -592,74 +503,6 @@ function createConfiguredMCPServer() {
               {
                 type: 'text',
                 text: JSON.stringify({ success: true, filename }, null, 2),
-              },
-            ],
-          };
-        }
-
-        case 'listArticleVersions': {
-          const { filename } = request.params.arguments as { filename: string };
-          const versions = await listArticleVersions(filename);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(versions, null, 2),
-              },
-            ],
-          };
-        }
-
-        case 'getArticleVersion': {
-          const { filename, versionId } = request.params.arguments as {
-            filename: string;
-            versionId: string;
-          };
-          const version = await getArticleVersion(filename, versionId);
-          if (!version) {
-            throw new Error(`Version ${versionId} not found for article ${filename}`);
-          }
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(version, null, 2),
-              },
-            ],
-          };
-        }
-
-        case 'restoreArticleVersion': {
-          const { filename, versionId, message } = request.params.arguments as {
-            filename: string;
-            versionId: string;
-            message?: string;
-          };
-          // Use background embedding for immediate response without waiting for embedding completion
-          const article = await restoreArticleVersion(filename, versionId, message, {
-            embeddingPriority: 'normal'
-          });
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify(article, null, 2),
-              },
-            ],
-          };
-        }
-
-        case 'deleteArticleVersions': {
-          const { filename, versionIds } = request.params.arguments as {
-            filename: string;
-            versionIds?: string[];
-          };
-          await deleteArticleVersions(filename, versionIds);
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({ success: true, filename, deletedVersions: versionIds || 'all' }, null, 2),
               },
             ],
           };

@@ -42,7 +42,6 @@ async function testMCPToolsDefinition() {
     console.log('\n📝 Enhanced existing tools:');
     console.log('   - createArticle: Now uses background embedding for immediate response');
     console.log('   - updateArticle: Now uses background embedding for immediate response');
-    console.log('   - restoreArticleVersion: Now uses background embedding for immediate response');
     console.log('   - readArticle: Now includes embedding status in response');
     console.log('   - listArticles: Now includes embedding status for each article');
 
