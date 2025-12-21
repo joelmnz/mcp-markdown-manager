@@ -1,7 +1,7 @@
 # Agent Instructions for MCP Markdown Manager
 
 ## Agent Steering
-- Always check `.kiro/steering` for additional project documentation and rules before starting complex tasks.
+- Always check `.kiro/steering` dir for additional project documentation and rules before starting complex tasks.
 
 ## Commands
 - **Build**: `bun run build` (builds frontend with hashed assets)
