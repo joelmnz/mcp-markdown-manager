@@ -1,4 +1,5 @@
 import { authenticate, requireAuth } from '../middleware/auth';
+import { DatabaseServiceError, DatabaseErrorType } from '../services/databaseErrors.js';
 import {
   listArticles,
   getFolders,
@@ -26,6 +27,34 @@ import { embeddingQueueConfigService } from '../services/embeddingQueueConfig.js
 import { importStatusService } from '../services/importStatus.js';
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
+
+/**
+ * Helper to handle service errors and return appropriate HTTP responses
+ */
+function handleServiceError(error: unknown, defaultMessage: string): Response {
+  if (error instanceof DatabaseServiceError) {
+    let status = 500;
+    if (error.type === DatabaseErrorType.NOT_FOUND) {
+      status = 404;
+    } else if (error.type === DatabaseErrorType.VALIDATION_ERROR || error.type === DatabaseErrorType.CONSTRAINT_VIOLATION) {
+      status = 400;
+    }
+
+    return new Response(JSON.stringify({
+      error: error.userMessage || error.message
+    }), {
+      status,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+
+  return new Response(JSON.stringify({
+    error: error instanceof Error ? error.message : defaultMessage
+  }), {
+    status: 500,
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
 
 export async function handleApiRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
@@ -320,12 +349,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           headers: { 'Content-Type': 'application/json' }
         });
       } catch (error) {
-        return new Response(JSON.stringify({
-          error: error instanceof Error ? error.message : 'Failed to retrieve folders'
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return handleServiceError(error, 'Failed to retrieve folders');
       }
     }
 
@@ -354,12 +378,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           headers: { 'Content-Type': 'application/json' }
         });
       } catch (error) {
-        return new Response(JSON.stringify({
-          error: error instanceof Error ? error.message : 'Failed to rename folder'
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return handleServiceError(error, 'Failed to rename folder');
       }
     }
 
@@ -376,12 +395,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           headers: { 'Content-Type': 'application/json' }
         });
       } catch (error) {
-        return new Response(JSON.stringify({
-          error: error instanceof Error ? error.message : 'Failed to delete folder'
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return handleServiceError(error, 'Failed to delete folder');
       }
     }
 
@@ -593,12 +607,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           headers: { 'Content-Type': 'application/json' }
         });
       } catch (error) {
-        return new Response(JSON.stringify({ 
-          error: error instanceof Error ? error.message : 'Validation failed' 
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return handleServiceError(error, 'Validation failed');
       }
     }
 
@@ -610,12 +619,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           headers: { 'Content-Type': 'application/json' }
         });
       } catch (error) {
-        return new Response(JSON.stringify({ 
-          error: error instanceof Error ? error.message : 'Import failed to start' 
-        }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return handleServiceError(error, 'Import failed to start');
       }
     }
 
@@ -627,11 +631,6 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
   } catch (error) {
     console.error('API Error:', error);
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : 'Internal server error'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return handleServiceError(error, 'Internal server error');
   }
 }
