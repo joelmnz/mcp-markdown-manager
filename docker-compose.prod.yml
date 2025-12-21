@@ -1,0 +1,186 @@
+# Production Docker Compose override
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  postgres:
+    # Production-optimized PostgreSQL configuration
+    command: >
+      postgres
+      -c shared_preload_libraries=vector
+      -c max_connections=${PROD_DB_MAX_CONNECTIONS:-200}
+      -c shared_buffers=${PROD_DB_SHARED_BUFFERS:-512MB}
+      -c effective_cache_size=${PROD_DB_EFFECTIVE_CACHE_SIZE:-2GB}
+      -c maintenance_work_mem=${PROD_DB_MAINTENANCE_WORK_MEM:-128MB}
+      -c checkpoint_completion_target=${PROD_DB_CHECKPOINT_COMPLETION_TARGET:-0.9}
+      -c wal_buffers=${PROD_DB_WAL_BUFFERS:-32MB}
+      -c default_statistics_target=${PROD_DB_DEFAULT_STATISTICS_TARGET:-100}
+      -c random_page_cost=${PROD_DB_RANDOM_PAGE_COST:-1.1}
+      -c effective_io_concurrency=${PROD_DB_EFFECTIVE_IO_CONCURRENCY:-200}
+      -c work_mem=${PROD_DB_WORK_MEM:-4MB}
+      -c min_wal_size=${PROD_DB_MIN_WAL_SIZE:-1GB}
+      -c max_wal_size=${PROD_DB_MAX_WAL_SIZE:-4GB}
+      -c max_worker_processes=${PROD_DB_MAX_WORKER_PROCESSES:-8}
+      -c max_parallel_workers_per_gather=${PROD_DB_MAX_PARALLEL_WORKERS_PER_GATHER:-4}
+      -c max_parallel_workers=${PROD_DB_MAX_PARALLEL_WORKERS:-8}
+      -c max_parallel_maintenance_workers=${PROD_DB_MAX_PARALLEL_MAINTENANCE_WORKERS:-4}
+    environment:
+      # Production security settings
+      - POSTGRES_INITDB_ARGS=${PROD_POSTGRES_INITDB_ARGS:---auth-host=scram-sha-256 --auth-local=scram-sha-256}
+    volumes:
+      # Add backup volume for automated backups
+      - postgres_data:/var/lib/postgresql/data
+      - ${BACKUP_DIR:-./backups}:/backups
+    # Remove port exposure for security (access through application only)
+    ports: []
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-article_user} -d ${DB_NAME:-article_manager}"]
+      interval: ${PROD_HEALTH_CHECK_INTERVAL:-30s}
+      timeout: ${PROD_HEALTH_CHECK_TIMEOUT:-10s}
+      retries: ${PROD_HEALTH_CHECK_RETRIES:-3}
+      start_period: ${PROD_HEALTH_CHECK_START_PERIOD:-60s}
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    user: postgres
+
+  article-manager:
+    # Production image configuration
+    image: ${PROD_APP_IMAGE:-ghcr.io/joelmnz/mcp-markdown-manager:latest}
+    restart: always
+    environment:
+      # Production environment settings
+      - NODE_ENV=${PROD_NODE_ENV:-production}
+      - PORT=${PROD_INTERNAL_PORT:-5000}
+      - MCP_SERVER_ENABLED=${PROD_MCP_SERVER_ENABLED:-true}
+      # Base path configuration for production nginx subpath deployment
+      - BASE_URL=${PROD_BASE_URL:-${BASE_URL:-}}
+      - BASE_PATH=${PROD_BASE_PATH:-${BASE_PATH:-}}
+      # Database connection with internal hostname
+      - DB_HOST=${PROD_DB_HOST:-postgres}
+      - DB_PORT=${PROD_DB_INTERNAL_PORT:-5432}
+      - DB_NAME=${DB_NAME:-article_manager}
+      - DB_USER=${DB_USER:-article_user}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SSL=${PROD_DB_SSL:-false}
+      # Production database pool settings
+      - DB_MAX_CONNECTIONS=${PROD_APP_DB_MAX_CONNECTIONS:-50}
+      - DB_IDLE_TIMEOUT=${PROD_DB_IDLE_TIMEOUT:-60000}
+      - DB_CONNECTION_TIMEOUT=${PROD_DB_CONNECTION_TIMEOUT:-5000}
+      - DB_HEALTH_CHECK_INTERVAL=${PROD_DB_HEALTH_CHECK_INTERVAL:-60000}
+      - DB_CONSTRAINT_REPAIR_ENABLED=${PROD_DB_CONSTRAINT_REPAIR_ENABLED:-true}
+      # Security settings
+      - AUTH_TOKEN=${AUTH_TOKEN}
+      # Logging
+      - LOG_LEVEL=${PROD_LOG_LEVEL:-info}
+      - LOG_FORMAT=${PROD_LOG_FORMAT:-json}
+      # Semantic search (production defaults to disabled for performance)
+      - SEMANTIC_SEARCH_ENABLED=${PROD_SEMANTIC_SEARCH_ENABLED:-false}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-ollama}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-nomic-embed-text}
+      - OLLAMA_BASE_URL=${PROD_OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      # Remove data volume in production (database-only storage)
+      - ${PROD_LOG_DIR:-./logs}:/app/logs
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:${PROD_INTERNAL_PORT:-5000}/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: ${PROD_APP_HEALTH_CHECK_INTERVAL:-60s}
+      timeout: ${PROD_APP_HEALTH_CHECK_TIMEOUT:-10s}
+      retries: ${PROD_APP_HEALTH_CHECK_RETRIES:-3}
+      start_period: ${PROD_APP_HEALTH_CHECK_START_PERIOD:-30s}
+    # Resource limits for production
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100m
+
+  # Backup service for automated backups
+  backup:
+    image: ${BACKUP_IMAGE:-postgres:16-alpine}
+    container_name: ${BACKUP_CONTAINER_NAME:-mcp-markdown-backup}
+    environment:
+      - PGHOST=${BACKUP_DB_HOST:-postgres}
+      - PGPORT=${BACKUP_DB_PORT:-5432}
+      - PGDATABASE=${DB_NAME:-article_manager}
+      - PGUSER=${DB_USER:-article_user}
+      - PGPASSWORD=${DB_PASSWORD}
+      - BACKUP_DIR=${BACKUP_CONTAINER_DIR:-/backups}
+      - RETENTION_DAYS=${RETENTION_DAYS:-30}
+      - COMPRESS_BACKUPS=${COMPRESS_BACKUPS:-true}
+      - BACKUP_PREFIX=${BACKUP_PREFIX:-article-manager}
+    volumes:
+      - ${BACKUP_DIR:-./backups}:/backups
+      - ./scripts/backup-automation.sh:/usr/local/bin/backup-automation.sh:ro
+    command: >
+      sh -c "
+        apk add --no-cache bash gzip &&
+        chmod +x /usr/local/bin/backup-automation.sh &&
+        echo '${BACKUP_SCHEDULE:-0 2 * * *} /usr/local/bin/backup-automation.sh backup' | crontab - &&
+        echo 'Backup service started. Scheduled backups: ${BACKUP_SCHEDULE:-0 2 * * *}' &&
+        crond -f -l 2
+      "
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+    # Resource limits for backup service
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+
+  # Optional: Monitoring service
+  postgres-exporter:
+    image: ${MONITORING_POSTGRES_EXPORTER_IMAGE:-prometheuscommunity/postgres-exporter:latest}
+    container_name: ${MONITORING_POSTGRES_EXPORTER_CONTAINER:-mcp-markdown-postgres-exporter}
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${DB_USER:-article_user}:${DB_PASSWORD}@${MONITORING_DB_HOST:-postgres}:${MONITORING_DB_PORT:-5432}/${DB_NAME:-article_manager}?sslmode=disable
+    ports:
+      - "${MONITORING_POSTGRES_EXPORTER_PORT:-9187}:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: ${MONITORING_RESTART_POLICY:-unless-stopped}
+    profiles:
+      - monitoring
+
+volumes:
+  postgres_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${POSTGRES_DATA_PATH:-./postgres-data}
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

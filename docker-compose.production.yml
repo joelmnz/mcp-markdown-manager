@@ -1,0 +1,157 @@
+version: '3.8'
+
+# Production Docker Compose configuration with SSL and subpath deployment
+# This example deploys MCP Markdown Manager behind nginx with SSL on /articles subpath
+# 
+# Prerequisites:
+#   1. SSL certificates in ./ssl/ directory (cert.pem, key.pem)
+#   2. Domain name configured in DNS
+#   3. Firewall configured for ports 80/443
+# 
+# Usage:
+#   1. Copy .env.example to .env.production and configure
+#   2. Set BASE_URL=https://yourdomain.com/articles in .env.production
+#   3. Place SSL certificates in ./ssl/ directory
+#   4. Run: docker-compose -f docker-compose.production.yml --env-file .env.production up -d
+#   5. Access: https://yourdomain.com/articles
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-production.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - mcp-markdown-manager
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "https://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: mcp-markdown-postgres-prod
+    environment:
+      - POSTGRES_DB=article_manager
+      - POSTGRES_USER=article_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - postgres_data_prod:/var/lib/postgresql/data
+      - ./backups:/backups
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U article_user -d article_manager"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+      -c shared_preload_libraries=vector
+      -c max_connections=200
+      -c shared_buffers=512MB
+      -c effective_cache_size=2GB
+      -c maintenance_work_mem=128MB
+      -c checkpoint_completion_target=0.9
+      -c wal_buffers=32MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+
+  mcp-markdown-manager:
+    image: ghcr.io/joelmnz/mcp-markdown-manager:latest
+    container_name: mcp-markdown-manager-prod
+    environment:
+      - AUTH_TOKEN=${AUTH_TOKEN}
+      - DATA_DIR=/data
+      - PORT=5000
+      - NODE_ENV=production
+      - MCP_SERVER_ENABLED=${MCP_SERVER_ENABLED:-true}
+      
+      # Production runtime base path configuration
+      # Use full HTTPS URL for production deployment
+      - BASE_URL=${BASE_URL:-https://yourdomain.com/articles}
+      
+      # Database configuration (production tuned)
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=article_manager
+      - DB_USER=article_user
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SSL=false
+      - DB_MAX_CONNECTIONS=50
+      - DB_IDLE_TIMEOUT=30000
+      - DB_CONNECTION_TIMEOUT=5000
+      - DB_HEALTH_CHECK_INTERVAL=30000
+      
+      # Production semantic search configuration
+      - SEMANTIC_SEARCH_ENABLED=${SEMANTIC_SEARCH_ENABLED:-true}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHUNK_SIZE=${CHUNK_SIZE:-500}
+      - CHUNK_OVERLAP=${CHUNK_OVERLAP:-50}
+      
+      # Production logging and monitoring
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ENABLE_REQUEST_LOGGING=${ENABLE_REQUEST_LOGGING:-true}
+    volumes:
+      - ./data:/data
+      - ./logs/app:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # Production resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+  # Optional: Backup service for automated database backups
+  backup:
+    image: postgres:16-alpine
+    container_name: mcp-markdown-backup
+    environment:
+      - PGPASSWORD=${DB_PASSWORD}
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup-automation.sh:/backup.sh:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    # Run backup daily at 2 AM
+    # Use cron or external scheduler to run: docker-compose -f docker-compose.production.yml run --rm backup
+    command: ["sh", "/backup.sh"]
+
+volumes:
+  postgres_data_prod:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /var/lib/docker/volumes/mcp-markdown-prod/_data
+
+networks:
+  default:
+    name: mcp-markdown-prod
+    driver: bridge
+</content>

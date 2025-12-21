@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { ArticleList } from '../components/ArticleList';
+import { apiClient } from '../utils/apiClient';
 
 interface Article {
   filename: string;
   title: string;
+  folder?: string;
   created: string;
 }
 
@@ -39,6 +41,8 @@ export function Home({ token, onNavigate }: HomeProps) {
   const [error, setError] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [folders, setFolders] = useState<string[]>([]);
+  const [selectedFolder, setSelectedFolder] = useState<string>('');
 
   useEffect(() => {
     loadArticles();
@@ -48,15 +52,22 @@ export function Home({ token, onNavigate }: HomeProps) {
     try {
       setLoading(true);
       setSearchResults([]);
-      const response = await fetch('/api/articles', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
 
-      if (response.ok) {
-        const data = await response.json();
-        setArticles(data);
+      const queryParams = new URLSearchParams();
+      if (selectedFolder) {
+        queryParams.append('folder', selectedFolder);
+      }
+
+      const [articlesResponse, foldersResponse] = await Promise.all([
+        apiClient.get(`/api/articles?${queryParams.toString()}`, token),
+        apiClient.get('/api/folders', token)
+      ]);
+
+      if (articlesResponse.ok && foldersResponse.ok) {
+        const articlesData = await articlesResponse.json();
+        const foldersData = await foldersResponse.json();
+        setArticles(articlesData);
+        setFolders(foldersData);
         setCurrentPage(1); // Reset to first page when loading all articles
       } else {
         setError('Failed to load articles');
@@ -77,14 +88,14 @@ export function Home({ token, onNavigate }: HomeProps) {
 
     try {
       setLoading(true);
-      
+
       if (searchMode === 'semantic') {
         // Hybrid search (semantic + title boost)
-        const response = await fetch(`/api/search?query=${encodeURIComponent(searchQuery)}&k=10&mode=hybrid`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        let searchUrl = `/api/search?query=${encodeURIComponent(searchQuery)}&k=10&mode=hybrid`;
+        if (selectedFolder) {
+          searchUrl += `&folder=${encodeURIComponent(selectedFolder)}`;
+        }
+        const response = await apiClient.get(searchUrl, token);
 
         if (response.ok) {
           const data = await response.json();
@@ -97,11 +108,13 @@ export function Home({ token, onNavigate }: HomeProps) {
         }
       } else {
         // Title search
-        const response = await fetch(`/api/articles?q=${encodeURIComponent(searchQuery)}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`
-          }
-        });
+        const queryParams = new URLSearchParams();
+        queryParams.append('q', searchQuery);
+        if (selectedFolder) {
+          queryParams.append('folder', selectedFolder);
+        }
+
+        const response = await apiClient.get(`/api/articles?${queryParams.toString()}`, token);
 
         if (response.ok) {
           const data = await response.json();
@@ -148,19 +161,23 @@ export function Home({ token, onNavigate }: HomeProps) {
     }
   };
 
+  const handleFolderSelect = (folder: string) => {
+    setSelectedFolder(folder);
+    // Reload articles will be triggered by useEffect logic if we separate effects, 
+    // but here we call it manually to keep it simple or add it to dependencies
+  };
+
+  // Reload when folder changes
+  useEffect(() => {
+    loadArticles();
+  }, [selectedFolder]);
+
   return (
     <div className="page">
       <div className="page-header">
         <h1>Articles</h1>
         <div className="page-header-actions">
-          <button 
-            className="button"
-            onClick={() => onNavigate('/rag-status')}
-            title="View RAG index status"
-          >
-            🔍 RAG Status
-          </button>
-          <button 
+          <button
             className="button button-primary"
             onClick={() => onNavigate('/new')}
           >
@@ -169,51 +186,75 @@ export function Home({ token, onNavigate }: HomeProps) {
         </div>
       </div>
 
-      <form onSubmit={handleSearch} className="search-form">
-        <div className="search-mode-toggle">
-          <label>
-            <input
-              type="radio"
-              value="title"
-              checked={searchMode === 'title'}
-              onChange={() => handleSearchModeChange('title')}
-            />
-            Title Search
-          </label>
-          <label>
-            <input
-              type="radio"
-              value="semantic"
-              checked={searchMode === 'semantic'}
-              onChange={() => handleSearchModeChange('semantic')}
-            />
-            Semantic Search
-          </label>
-        </div>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder={searchMode === 'semantic' ? 'Search by meaning...' : 'Search articles...'}
-          className="search-input"
-        />
-        <button type="submit" className="button">Search</button>
-        {searchQuery && (
-          <button 
-            type="button" 
-            className="button button-secondary"
-            onClick={() => {
-              setSearchQuery('');
-              loadArticles();
-            }}
-          >
-            Clear
-          </button>
+      <div className="filter-controls-container">
+        {/* Folder Filter */}
+        {folders.length > 0 && (
+          <div className="folder-filter-section">
+            <label className="filter-label">Filter by folder:</label>
+            <select
+              value={selectedFolder || ''}
+              onChange={(e) => handleFolderSelect(e.target.value)}
+              className="folder-select"
+            >
+              <option value="">All Folders</option>
+              {folders.map((folder) => (
+                <option key={folder} value={folder}>
+                  📁 {folder}
+                </option>
+              ))}
+            </select>
+          </div>
         )}
-      </form>
+
+        {/* Search Form */}
+        <form onSubmit={handleSearch} className="search-form">
+          <div className="search-mode-toggle">
+            <label>
+              <input
+                type="radio"
+                value="title"
+                checked={searchMode === 'title'}
+                onChange={() => handleSearchModeChange('title')}
+              />
+              Title Search
+            </label>
+            <label>
+              <input
+                type="radio"
+                value="semantic"
+                checked={searchMode === 'semantic'}
+                onChange={() => handleSearchModeChange('semantic')}
+              />
+              Semantic Search
+            </label>
+          </div>
+          <div className="search-input-row">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={searchMode === 'semantic' ? 'Search by meaning...' : 'Search articles...'}
+              className="search-input"
+            />
+            <button type="submit" className="button">Search</button>
+            {searchQuery && (
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => {
+                  setSearchQuery('');
+                  loadArticles();
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        </form>
+      </div>
 
       {error && <div className="error-message">{error}</div>}
-      
+
       {loading ? (
         <div className="loading">Loading...</div>
       ) : searchResults.length > 0 ? (
@@ -235,17 +276,20 @@ export function Home({ token, onNavigate }: HomeProps) {
         </div>
       ) : (
         <>
-          <ArticleList articles={paginatedArticles} onArticleClick={handleArticleClick} />
+          <ArticleList
+            articles={paginatedArticles}
+            onArticleClick={handleArticleClick}
+          />
           {articles.length > 0 && (
             <div className="pagination-controls">
               <div className="pagination-info">
                 Showing {startIndex + 1}-{Math.min(endIndex, articles.length)} of {articles.length} articles
               </div>
-              
+
               <div className="pagination-size-selector">
                 <label>Items per page:</label>
-                <select 
-                  value={pageSize} 
+                <select
+                  value={pageSize}
                   onChange={(e) => handlePageSizeChange(Number(e.target.value))}
                   className="page-size-select"
                 >
@@ -264,16 +308,16 @@ export function Home({ token, onNavigate }: HomeProps) {
                   >
                     Previous
                   </button>
-                  
+
                   <div className="page-numbers">
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
                       // Show first page, last page, current page, and pages around current
-                      const showPage = 
-                        page === 1 || 
-                        page === totalPages || 
+                      const showPage =
+                        page === 1 ||
+                        page === totalPages ||
                         (page >= currentPage - 1 && page <= currentPage + 1);
-                      
-                      const showEllipsis = 
+
+                      const showEllipsis =
                         (page === currentPage - 2 && currentPage > 3) ||
                         (page === currentPage + 2 && currentPage < totalPages - 2);
 

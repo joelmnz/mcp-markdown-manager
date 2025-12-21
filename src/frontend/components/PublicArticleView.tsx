@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MarkdownView } from './MarkdownView';
 import { useFullscreen } from '../hooks/useFullscreen';
+import { apiClient } from '../utils/apiClient';
 
 interface Article {
   filename: string;
@@ -34,7 +35,7 @@ export function PublicArticleView({ slug, onNavigate }: PublicArticleViewProps) 
   const loadArticle = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/public-articles/${slug}`);
+      const response = await apiClient.get(`/api/public-articles/${slug}`);
 
       if (response.ok) {
         const data = await response.json();

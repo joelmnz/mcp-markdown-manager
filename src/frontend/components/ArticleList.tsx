@@ -3,6 +3,7 @@ import React from 'react';
 interface Article {
   filename: string;
   title: string;
+  folder?: string;
   created: string;
 }
 
@@ -11,7 +12,10 @@ interface ArticleListProps {
   onArticleClick: (filename: string) => void;
 }
 
-export function ArticleList({ articles, onArticleClick }: ArticleListProps) {
+export function ArticleList({
+  articles,
+  onArticleClick
+}: ArticleListProps) {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -38,7 +42,14 @@ export function ArticleList({ articles, onArticleClick }: ArticleListProps) {
           onClick={() => onArticleClick(article.filename)}
         >
           <div className="article-item-header">
-            <h3 className="article-item-title">{article.title}</h3>
+            <div>
+              <h3 className="article-item-title">{article.title}</h3>
+              {article.folder && (
+                <span className="article-item-folder" style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginRight: '0.5rem', background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: '4px' }}>
+                  📁 {article.folder}
+                </span>
+              )}
+            </div>
             <span className="article-item-date">{formatDate(article.created)}</span>
           </div>
         </div>

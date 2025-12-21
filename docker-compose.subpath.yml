@@ -1,0 +1,104 @@
+version: '3.8'
+
+# Docker Compose configuration for nginx subpath deployment
+# This example deploys MCP Markdown Manager behind nginx on /md subpath
+# 
+# Usage:
+#   1. Copy .env.example to .env and configure AUTH_TOKEN and DB_PASSWORD
+#   2. Set BASE_URL=http://localhost/md in .env
+#   3. Run: docker-compose -f docker-compose.subpath.yml up -d
+#   4. Access: http://localhost/md
+
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx-proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx-subpath.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - mcp-markdown-manager
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: mcp-markdown-postgres
+    environment:
+      - POSTGRES_DB=article_manager
+      - POSTGRES_USER=article_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U article_user -d article_manager"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres
+      -c shared_preload_libraries=vector
+      -c max_connections=100
+      -c shared_buffers=256MB
+      -c effective_cache_size=1GB
+
+  mcp-markdown-manager:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/joelmnz/mcp-markdown-manager:latest
+    container_name: mcp-markdown-manager
+    environment:
+      - AUTH_TOKEN=${AUTH_TOKEN}
+      - DATA_DIR=/data
+      - PORT=5000
+      - NODE_ENV=${NODE_ENV:-production}
+      - MCP_SERVER_ENABLED=${MCP_SERVER_ENABLED:-true}
+      
+      # Runtime base path configuration for /md subpath
+      # The application will extract "/md" from the BASE_URL and use it for all URL generation
+      - BASE_URL=${BASE_URL:-http://localhost/md}
+      
+      # Alternative: Use BASE_PATH for path-only configuration
+      # - BASE_PATH=${BASE_PATH:-/md}
+      
+      # Database configuration
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=article_manager
+      - DB_USER=article_user
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SSL=false
+      - DB_MAX_CONNECTIONS=20
+      
+      # Optional semantic search configuration
+      - SEMANTIC_SEARCH_ENABLED=${SEMANTIC_SEARCH_ENABLED:-false}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-ollama}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-nomic-embed-text}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - ./data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    # Note: No external port mapping - accessed through nginx proxy
+
+volumes:
+  postgres_data:
+    driver: local
+</content>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getConfiguredApiClient } from '../utils/apiClient';
 
 interface LoginProps {
   onLogin: (token: string) => void;
@@ -13,12 +14,9 @@ export function Login({ onLogin }: LoginProps) {
     setError('');
 
     try {
-      // Verify token by making a test API call
-      const response = await fetch('/api/articles', {
-        headers: {
-          'Authorization': `Bearer ${password}`
-        }
-      });
+      // Verify token by making a test API call using the configured API client
+      const apiClient = getConfiguredApiClient();
+      const response = await apiClient.get('/api/articles', password);
 
       if (response.ok) {
         onLogin(password);

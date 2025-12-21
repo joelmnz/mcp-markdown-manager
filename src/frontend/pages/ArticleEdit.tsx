@@ -4,6 +4,7 @@ import { applyFixes } from 'markdownlint';
 import { MarkdownView } from '../components/MarkdownView';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
+import { apiClient } from '../utils/apiClient';
 
 interface ArticleEditProps {
   filename?: string;
@@ -14,6 +15,7 @@ interface ArticleEditProps {
 export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [folder, setFolder] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [linting, setLinting] = useState(false);
@@ -32,16 +34,13 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
   const loadArticle = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/articles/${filename}.md`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiClient.get(`/api/articles/${filename}.md`, token);
 
       if (response.ok) {
         const data = await response.json();
         setTitle(data.title);
         setContent(data.content);
+        setFolder(data.folder || '');
         setIsPublic(data.isPublic || false);
       } else {
         setError('Article not found');
@@ -64,16 +63,11 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       setError('');
 
       const url = isNew ? '/api/articles' : `/api/articles/${filename}.md`;
-      const method = isNew ? 'POST' : 'PUT';
+      const data = { title, content, folder };
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ title, content })
-      });
+      const response = isNew
+        ? await apiClient.post(url, data, token)
+        : await apiClient.put(url, data, token);
 
       if (response.ok) {
         const data = await response.json();
@@ -94,14 +88,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
     const targetFilename = articleFilename || `${filename}.md`;
 
     try {
-      const response = await fetch(`/api/articles/${targetFilename}/public`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ isPublic: newIsPublic })
-      });
+      const response = await apiClient.post(`/api/articles/${targetFilename}/public`, { isPublic: newIsPublic }, token);
 
       if (response.ok) {
         setIsPublic(newIsPublic);
@@ -296,8 +283,8 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         </div>
       )}
 
-      <div className="edit-container">
-        <div className="edit-section">
+      <div className="edit-metadata-row">
+        <div className="edit-metadata-item">
           <label className="edit-label">Title</label>
           <input
             type="text"
@@ -306,7 +293,22 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
             placeholder="Article title"
             className="edit-title-input"
           />
+        </div>
 
+        <div className="edit-metadata-item">
+          <label className="edit-label">Folder</label>
+          <input
+            type="text"
+            value={folder}
+            onChange={(e) => setFolder(e.target.value)}
+            placeholder="Folder path (optional, e.g. projects/web-dev)"
+            className="edit-folder-input"
+          />
+        </div>
+      </div>
+
+      <div className="edit-container">
+        <div className="edit-section">
           <label className="edit-label">Content (Markdown)</label>
           <textarea
             value={content}

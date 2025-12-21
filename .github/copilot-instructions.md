@@ -27,12 +27,13 @@ bun run typecheck      # TypeScript validation
 ### Environment Setup
 Required environment variables (see `.env.example`):
 - `AUTH_TOKEN` - Authentication token for all interfaces (required)
-- `DATA_DIR` - Directory where markdown articles are stored (default: `./data`)
+- `DB_PASSWORD` - Database password
+- `DATA_DIR` - Optional, only required if you want to import markdown articles
 - `PORT` - Server port (default: `5000`)
 - `MCP_SERVER_ENABLED` - Enable/disable MCP server (default: `true`)
 
 ### Testing
-No formal test suite (POC project). When adding features, manually test:
+No formal test suite. When adding features, manually test:
 1. Web UI at `http://localhost:5000`
 2. REST API at `http://localhost:5000/api/*`
 3. MCP endpoint at `http://localhost:5000/mcp`
@@ -189,7 +190,7 @@ import { validateAuth } from './middleware/auth';
 - Frontend shows user-friendly error messages via alert/notification
 
 ## Testing Philosophy
-This is a POC with no formal tests. When adding tests:
+This app has no formal testing framework yet. When adding tests:
 - Test business logic in `services/articles.ts`
 - Mock file system operations
 - Test MCP tool schemas and responses

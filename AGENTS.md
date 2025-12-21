@@ -1,10 +1,17 @@
 # Agent Instructions for MCP Markdown Manager
 
+## Agent Steering
+- Always check `.kiro/steering` dir for additional project documentation and rules before starting complex tasks.
+
 ## Commands
 - **Build**: `bun run build` (builds frontend with hashed assets)
 - **Typecheck**: `bun run typecheck`
 - **Dev**: `bun run dev:backend` (backend) and `bun run dev:frontend` (frontend, separate terminals)
-- **Tests**: No formal test suite (POC project)
+- **Tests**: Manual test scripts in `scripts/` directory (no formal test framework)
+  - `bun scripts/test-parsing.ts` - Test markdown parsing functions
+  - `bun scripts/test-import.ts` - Test article import functionality  
+  - `bun scripts/test-import-logic.ts` - Test import logic without database
+  - `bun scripts/test-error-handling.ts` - Test database error handling
 
 ## Environment Variables
 - **AUTH_TOKEN**: Authentication token for all interfaces (required)
@@ -19,7 +26,7 @@
 - **Types**: Strict TypeScript (`strict: true`), explicit interfaces for data structures (e.g., `Article`, `ArticleMetadata`)
 - **Naming**: camelCase for functions/variables, PascalCase for React components and interfaces
 - **Error Handling**: Services throw descriptive errors; HTTP handlers return status codes; MCP handlers return `isError: true`
-- **File System**: All article operations through `services/articles.ts`; markdown files with YAML frontmatter in `DATA_DIR`
+- **File System**: All article operations through `services/articles.ts` (DB-backed); `fs` used for imports/backups
 - **Frontend**: No state library; localStorage for persistence; props drilling; custom routing in `App.tsx`
 - **CSS**: Custom properties with `data-theme` attribute for theming; mobile-first responsive design
 

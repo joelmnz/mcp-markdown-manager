@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import mermaid from 'mermaid';
+import createDOMPurify from 'dompurify';
 import { useTheme } from '../hooks/useTheme';
 
 interface MermaidDiagramProps {
@@ -19,7 +20,7 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
     mermaid.initialize({ 
       startOnLoad: false,
       theme: theme === 'dark' ? 'dark' : 'default',
-      securityLevel: 'loose'
+      securityLevel: 'strict'
     });
 
     // Generate unique ID for this diagram
@@ -28,13 +29,30 @@ export function MermaidDiagram({ chart }: MermaidDiagramProps) {
     // Render the diagram
     mermaid.render(id, chart)
       .then(({ svg }) => {
+        let sanitizedSvg = '';
+        try {
+          const DOMPurify = createDOMPurify(window);
+          sanitizedSvg = DOMPurify.sanitize(svg, {
+            USE_PROFILES: { svg: true, svgFilters: true },
+            ADD_TAGS: ['foreignObject'],
+            FORBID_TAGS: ['script'],
+          });
+        } catch (sanitizeError) {
+          console.error('Failed to sanitize Mermaid SVG:', sanitizeError);
+        }
+
+        if (!sanitizedSvg) {
+          setError('Failed to safely render diagram');
+          return;
+        }
+
         // Insert SVG into the DOM directly
         if (diagramRef.current) {
-          diagramRef.current.innerHTML = svg;
+          diagramRef.current.innerHTML = sanitizedSvg;
         }
         // Only render to expanded ref if it exists (when expanded view is open)
         if (isExpanded && expandedDiagramRef.current) {
-          expandedDiagramRef.current.innerHTML = svg;
+          expandedDiagramRef.current.innerHTML = sanitizedSvg;
         }
         setError('');
       })

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MarkdownView } from '../components/MarkdownView';
 import { useFullscreen } from '../hooks/useFullscreen';
+import { apiClient } from '../utils/apiClient';
 
 interface Article {
   filename: string;
@@ -40,11 +41,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
   const loadArticle = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/articles/${filename}.md`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiClient.get(`/api/articles/${filename}.md`, token);
 
       if (response.ok) {
         const data = await response.json();
@@ -62,11 +59,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
 
   const loadVersions = async () => {
     try {
-      const response = await fetch(`/api/articles/${filename}.md/versions`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiClient.get(`/api/articles/${filename}.md/versions`, token);
 
       if (response.ok) {
         const data = await response.json();
@@ -85,11 +78,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
   const loadVersion = async (versionId: string, index: number) => {
     try {
       setLoadingVersion(true);
-      const response = await fetch(`/api/articles/${filename}.md/versions/${versionId}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiClient.get(`/api/articles/${filename}.md/versions/${versionId}`, token);
 
       if (response.ok) {
         const data = await response.json();
@@ -137,16 +126,9 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
 
     try {
       setRestoring(true);
-      const response = await fetch(`/api/articles/${filename}.md/versions/${currentVersion.versionId}/restore`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message: `Restored from ${currentVersion.versionId}`
-        })
-      });
+      const response = await apiClient.put(`/api/articles/${filename}.md/versions/${currentVersion.versionId}/restore`, {
+        message: `Restored from ${currentVersion.versionId}`
+      }, token);
 
       if (response.ok) {
         // Reload article and versions
@@ -168,12 +150,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
     }
 
     try {
-      const response = await fetch(`/api/articles/${filename}.md/versions`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiClient.delete(`/api/articles/${filename}.md/versions`, token);
 
       if (response.ok) {
         setVersions([]);
@@ -194,12 +171,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
 
     try {
       setDeleting(true);
-      const response = await fetch(`/api/articles/${filename}.md`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
+      const response = await apiClient.delete(`/api/articles/${filename}.md`, token);
 
       if (response.ok) {
         onNavigate('/');

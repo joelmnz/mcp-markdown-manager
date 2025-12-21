@@ -1,6 +1,25 @@
-version: '3.8'
-
 services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: mcp-markdown-postgres
+    environment:
+      - POSTGRES_DB=article_manager
+      - POSTGRES_USER=article_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U article_user -d article_manager" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: >
+      postgres -c shared_preload_libraries=vector -c max_connections=100 -c shared_buffers=256MB -c effective_cache_size=1GB -c maintenance_work_mem=64MB -c checkpoint_completion_target=0.9 -c wal_buffers=16MB -c default_statistics_target=100
+
   article-manager:
     build:
       context: .
@@ -8,23 +27,48 @@ services:
     image: ghcr.io/joelmnz/mcp-markdown-manager:latest
     container_name: mcp-markdown-manager
     ports:
-      - "5000:5000"
+      - "${PORT:-5000}:5000"
     environment:
       - AUTH_TOKEN=${AUTH_TOKEN}
       - DATA_DIR=/data
       - PORT=5000
-      - NODE_ENV=production
-      - MCP_SERVER_ENABLED=true
+      - NODE_ENV=${NODE_ENV:-production}
+      - MCP_SERVER_ENABLED=${MCP_SERVER_ENABLED:-true}
+      # Base path configuration for nginx subpath deployment
+      - BASE_URL=${BASE_URL:-}
+      - BASE_PATH=${BASE_PATH:-}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=article_manager
+      - DB_USER=article_user
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_SSL=false
+      - DB_MAX_CONNECTIONS=20
+      - DB_IDLE_TIMEOUT=30000
+      - DB_CONNECTION_TIMEOUT=2000
+      - DB_HEALTH_CHECK_INTERVAL=30000
+      - DB_CONSTRAINT_REPAIR_ENABLED=true
+      # Optional semantic search configuration
+      - SEMANTIC_SEARCH_ENABLED=${SEMANTIC_SEARCH_ENABLED:-false}
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-ollama}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-nomic-embed-text}
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     volumes:
       - ./data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "bun", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      test: [ "CMD", "bun", "-e", "fetch('http://localhost:5000/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))" ]
       interval: 30s
       timeout: 3s
       retries: 3
-      start_period: 5s
+      start_period: 10s
 
 volumes:
   data:
+    driver: local
+  postgres_data:
     driver: local
