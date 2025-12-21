@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
+const AUTO_CLOSE_DELAY_MS = 1500; // Delay before auto-closing modal after successful operation
+
 interface FolderManagementModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -77,7 +79,7 @@ export function FolderManagementModal({
       // Close modal after short delay to show success message
       setTimeout(() => {
         onClose();
-      }, 1500);
+      }, AUTO_CLOSE_DELAY_MS);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to rename folder');
     } finally {
@@ -116,7 +118,7 @@ export function FolderManagementModal({
       // Close modal after short delay to show success message
       setTimeout(() => {
         onClose();
-      }, 1500);
+      }, AUTO_CLOSE_DELAY_MS);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete folder');
       setShowDeleteConfirm(false);
