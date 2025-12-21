@@ -134,4 +134,7 @@ async function testEmbeddingQueue() {
 }
 
 // Run the test
-testEmbeddingQueue().catch(console.error);
+testEmbeddingQueue().catch((error) => {
+  console.error('❌ Unhandled test error:', error);
+  process.exit(1);
+});
