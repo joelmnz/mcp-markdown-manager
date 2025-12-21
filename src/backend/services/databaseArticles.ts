@@ -161,9 +161,9 @@ export class DatabaseArticleService {
     let sql = `
       SELECT slug, title, folder, is_public, created_at, updated_at
       FROM articles
-      WHERE to_tsvector('english', title) @@ plainto_tsquery('english', $1)
+      WHERE title ILIKE $1
     `;
-    const params: any[] = [query];
+    const params: any[] = [`%${query}%`];
 
     if (folder !== undefined) {
       const normalizedFolder = this.normalizeFolder(folder);

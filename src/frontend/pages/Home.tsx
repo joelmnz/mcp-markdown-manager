@@ -246,7 +246,7 @@ export function Home({ token, onNavigate }: HomeProps) {
                 checked={searchMode === 'title'}
                 onChange={() => handleSearchModeChange('title')}
               />
-              Title Search
+              Title
             </label>
             <label>
               <input
@@ -255,7 +255,7 @@ export function Home({ token, onNavigate }: HomeProps) {
                 checked={searchMode === 'semantic'}
                 onChange={() => handleSearchModeChange('semantic')}
               />
-              Semantic Search
+              Semantic
             </label>
           </div>
           <div className="search-input-row">
