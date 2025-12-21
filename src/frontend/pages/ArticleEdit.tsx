@@ -283,8 +283,8 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         </div>
       )}
 
-      <div className="edit-container">
-        <div className="edit-section">
+      <div className="edit-metadata-row">
+        <div className="edit-metadata-item">
           <label className="edit-label">Title</label>
           <input
             type="text"
@@ -293,17 +293,22 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
             placeholder="Article title"
             className="edit-title-input"
           />
+        </div>
 
+        <div className="edit-metadata-item">
           <label className="edit-label">Folder</label>
           <input
             type="text"
             value={folder}
             onChange={(e) => setFolder(e.target.value)}
             placeholder="Folder path (optional, e.g. projects/web-dev)"
-            className="edit-input"
-            style={{ width: '100%', marginBottom: '1rem', padding: '0.5rem', borderRadius: '4px', border: '1px solid var(--border-color)', background: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+            className="edit-folder-input"
           />
+        </div>
+      </div>
 
+      <div className="edit-container">
+        <div className="edit-section">
           <label className="edit-label">Content (Markdown)</label>
           <textarea
             value={content}

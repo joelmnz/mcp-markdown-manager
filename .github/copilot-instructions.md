@@ -27,7 +27,8 @@ bun run typecheck      # TypeScript validation
 ### Environment Setup
 Required environment variables (see `.env.example`):
 - `AUTH_TOKEN` - Authentication token for all interfaces (required)
-- `DATA_DIR` - Directory where markdown articles are stored (default: `./data`)
+- `DB_PASSWORD` - Database password
+- `DATA_DIR` - Optional, only required if you want to import markdown articles
 - `PORT` - Server port (default: `5000`)
 - `MCP_SERVER_ENABLED` - Enable/disable MCP server (default: `true`)
 
