@@ -161,6 +161,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       const query = url.searchParams.get('query');
       const k = parseInt(url.searchParams.get('k') || '5', 10);
       const mode = url.searchParams.get('mode') || 'hybrid'; // 'semantic' or 'hybrid'
+      const folder = url.searchParams.get('folder') || undefined;
 
       if (!query) {
         return new Response(JSON.stringify({ error: 'Query parameter is required' }), {
@@ -170,8 +171,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
 
       const results = mode === 'semantic'
-        ? await semanticSearch(query, k)
-        : await hybridSearch(query, k);
+        ? await semanticSearch(query, k, folder)
+        : await hybridSearch(query, k, folder);
 
       return new Response(JSON.stringify(results), {
         headers: { 'Content-Type': 'application/json' }

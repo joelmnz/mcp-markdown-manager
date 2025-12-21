@@ -91,7 +91,11 @@ export function Home({ token, onNavigate }: HomeProps) {
 
       if (searchMode === 'semantic') {
         // Hybrid search (semantic + title boost)
-        const response = await apiClient.get(`/api/search?query=${encodeURIComponent(searchQuery)}&k=10&mode=hybrid`, token);
+        let searchUrl = `/api/search?query=${encodeURIComponent(searchQuery)}&k=10&mode=hybrid`;
+        if (selectedFolder) {
+          searchUrl += `&folder=${encodeURIComponent(selectedFolder)}`;
+        }
+        const response = await apiClient.get(searchUrl, token);
 
         if (response.ok) {
           const data = await response.json();

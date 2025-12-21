@@ -36,8 +36,8 @@ export async function deleteArticleChunks(filename: string): Promise<void> {
 }
 
 // Perform semantic search
-export async function semanticSearch(query: string, k: number = 5): Promise<SearchResult[]> {
-  const dbResults = await databaseEmbeddingService.semanticSearch(query, k);
+export async function semanticSearch(query: string, k: number = 5, folder?: string): Promise<SearchResult[]> {
+  const dbResults = await databaseEmbeddingService.semanticSearch(query, k, folder);
   
   // Convert database results to legacy format (remove articleMetadata)
   return dbResults.map(result => ({
@@ -48,8 +48,8 @@ export async function semanticSearch(query: string, k: number = 5): Promise<Sear
 }
 
 // Hybrid search combining title and semantic search
-export async function hybridSearch(query: string, k: number = 5): Promise<SearchResult[]> {
-  const dbResults = await databaseEmbeddingService.hybridSearch(query, k);
+export async function hybridSearch(query: string, k: number = 5, folder?: string): Promise<SearchResult[]> {
+  const dbResults = await databaseEmbeddingService.hybridSearch(query, k, folder);
   
   // Convert database results to legacy format (remove articleMetadata)
   return dbResults.map(result => ({
