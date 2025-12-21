@@ -52,4 +52,7 @@ async function testMCPToolsDefinition() {
 }
 
 // Run the test
-testMCPToolsDefinition().catch(console.error);
+testMCPToolsDefinition().catch((error) => {
+  console.error('❌ Test failed:', error);
+  process.exit(1);
+});
