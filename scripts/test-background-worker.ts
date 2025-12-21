@@ -89,4 +89,7 @@ async function testBackgroundWorker() {
 }
 
 // Run the test
-testBackgroundWorker().catch(console.error);
+testBackgroundWorker().catch((error) => {
+  console.error('\n❌ Unhandled test error:', error);
+  process.exit(1);
+});
