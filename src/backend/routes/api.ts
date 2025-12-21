@@ -329,10 +329,10 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
     }
 
-    // PUT /api/folders/:oldName - Rename a folder
-    if (path.startsWith('/api/folders/') && request.method === 'PUT') {
+    // PUT /api/folders/manage/:oldName - Rename a folder
+    if (path.startsWith('/api/folders/manage/') && request.method === 'PUT') {
       try {
-        const oldFolderName = decodeURIComponent(path.replace('/api/folders/', ''));
+        const oldFolderName = decodeURIComponent(path.replace('/api/folders/manage/', ''));
         const body = await request.json();
         const { newName } = body;
 
@@ -363,10 +363,10 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
     }
 
-    // DELETE /api/folders/:folderName - Delete a folder
-    if (path.startsWith('/api/folders/') && request.method === 'DELETE') {
+    // DELETE /api/folders/manage/:folderName - Delete a folder
+    if (path.startsWith('/api/folders/manage/') && request.method === 'DELETE') {
       try {
-        const folderName = decodeURIComponent(path.replace('/api/folders/', ''));
+        const folderName = decodeURIComponent(path.replace('/api/folders/manage/', ''));
         const result = await deleteFolder(folderName);
         return new Response(JSON.stringify({
           success: true,

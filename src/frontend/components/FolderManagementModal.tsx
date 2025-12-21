@@ -58,7 +58,7 @@ export function FolderManagementModal({
     setSuccess('');
 
     try {
-      const response = await apiClient.put(`/api/folders/${encodeURIComponent(folderToManage)}`, { newName: newFolderName.trim() }, token);
+      const response = await apiClient.put(`/api/folders/manage/${encodeURIComponent(folderToManage)}`, { newName: newFolderName.trim() }, token);
 
       const data = await response.json();
 
@@ -92,7 +92,7 @@ export function FolderManagementModal({
     setSuccess('');
 
     try {
-      const response = await apiClient.delete(`/api/folders/${encodeURIComponent(folderToManage)}`, token);
+      const response = await apiClient.delete(`/api/folders/manage/${encodeURIComponent(folderToManage)}`, token);
 
       const data = await response.json();
 
