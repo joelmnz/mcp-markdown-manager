@@ -247,7 +247,7 @@ export function Home({ token, onNavigate }: HomeProps) {
               onClick={() => setShowFolderModal(true)}
               title="Manage folders"
             >
-              ⚙️
+              📂
             </button>
           </div>
         )}
