@@ -30,7 +30,8 @@ import { semanticSearch, hybridSearch, getDetailedIndexStats } from '../src/back
 import { databaseHealthService } from '../src/backend/services/databaseHealth.js';
 
 const TEST_AUTH_TOKEN = 'test-token-123';
-const BASE_URL = 'http://localhost:5000';
+const PORT = process.env.PORT || '5000';
+const BASE_URL = `http://localhost:${PORT}`;
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 
 interface TestResult {
