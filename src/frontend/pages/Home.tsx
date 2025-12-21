@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ArticleList } from '../components/ArticleList';
+import { FolderManagementModal } from '../components/FolderManagementModal';
 import { apiClient } from '../utils/apiClient';
 
 interface Article {
@@ -52,6 +53,7 @@ export function Home({ token, onNavigate }: HomeProps) {
       return '';
     }
   });
+  const [showFolderModal, setShowFolderModal] = useState(false);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -188,6 +190,13 @@ export function Home({ token, onNavigate }: HomeProps) {
     // but here we call it manually to keep it simple or add it to dependencies
   };
 
+  const handleFolderUpdate = () => {
+    // Reload articles and folders after folder rename/delete
+    loadArticles();
+    // Reset selected folder if it no longer exists
+    setSelectedFolder('');
+  };
+
   const handleLinkClick = (e: React.MouseEvent, callback: () => void) => {
     if (e.ctrlKey || e.metaKey || e.button === 1) {
       // Allow default behavior (open in new tab)
@@ -220,7 +229,7 @@ export function Home({ token, onNavigate }: HomeProps) {
         {/* Folder Filter */}
         {folders.length > 0 && (
           <div className="folder-filter-section">
-            <label className="filter-label">Filter by folder:</label>
+            <label className="filter-label">Folder:</label>
             <select
               value={selectedFolder || ''}
               onChange={(e) => handleFolderSelect(e.target.value)}
@@ -233,6 +242,13 @@ export function Home({ token, onNavigate }: HomeProps) {
                 </option>
               ))}
             </select>
+            <button
+              className="folder-manage-button"
+              onClick={() => setShowFolderModal(true)}
+              title="Manage folders"
+            >
+              📂
+            </button>
           </div>
         )}
 
@@ -399,6 +415,15 @@ export function Home({ token, onNavigate }: HomeProps) {
           )}
         </>
       )}
+
+      <FolderManagementModal
+        isOpen={showFolderModal}
+        onClose={() => setShowFolderModal(false)}
+        folders={folders}
+        selectedFolder={selectedFolder}
+        token={token}
+        onFolderUpdate={handleFolderUpdate}
+      />
     </div>
   );
 }

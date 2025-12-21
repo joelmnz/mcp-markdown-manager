@@ -23,7 +23,7 @@ import {
   getBasePath,
   isRuntimeConfigAvailable as isUrlBuilderConfigAvailable
 } from './utils/urlBuilder';
-import { configureApiClient } from './utils/apiClient';
+import { configureApiClient, apiClient } from './utils/apiClient';
 import './styles/main.css';
 
 type Route =
@@ -49,7 +49,7 @@ function App() {
     // Check backend health
     const checkHealth = async () => {
       try {
-        const response = await fetch('/health');
+        const response = await apiClient.get('/health');
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
           // If 503, it's a specific health failure (like DB down)
@@ -64,7 +64,6 @@ function App() {
       }
     };
 
-    checkHealth();
     // Initialize runtime configuration first with enhanced error handling
     const configResult = initializeRuntimeConfig();
 
@@ -83,6 +82,9 @@ function App() {
 
     // Configure API client with runtime configuration
     configureApiClient(config);
+
+    // Check backend health using the configured API client
+    checkHealth();
 
     setConfigInitialized(true);
 

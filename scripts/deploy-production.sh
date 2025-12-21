@@ -5,6 +5,8 @@
 
 set -e  # Exit on any error
 
+PORT="${PORT:-5000}"
+
 echo "🚀 Starting Article Manager production deployment..."
 
 # Check if required environment variables are set
@@ -91,7 +93,7 @@ start_application() {
     local attempt=1
     
     while [[ $attempt -le $max_attempts ]]; do
-        if curl -f http://localhost:5000/health >/dev/null 2>&1; then
+        if curl -f http://localhost:${PORT}/health >/dev/null 2>&1; then
             echo "✅ Application is ready and healthy"
             return 0
         fi
@@ -120,8 +122,8 @@ show_deployment_summary() {
     echo "🎉 Deployment completed successfully!"
     echo ""
     echo "📊 Application Status:"
-    echo "   - Web UI: http://localhost:5000"
-    echo "   - Health Check: http://localhost:5000/health"
+    echo "   - Web UI: http://localhost:${PORT}"
+    echo "   - Health Check: http://localhost:${PORT}/health"
     echo "   - Database: PostgreSQL on localhost:5432"
     echo ""
     echo "🔧 Management Commands:"
@@ -133,7 +135,7 @@ show_deployment_summary() {
     echo "   - Health check: bun run db:health"
     echo ""
     echo "📚 Next Steps:"
-    echo "   1. Test the application at http://localhost:5000"
+    echo "   1. Test the application at http://localhost:${PORT}"
     echo "   2. Import existing data: bun run import import ./data"
     echo "   3. Set up regular backups"
     echo "   4. Configure monitoring and alerts"

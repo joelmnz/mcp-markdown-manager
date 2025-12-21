@@ -502,6 +502,84 @@ export class DatabaseArticleService {
 
     return result.rows.map(row => row.folder);
   }
+
+  /**
+   * Rename a folder (updates all articles with the old folder name to the new folder name)
+   */
+  async renameFolder(oldFolderName: string, newFolderName: string): Promise<{ updatedCount: number }> {
+    try {
+      // Normalize folder names
+      const normalizedOldFolder = this.normalizeFolder(oldFolderName);
+      const normalizedNewFolder = this.normalizeFolder(newFolderName);
+
+      // Validate new folder name format
+      await this.validateFolder(normalizedNewFolder);
+
+      // Check if old folder exists
+      const folders = await this.getFolderHierarchy();
+      if (!folders.includes(normalizedOldFolder)) {
+        throw new DatabaseServiceError(
+          DatabaseErrorType.NOT_FOUND,
+          `Folder '${oldFolderName}' not found`,
+          'The folder you are trying to rename does not exist.'
+        );
+      }
+
+      // Update all articles with the old folder name
+      const result = await database.query(
+        `UPDATE articles 
+         SET folder = $1, updated_at = $2
+         WHERE folder = $3`,
+        [normalizedNewFolder, new Date(), normalizedOldFolder]
+      );
+
+      return { updatedCount: result.rowCount || 0 };
+    } catch (error) {
+      if (error instanceof DatabaseServiceError) {
+        throw error;
+      }
+      const dbError = handleDatabaseError(error);
+      logDatabaseError(dbError, 'Rename Folder');
+      throw dbError;
+    }
+  }
+
+  /**
+   * Delete a folder (sets folder to empty string for all articles with that folder)
+   */
+  async deleteFolder(folderName: string): Promise<{ updatedCount: number }> {
+    try {
+      // Normalize folder name
+      const normalizedFolder = this.normalizeFolder(folderName);
+
+      // Check if folder exists
+      const folders = await this.getFolderHierarchy();
+      if (!folders.includes(normalizedFolder)) {
+        throw new DatabaseServiceError(
+          DatabaseErrorType.NOT_FOUND,
+          `Folder '${folderName}' not found`,
+          'The folder you are trying to delete does not exist.'
+        );
+      }
+
+      // Update all articles with the folder to have empty folder
+      const result = await database.query(
+        `UPDATE articles 
+         SET folder = '', updated_at = $1
+         WHERE folder = $2`,
+        [new Date(), normalizedFolder]
+      );
+
+      return { updatedCount: result.rowCount || 0 };
+    } catch (error) {
+      if (error instanceof DatabaseServiceError) {
+        throw error;
+      }
+      const dbError = handleDatabaseError(error);
+      logDatabaseError(dbError, 'Delete Folder');
+      throw dbError;
+    }
+  }
 }
 
 // Export singleton instance
