@@ -218,7 +218,10 @@ export function Home({ token, onNavigate }: HomeProps) {
         <div className="page-header-actions">
           <button
             className="button button-primary"
-            onClick={() => onNavigate('/new')}
+            onClick={() => {
+              const url = selectedFolder ? `/new?folder=${encodeURIComponent(selectedFolder)}` : '/new';
+              onNavigate(url);
+            }}
           >
             + New Article
           </button>

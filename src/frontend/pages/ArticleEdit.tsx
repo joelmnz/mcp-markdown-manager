@@ -13,9 +13,16 @@ interface ArticleEditProps {
 }
 
 export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
+  // Read folder from URL query parameter for new articles
+  const getInitialFolder = () => {
+    if (filename) return ''; // Existing article will load its own folder
+    const params = new URLSearchParams(window.location.search);
+    return params.get('folder') || '';
+  };
+
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [folder, setFolder] = useState('');
+  const [folder, setFolder] = useState(getInitialFolder());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [linting, setLinting] = useState(false);
