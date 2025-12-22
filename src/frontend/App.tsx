@@ -191,7 +191,9 @@ function App() {
 
   const parseRoute = (path: string): Route => {
     // Normalize path and handle empty/root cases
-    const normalizedPath = path || '/';
+    // Strip query parameters for route matching
+    const pathWithoutQuery = path.split('?')[0] || '/';
+    const normalizedPath = pathWithoutQuery || '/';
 
     if (normalizedPath === '/' || normalizedPath === '') {
       return { type: 'home' };
