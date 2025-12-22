@@ -799,11 +799,87 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
   entry.lastSeenAtMs = nowMs;
 
   const nodeReq = await convertBunRequestToNode(request);
-  const nodeRes = createNodeResponse();
 
-  await entry.transport.handleRequest(nodeReq, nodeRes);
+  let controller: ReadableStreamDefaultController;
+  const stream = new ReadableStream({
+    start(c) {
+      controller = c;
+    },
+    cancel() {
+      // Optional: Handle stream cancellation
+    }
+  });
 
-  return convertNodeResponseToBun(nodeRes);
+  let resolveHeaders: (headers: Headers) => void;
+  let rejectHeaders: (reason?: any) => void;
+  const headersPromise = new Promise<Headers>((resolve, reject) => {
+    resolveHeaders = resolve;
+    rejectHeaders = reject;
+  });
+
+  let headersResolved = false;
+
+  const nodeRes = createNodeResponse({
+    onWrite: (chunk) => {
+      if (typeof chunk === 'string') {
+        controller.enqueue(new TextEncoder().encode(chunk));
+      } else if (chunk instanceof Uint8Array) {
+        controller.enqueue(chunk);
+      } else {
+        controller.enqueue(new TextEncoder().encode(String(chunk)));
+      }
+    },
+    onEnd: () => {
+      try {
+        controller.close();
+      } catch (e) {
+        // Ignore if already closed
+      }
+    },
+    onWriteHead: (code, headersObj) => {
+      if (headersResolved) return;
+      headersResolved = true;
+
+      const responseHeaders = new Headers();
+      if (headersObj) {
+        Object.entries(headersObj).forEach(([key, value]) => {
+          if (Array.isArray(value)) {
+            value.forEach(v => responseHeaders.append(key, v));
+          } else if (value) {
+            responseHeaders.set(key, value as string);
+          }
+        });
+      }
+      resolveHeaders(responseHeaders);
+    }
+  });
+
+  // Start handling the request without awaiting it to block the response
+  entry.transport.handleRequest(nodeReq, nodeRes).catch(error => {
+    console.error('Error handling MCP GET request:', error);
+    if (!headersResolved) {
+      rejectHeaders(error);
+    }
+    try {
+      controller.error(error);
+    } catch (e) {
+      // Ignore
+    }
+  });
+
+  try {
+    const headers = await headersPromise;
+    return new Response(stream, {
+      status: 200,
+      headers,
+    });
+  } catch (error) {
+    console.error('Failed to establish SSE stream:', error);
+    return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 }
 
 // HTTP endpoint handler for MCP protocol - DELETE requests (session termination)
@@ -851,7 +927,15 @@ async function convertBunRequestToNode(bunReq: Request, parsedBody?: any): Promi
   return nodeReq;
 }
 
-function createNodeResponse(): any {
+interface NodeResponseCallbacks {
+  onWrite?: (chunk: any) => void;
+  onEnd?: (data?: any) => void;
+  onHeader?: (name: string, value: string | string[]) => void;
+  onWriteHead?: (code: number, headers?: Record<string, string | string[]>) => void;
+  onFlushHeaders?: () => void;
+}
+
+function createNodeResponse(callbacks?: NodeResponseCallbacks): any {
   let statusCode = 200;
   let statusMessage = 'OK';
   const headers: Record<string, string | string[]> = {};
@@ -874,6 +958,7 @@ function createNodeResponse(): any {
 
     setHeader(name: string, value: string | string[]) {
       headers[name.toLowerCase()] = value;
+      callbacks?.onHeader?.(name, value);
       return this;
     },
 
@@ -883,34 +968,48 @@ function createNodeResponse(): any {
 
     writeHead(code: number, message?: string | Record<string, string>, headersObj?: Record<string, string>) {
       statusCode = code;
+      let finalHeaders: Record<string, string | string[]> = {};
+      
       if (typeof message === 'string') {
         statusMessage = message;
         if (headersObj) {
           Object.entries(headersObj).forEach(([k, v]) => {
             headers[k.toLowerCase()] = v;
+            finalHeaders[k.toLowerCase()] = v;
           });
         }
       } else if (message) {
         Object.entries(message).forEach(([k, v]) => {
           headers[k.toLowerCase()] = v;
+          finalHeaders[k.toLowerCase()] = v;
         });
       }
       this.headersSent = true;
       this.statusCode = code;
+      
+      callbacks?.onWriteHead?.(code, finalHeaders);
       return this;
+    },
+    
+    flushHeaders() {
+      this.headersSent = true;
+      callbacks?.onFlushHeaders?.();
     },
 
     write(chunk: any) {
       chunks.push(chunk);
+      callbacks?.onWrite?.(chunk);
       return true;
     },
 
     end(data?: any) {
       if (data) {
         chunks.push(data);
+        callbacks?.onWrite?.(data);
       }
       finished = true;
       this.finished = true;
+      callbacks?.onEnd?.(data);
       // Trigger finish event
       this.emit('finish');
       // Resolve the finish promise

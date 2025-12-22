@@ -8,6 +8,7 @@
     "dev:backend": "bun --watch src/backend/server.ts",
     "dev:frontend": "bun scripts/watch-frontend.ts",
     "dc:ui": "docker compose down article-manager && docker compose up -d --build article-manager",
+    "dc:logs": "docker compose logs -f article-manager",
     "dc:db": "docker compose up -d postgres",
     "dc:down": "docker compose down",
     "mcp:inspect": "npx @modelcontextprotocol/inspector",
