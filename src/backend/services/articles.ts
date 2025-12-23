@@ -256,25 +256,34 @@ export async function createArticle(title: string, content: string, folder: stri
 }
 
 // Update an existing article
-export async function updateArticle(filename: string, title: string, content: string, folder?: string, message?: string, options?: ArticleServiceOptions): Promise<Article> {
-  const cleanedContent = cleanMarkdownContent(content);
+export async function updateArticle(filename: string, title?: string, content?: string, folder?: string, message?: string, options?: ArticleServiceOptions): Promise<Article> {
   const slug = filenameToSlug(filename);
 
-  // Get existing article to preserve creation date
+  // Get existing article to use as base for partial updates
   const existing = await databaseArticleService.readArticle(slug);
   if (!existing) {
     throw new Error(`Article '${filename}' not found`);
   }
 
-  // Use existing folder if not provided
-  const targetFolder = folder !== undefined ? folder : existing.folder;
+  // Validate that at least one field is provided for update
+  if (title === undefined && content === undefined && folder === undefined) {
+    throw new Error('At least one field (title, content, or folder) must be provided for update');
+  }
+
+  // Use existing values for any fields not provided (partial update support)
+  const finalTitle = title !== undefined ? title : existing.title;
+  const finalContent = content !== undefined ? content : existing.content;
+  const finalFolder = folder !== undefined ? folder : existing.folder;
+
+  // Only clean content if it was provided in the update
+  const cleanedContent = content !== undefined ? cleanMarkdownContent(content) : existing.content;
 
   // Update article in database first (this handles slug changes automatically)
-  const updatedArticle = await databaseArticleService.updateArticle(slug, title, cleanedContent, targetFolder, message);
+  const updatedArticle = await databaseArticleService.updateArticle(slug, finalTitle, cleanedContent, finalFolder, message);
 
   // Create version snapshot
   const newFilename = slugToFilename(updatedArticle.slug);
-  await createVersionSnapshot(newFilename, title, cleanedContent, targetFolder, message || 'Updated article');
+  await createVersionSnapshot(newFilename, finalTitle, cleanedContent, finalFolder, message || 'Updated article');
 
   // Handle embedding updates with failure isolation
   if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
@@ -312,7 +321,7 @@ export async function updateArticle(filename: string, title: string, content: st
           scheduledAt: new Date(),
           metadata: {
             filename: newFilename,
-            title,
+            title: finalTitle,
             contentLength: cleanedContent.length,
             slugChanged: filename !== newFilename
           }

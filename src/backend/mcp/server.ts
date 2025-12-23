@@ -272,7 +272,7 @@ function createConfiguredMCPServer() {
       },
       {
         name: 'updateArticle',
-        description: 'Update an existing article',
+        description: 'Update an existing article (supports partial updates - provide only the fields you want to change)',
         inputSchema: {
           type: 'object',
           properties: {
@@ -282,18 +282,18 @@ function createConfiguredMCPServer() {
             },
             title: {
               type: 'string',
-              description: 'New title of the article',
+              description: 'New title of the article (optional - if omitted, title remains unchanged)',
             },
             content: {
               type: 'string',
-              description: 'New markdown content of the article',
+              description: 'New markdown content of the article (optional - if omitted, content remains unchanged)',
             },
             folder: {
               type: 'string',
-              description: 'New folder path (e.g., "projects/web-dev")'
+              description: 'New folder path (e.g., "projects/web-dev", optional - if omitted, folder remains unchanged)'
             },
           },
-          required: ['filename', 'title', 'content'],
+          required: ['filename'],
         },
       },
       {
@@ -565,10 +565,16 @@ function createConfiguredMCPServer() {
         case 'updateArticle': {
           const { filename, title, content, folder } = request.params.arguments as {
             filename: string;
-            title: string;
-            content: string;
+            title?: string;
+            content?: string;
             folder?: string;
           };
+          
+          // Validate that at least one field is provided for update
+          if (title === undefined && content === undefined && folder === undefined) {
+            throw new Error('At least one field (title, content, or folder) must be provided for update');
+          }
+          
           // Use background embedding for immediate response without waiting for embedding completion
           const article = await updateArticle(filename, title, content, folder, undefined, {
             embeddingPriority: 'normal'
