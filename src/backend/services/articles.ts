@@ -272,10 +272,9 @@ export async function updateArticle(filename: string, title?: string, content?: 
 
   // Use existing values for any fields not provided (partial update support)
   const finalTitle = title !== undefined ? title : existing.title;
-  const finalContent = content !== undefined ? content : existing.content;
   const finalFolder = folder !== undefined ? folder : existing.folder;
-
-  // Only clean content if it was provided in the update
+  
+  // Only clean content if it was provided in the update, otherwise use existing
   const cleanedContent = content !== undefined ? cleanMarkdownContent(content) : existing.content;
 
   // Update article in database first (this handles slug changes automatically)
