@@ -9,6 +9,7 @@ interface Article {
   content: string;
   created: string;
   isPublic: boolean;
+  isDeleted?: boolean;
 }
 
 interface PublicArticleViewProps {
@@ -68,6 +69,22 @@ export function PublicArticleView({ slug, onNavigate }: PublicArticleViewProps) 
 
   return (
     <div className="public-article-page">
+      {/* Deleted Article Warning Banner */}
+      {article.isDeleted && (
+        <div style={{ 
+          backgroundColor: '#f8d7da', 
+          border: '1px solid #f5c6cb', 
+          borderRadius: '4px', 
+          padding: '1rem', 
+          margin: '1rem 0',
+          color: '#721c24',
+          textAlign: 'center'
+        }}>
+          <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+          <strong> This article has been deleted and may be removed permanently soon.</strong>
+        </div>
+      )}
+      
       {isAuthenticated && (
         <div className="public-article-edit-button">
           <button 
