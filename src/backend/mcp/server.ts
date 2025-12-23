@@ -398,16 +398,25 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
     }
 
     if (!sessionId) {
-      return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id || null, error: { code: -32000, message: 'No valid session ID provided' } }), { status: 400 });
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id || null, error: { code: -32000, message: 'No valid session ID provided' } }), { 
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     const entry = sessions[sessionId];
     if (!entry) {
-      return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id || null, error: { code: -32000, message: 'Invalid session ID' } }), { status: 404 });
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id || null, error: { code: -32000, message: 'Invalid session ID' } }), { 
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     if (entry.token !== token || (MCP_BIND_SESSION_TO_IP && entry.ip !== getClientIp(request))) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     entry.lastSeenAtMs = nowMs;
@@ -415,7 +424,10 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
 
   } catch (error) {
     loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, 'MCP POST error', { error: error instanceof Error ? error : new Error(String(error)) });
-    return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id, error: { code: -32000, message: error instanceof Error ? error.message : 'Internal error' } }), { status: 500 });
+    return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id, error: { code: -32000, message: error instanceof Error ? error.message : 'Internal error' } }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
 
@@ -477,7 +489,10 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
     const headers = await headersPromise;
     return new Response(stream, { status: 200, headers });
   } catch (error) {
-    return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
+    return new Response(JSON.stringify({ error: 'Internal Server Error' }), { 
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
 
