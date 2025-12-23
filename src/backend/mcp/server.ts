@@ -476,6 +476,18 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
         });
       }
       resolveHeaders(responseHeaders);
+    },
+    onFlushHeaders: (headersObj) => {
+      if (headersResolved) return;
+      headersResolved = true;
+      const responseHeaders = new Headers();
+      if (headersObj) {
+        Object.entries(headersObj).forEach(([key, value]) => {
+          if (Array.isArray(value)) value.forEach(v => responseHeaders.append(key, v));
+          else if (value) responseHeaders.set(key, value as string);
+        });
+      }
+      resolveHeaders(responseHeaders);
     }
   });
 
