@@ -460,7 +460,6 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
   });
 
   let headersResolved = false;
-  let timeoutId: NodeJS.Timeout;
 
   const resolveHeadersSafely = (headers: Headers) => {
     if (headersResolved) return;
@@ -477,7 +476,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
   };
 
   // Add timeout to prevent indefinite hanging if headers are never written
-  timeoutId = setTimeout(() => {
+  const timeoutId = setTimeout(() => {
     rejectHeadersSafely(new Error('Timeout waiting for response headers'));
   }, MCP_SSE_HEADERS_TIMEOUT_MS);
 
@@ -519,7 +518,6 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
     }
   });
 
-  // Start handling the request
   entry.transport.handleRequest(nodeReq, nodeRes).catch(error => {
     loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, `SSE Stream error for session ${sessionId}`, { error });
     rejectHeadersSafely(error);
