@@ -88,7 +88,7 @@ export interface NodeResponseCallbacks {
   onEnd?: (data?: any) => void;
   onHeader?: (name: string, value: string | string[]) => void;
   onWriteHead?: (code: number, headers?: Record<string, string | string[]>) => void;
-  onFlushHeaders?: () => void;
+  onFlushHeaders?: (headers?: Record<string, string | string[]>) => void;
 }
 
 export function createNodeResponse(callbacks?: NodeResponseCallbacks): any {
@@ -149,7 +149,7 @@ export function createNodeResponse(callbacks?: NodeResponseCallbacks): any {
     
     flushHeaders() {
       this.headersSent = true;
-      callbacks?.onFlushHeaders?.();
+      callbacks?.onFlushHeaders?.(headers);
     },
 
     write(chunk: any) {

@@ -458,16 +458,46 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
     rejectHeaders = reject;
   });
 
+  // Add timeout to prevent indefinite hanging if headers are never written
+  const timeoutMs = 30000; // 30 second timeout
+  const timeoutId = setTimeout(() => {
+    if (!headersResolved) {
+      rejectHeaders(new Error('Timeout waiting for response headers'));
+    }
+  }, timeoutMs);
+
   let headersResolved = false;
+  const resolveHeadersSafely = (headers: Headers) => {
+    if (headersResolved) return;
+    headersResolved = true;
+    clearTimeout(timeoutId);
+    resolveHeaders(headers);
+  };
+
+  const rejectHeadersSafely = (reason?: any) => {
+    if (headersResolved) return;
+    headersResolved = true;
+    clearTimeout(timeoutId);
+    rejectHeaders(reason);
+  };
+
   nodeRes = createNodeResponse({
     onWrite: (chunk) => {
       const data = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk;
       controller.enqueue(data);
     },
-    onEnd: () => { try { controller.close(); } catch (e) {} },
+    onEnd: () => {
+      // If headers were never written but end is called, resolve with default headers
+      if (!headersResolved) {
+        const defaultHeaders = new Headers();
+        defaultHeaders.set('Content-Type', 'text/event-stream');
+        defaultHeaders.set('Cache-Control', 'no-cache');
+        defaultHeaders.set('Connection', 'keep-alive');
+        resolveHeadersSafely(defaultHeaders);
+      }
+      try { controller.close(); } catch (e) {}
+    },
     onWriteHead: (_code, headersObj) => {
-      if (headersResolved) return;
-      headersResolved = true;
       const responseHeaders = new Headers();
       if (headersObj) {
         Object.entries(headersObj).forEach(([key, value]) => {
@@ -475,11 +505,9 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
           else if (value) responseHeaders.set(key, value as string);
         });
       }
-      resolveHeaders(responseHeaders);
+      resolveHeadersSafely(responseHeaders);
     },
     onFlushHeaders: (headersObj) => {
-      if (headersResolved) return;
-      headersResolved = true;
       const responseHeaders = new Headers();
       if (headersObj) {
         Object.entries(headersObj).forEach(([key, value]) => {
@@ -487,13 +515,14 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
           else if (value) responseHeaders.set(key, value as string);
         });
       }
-      resolveHeaders(responseHeaders);
+      resolveHeadersSafely(responseHeaders);
     }
   });
 
+  // Start handling the request
   entry.transport.handleRequest(nodeReq, nodeRes).catch(error => {
     loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, `SSE Stream error for session ${sessionId}`, { error });
-    if (!headersResolved) rejectHeaders(error);
+    rejectHeadersSafely(error);
     try { controller.error(error); } catch (e) {}
   });
 
@@ -501,6 +530,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
     const headers = await headersPromise;
     return new Response(stream, { status: 200, headers });
   } catch (error) {
+    loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, `Failed to establish SSE stream for session ${sessionId}`, { error: error instanceof Error ? error : new Error(String(error)) });
     return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
