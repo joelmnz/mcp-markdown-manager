@@ -514,8 +514,9 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       const body = await request.json();
       const { title, content, folder, message } = body;
 
-      if (!title || !content) {
-        return new Response(JSON.stringify({ error: 'Title and content are required' }), {
+      // Validate that at least one field is provided for update
+      if (title === undefined && content === undefined && folder === undefined) {
+        return new Response(JSON.stringify({ error: 'At least one field (title, content, or folder) must be provided for update' }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
         });
