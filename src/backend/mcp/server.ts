@@ -458,6 +458,8 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
     rejectHeaders = reject;
   });
 
+  let headersResolved = false;
+
   // Add timeout to prevent indefinite hanging if headers are never written
   const timeoutMs = 30000; // 30 second timeout
   const timeoutId = setTimeout(() => {
@@ -466,7 +468,6 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
     }
   }, timeoutMs);
 
-  let headersResolved = false;
   const resolveHeadersSafely = (headers: Headers) => {
     if (headersResolved) return;
     headersResolved = true;
@@ -530,7 +531,13 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
     const headers = await headersPromise;
     return new Response(stream, { status: 200, headers });
   } catch (error) {
-    loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, `Failed to establish SSE stream for session ${sessionId}`, { error: error instanceof Error ? error : new Error(String(error)) });
+    const errorObj = error instanceof Error ? error : new Error(String(error));
+    loggingService.log(
+      LogLevel.ERROR,
+      LogCategory.ERROR_HANDLING,
+      `Failed to establish SSE stream for session ${sessionId}`,
+      { error: errorObj }
+    );
     return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
