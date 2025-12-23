@@ -12,12 +12,13 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 export async function handleTransportRequest(
   transport: StreamableHTTPServerTransport,
   bunReq: Request,
-  body?: any
+  body?: any,
+  sessionId?: string
 ): Promise<Response> {
   const nodeReq = await convertBunRequestToNode(bunReq, body);
   const nodeRes = createNodeResponse();
   await transport.handleRequest(nodeReq, nodeRes, body);
-  return convertNodeResponseToBun(nodeRes);
+  return convertNodeResponseToBun(nodeRes, sessionId);
 }
 
 export async function convertBunRequestToNode(bunReq: Request, parsedBody?: any): Promise<any> {

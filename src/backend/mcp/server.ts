@@ -394,7 +394,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
         metadata: { ip, userAgent }
       });
 
-      return handleTransportRequest(transport, request, body);
+      return handleTransportRequest(transport, request, body, newSessionId);
     }
 
     if (!sessionId) {
@@ -411,7 +411,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
     }
 
     entry.lastSeenAtMs = nowMs;
-    return handleTransportRequest(entry.transport, request, body);
+    return handleTransportRequest(entry.transport, request, body, sessionId);
 
   } catch (error) {
     loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, 'MCP POST error', { error: error instanceof Error ? error : new Error(String(error)) });
@@ -497,5 +497,5 @@ export async function handleMCPDeleteRequest(request: Request): Promise<Response
   await entry.transport.handleRequest(nodeReq, nodeRes);
 
   loggingService.log(LogLevel.INFO, LogCategory.TASK_LIFECYCLE, `MCP session terminated: ${sessionId}`);
-  return convertNodeResponseToBun(nodeRes);
+  return convertNodeResponseToBun(nodeRes, sessionId ?? undefined);
 }
