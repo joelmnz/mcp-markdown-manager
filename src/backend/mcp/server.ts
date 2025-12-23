@@ -477,7 +477,10 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
     const headers = await headersPromise;
     return new Response(stream, { status: 200, headers });
   } catch (error) {
-    return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
+    return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }
 
