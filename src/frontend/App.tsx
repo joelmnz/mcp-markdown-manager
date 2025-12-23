@@ -8,6 +8,7 @@ import { ArticleView } from './pages/ArticleView';
 import { ArticleEdit } from './pages/ArticleEdit';
 import { RAGStatus } from './pages/RAGStatus';
 import { ImportFiles } from './pages/ImportFiles';
+import { Trash } from './pages/Trash';
 import { PublicArticleView } from './components/PublicArticleView';
 import {
   initializeRuntimeConfig,
@@ -33,6 +34,7 @@ type Route =
   | { type: 'new' }
   | { type: 'rag-status' }
   | { type: 'import-files' }
+  | { type: 'trash' }
   | { type: 'public-article'; slug: string };
 
 function App() {
@@ -205,6 +207,10 @@ function App() {
 
     if (normalizedPath === '/import-files') {
       return { type: 'import-files' };
+    }
+
+    if (normalizedPath === '/trash') {
+      return { type: 'trash' };
     }
 
     if (normalizedPath.startsWith('/public-article/')) {
@@ -382,6 +388,9 @@ function App() {
         )}
         {route.type === 'import-files' && (
           <ImportFiles token={token} onNavigate={navigate} />
+        )}
+        {route.type === 'trash' && (
+          <Trash />
         )}
         {route.type === 'article' && (
           <ArticleView filename={route.filename} token={token} onNavigate={navigate} />

@@ -9,6 +9,7 @@ interface Article {
   content: string;
   created: string;
   isPublic: boolean;
+  isDeleted?: boolean;
 }
 
 interface VersionMetadata {
@@ -185,6 +186,29 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
     }
   };
 
+  const handleRestoreArticle = async () => {
+    if (!confirm('Are you sure you want to restore this article?')) {
+      return;
+    }
+
+    try {
+      setRestoring(true);
+      const response = await apiClient.post(`/api/articles/${filename}.md/restore`, {}, token);
+
+      if (response.ok) {
+        // Reload article to get updated status
+        await loadArticle();
+      } else {
+        const data = await response.json().catch(() => ({}));
+        setError(data.error || 'Failed to restore article');
+      }
+    } catch (err) {
+      setError('Failed to restore article');
+    } finally {
+      setRestoring(false);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -216,6 +240,34 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
 
   return (
     <div className="page">
+      {/* Deleted Article Banner */}
+      {article.isDeleted && (
+        <div style={{ 
+          backgroundColor: '#fff3cd', 
+          border: '1px solid #ffc107', 
+          borderRadius: '4px', 
+          padding: '1rem', 
+          margin: '1rem 0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+            <strong style={{ color: '#856404' }}>This article is in the trash.</strong>
+          </div>
+          <button
+            className="button button-primary"
+            onClick={handleRestoreArticle}
+            disabled={restoring}
+            style={{ minWidth: '120px' }}
+          >
+            {restoring ? 'Restoring...' : '↻ Restore'}
+          </button>
+        </div>
+      )}
+      
       <div className="article-header">
         <button className="button button-secondary" onClick={() => onNavigate('/')}>
           ← Back
