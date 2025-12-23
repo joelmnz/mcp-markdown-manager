@@ -76,26 +76,17 @@ cp .env.example .env
 
 ```bash
 # Start PostgreSQL with Docker
-docker-compose up -d postgres
-
-# Verify database health
-bun run db:health
+bun run dc:db
 ```
 
 Note: The application automatically initializes the database schema on startup.
 
 #### 4. Run development servers
 
-Terminal 1 (Backend):
+Using docker is easiest
 
 ```bash
-bun run dev:backend
-```
-
-Terminal 2 (Frontend):
-
-```bash
-bun run dev:frontend
+bun run dc:ui
 ```
 
 #### 5. Access the application
@@ -121,6 +112,18 @@ To test the MCP Server you can use the MCP inspector
 ```bash
 npx @modelcontextprotocol/inspector
 ```
+
+### MCP Testing
+
+You can test the MCP server using the MCP Inspector tool:
+
+```bash
+bun run dc:db
+bun run dc:ui
+bun run mcp:inspect
+```
+
+This will open the MCP Inspector connected to your running MCP Markdown Manager instance. To connect you will need the `AUTH_TOKEN` and `PORT` you set in your `.env` file.
 
 ### Production Build
 
