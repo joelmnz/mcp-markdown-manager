@@ -13,6 +13,7 @@ export interface Article {
   folder?: string;
   created: string;
   isPublic: boolean;
+  isDeleted?: boolean;
 }
 
 export interface ArticleMetadata {
@@ -22,6 +23,8 @@ export interface ArticleMetadata {
   created: string;
   modified: string;
   isPublic: boolean;
+  isDeleted?: boolean;
+  deletedAt?: string;
 }
 
 export interface VersionMetadata {
@@ -107,7 +110,8 @@ function convertToLegacyArticle(dbArticle: any): Article {
     content: dbArticle.content,
     folder: dbArticle.folder,
     created: dbArticle.created,
-    isPublic: dbArticle.isPublic
+    isPublic: dbArticle.isPublic,
+    isDeleted: dbArticle.isDeleted
   };
 }
 
@@ -119,7 +123,9 @@ function convertToLegacyMetadata(dbMetadata: any): ArticleMetadata {
     folder: dbMetadata.folder,
     created: dbMetadata.created,
     modified: dbMetadata.modified,
-    isPublic: dbMetadata.isPublic
+    isPublic: dbMetadata.isPublic,
+    isDeleted: dbMetadata.isDeleted,
+    deletedAt: dbMetadata.deletedAt
   };
 }
 
@@ -324,7 +330,7 @@ export async function updateArticle(filename: string, title: string, content: st
   return convertToLegacyArticle(updatedArticle);
 }
 
-// Delete an article
+// Delete an article (permanent deletion)
 export async function deleteArticle(filename: string, options?: ArticleServiceOptions): Promise<void> {
   const slug = filenameToSlug(filename);
 
@@ -360,6 +366,90 @@ export async function deleteArticle(filename: string, options?: ArticleServiceOp
       });
     }, 'article deletion embedding cleanup task queuing');
   }
+}
+
+// Soft delete an article (mark as deleted, remove from vector index)
+export async function softDeleteArticle(filename: string, options?: ArticleServiceOptions): Promise<void> {
+  const slug = filenameToSlug(filename);
+
+  // Get article ID before soft deletion for embedding cleanup
+  let articleId: number | null = null;
+  if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
+    try {
+      articleId = await databaseArticleService.getArticleId(slug);
+    } catch (error) {
+      console.error('Error getting article ID for embedding cleanup:', error);
+      // Continue with soft deletion even if we can't get the ID
+    }
+  }
+
+  // Soft delete in database (mark as deleted)
+  await databaseArticleService.softDeleteArticle(slug);
+
+  // Queue embedding removal task to hide from RAG results with failure isolation
+  if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding && articleId) {
+    await safelyHandleEmbeddingOperation(async () => {
+      const config = embeddingQueueConfigService.getConfig();
+      await embeddingQueueService.enqueueTask({
+        articleId,
+        slug,
+        operation: 'delete',
+        priority: options?.embeddingPriority || 'high', // High priority to quickly remove from search
+        maxAttempts: config.maxRetries,
+        scheduledAt: new Date(),
+        metadata: {
+          filename,
+          reason: 'soft_delete'
+        }
+      });
+    }, 'article soft deletion embedding cleanup task queuing');
+  }
+}
+
+// Restore a soft-deleted article (unmark as deleted, queue for embedding)
+export async function restoreArticle(filename: string, options?: ArticleServiceOptions): Promise<void> {
+  const slug = filenameToSlug(filename);
+
+  // Restore in database (unmark as deleted)
+  await databaseArticleService.restoreArticle(slug);
+
+  // Get article for re-embedding
+  const article = await databaseArticleService.readArticle(slug);
+  
+  if (!article) {
+    throw new Error(`Article ${filename} not found after restore`);
+  }
+
+  // Queue embedding task to restore to RAG results with failure isolation
+  if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
+    await safelyHandleEmbeddingOperation(async () => {
+      const articleId = await databaseArticleService.getArticleId(slug);
+      
+      if (articleId) {
+        const config = embeddingQueueConfigService.getConfig();
+        await embeddingQueueService.enqueueTask({
+          articleId,
+          slug: article.slug,
+          operation: 'update',
+          priority: options?.embeddingPriority || 'high', // High priority to quickly restore to search
+          maxAttempts: config.maxRetries,
+          scheduledAt: new Date(),
+          metadata: {
+            filename,
+            title: article.title,
+            contentLength: article.content.length,
+            reason: 'restore_from_trash'
+          }
+        });
+      }
+    }, 'article restore embedding task queuing');
+  }
+}
+
+// List deleted articles (trash)
+export async function listTrash(limit?: number): Promise<ArticleMetadata[]> {
+  const dbArticles = await databaseArticleService.listTrash(limit);
+  return dbArticles.map(convertToLegacyMetadata);
 }
 
 // List all versions of an article

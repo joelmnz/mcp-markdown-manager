@@ -72,8 +72,10 @@ export class SchemaService {
         content TEXT NOT NULL,
         folder VARCHAR(500) DEFAULT '' NOT NULL,
         is_public BOOLEAN DEFAULT FALSE NOT NULL,
+        is_deleted BOOLEAN DEFAULT FALSE NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        deleted_at TIMESTAMP WITH TIME ZONE,
         created_by VARCHAR(255),
         updated_by VARCHAR(255)
       )
@@ -227,6 +229,8 @@ export class SchemaService {
       'CREATE INDEX IF NOT EXISTS idx_articles_updated_at ON articles(updated_at DESC)',
       'CREATE INDEX IF NOT EXISTS idx_articles_title ON articles USING gin(to_tsvector(\'english\', title))',
       'CREATE INDEX IF NOT EXISTS idx_articles_is_public ON articles(is_public)',
+      'CREATE INDEX IF NOT EXISTS idx_articles_is_deleted ON articles(is_deleted)',
+      'CREATE INDEX IF NOT EXISTS idx_articles_deleted_at ON articles(deleted_at DESC) WHERE is_deleted = true',
 
       // Article history indexes
       'CREATE INDEX IF NOT EXISTS idx_article_history_article_id ON article_history(article_id)',

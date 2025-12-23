@@ -17,8 +17,10 @@ export interface DatabaseArticle {
   content: string;
   folder: string;
   isPublic: boolean;
+  isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
+  deletedAt?: Date;
   createdBy?: string;
   updatedBy?: string;
 }
@@ -31,6 +33,7 @@ export interface Article {
   folder: string;
   created: string;
   isPublic: boolean;
+  isDeleted?: boolean;
 }
 
 export interface ArticleMetadata {
@@ -40,6 +43,8 @@ export interface ArticleMetadata {
   created: string;
   modified: string;
   isPublic: boolean;
+  isDeleted?: boolean;
+  deletedAt?: string;
 }
 
 /**
@@ -95,7 +100,8 @@ export class DatabaseArticleService {
       content: row.content,
       folder: row.folder,
       created: row.created_at.toISOString(),
-      isPublic: row.is_public
+      isPublic: row.is_public,
+      isDeleted: row.is_deleted || false
     };
   }
 
@@ -109,7 +115,9 @@ export class DatabaseArticleService {
       folder: row.folder,
       created: row.created_at.toISOString(),
       modified: row.updated_at.toISOString(),
-      isPublic: row.is_public
+      isPublic: row.is_public,
+      isDeleted: row.is_deleted || false,
+      deletedAt: row.deleted_at ? row.deleted_at.toISOString() : undefined
     };
   }
 
@@ -119,8 +127,9 @@ export class DatabaseArticleService {
   async listArticles(folder?: string, limit?: number): Promise<ArticleMetadata[]> {
     try {
       let query = `
-        SELECT slug, title, folder, is_public, created_at, updated_at
+        SELECT slug, title, folder, is_public, is_deleted, created_at, updated_at, deleted_at
         FROM articles
+        WHERE is_deleted = FALSE
       `;
       const params: any[] = [];
 
@@ -131,11 +140,11 @@ export class DatabaseArticleService {
         // e.g., 'projects' matches 'projects', 'projects/web-dev', 'projects/project-1', etc.
         if (normalizedFolder === '') {
           // Empty folder means root - show all articles
-          query += ' WHERE folder = $1';
+          query += ' AND folder = $1';
           params.push(normalizedFolder);
         } else {
           // Include the folder itself and all subfolders
-          query += ' WHERE (folder = $1 OR folder LIKE $2)';
+          query += ' AND (folder = $1 OR folder LIKE $2)';
           params.push(normalizedFolder, `${normalizedFolder}/%`);
         }
       }
@@ -164,9 +173,9 @@ export class DatabaseArticleService {
    */
   async searchArticles(query: string, folder?: string): Promise<ArticleMetadata[]> {
     let sql = `
-      SELECT slug, title, folder, is_public, created_at, updated_at
+      SELECT slug, title, folder, is_public, is_deleted, created_at, updated_at, deleted_at
       FROM articles
-      WHERE title ILIKE $1
+      WHERE title ILIKE $1 AND is_deleted = FALSE
     `;
     const params: any[] = [`%${query}%`];
 
@@ -362,7 +371,7 @@ export class DatabaseArticleService {
   }
 
   /**
-   * Delete an article
+   * Delete an article (permanent deletion)
    */
   async deleteArticle(slug: string): Promise<void> {
     try {
@@ -405,6 +414,142 @@ export class DatabaseArticleService {
       }
       const dbError = handleDatabaseError(error);
       logDatabaseError(dbError, 'Delete Article');
+      throw dbError;
+    }
+  }
+
+  /**
+   * Soft delete an article (mark as deleted)
+   */
+  async softDeleteArticle(slug: string): Promise<void> {
+    try {
+      if (!slug || slug.trim().length === 0) {
+        throw new DatabaseServiceError(
+          DatabaseErrorType.VALIDATION_ERROR,
+          'Slug cannot be empty',
+          'Article identifier cannot be empty.'
+        );
+      }
+
+      const now = new Date();
+
+      const result = await database.query(
+        `UPDATE articles 
+         SET is_deleted = TRUE, deleted_at = $1, updated_at = $2
+         WHERE slug = $3 AND is_deleted = FALSE`,
+        [now, now, slug]
+      );
+
+      if (result.rowCount === 0) {
+        // Check if article exists but is already deleted
+        const existingCheck = await database.query(
+          'SELECT is_deleted FROM articles WHERE slug = $1',
+          [slug]
+        );
+        
+        if (existingCheck.rows.length === 0) {
+          throw new DatabaseServiceError(
+            DatabaseErrorType.NOT_FOUND,
+            `Article with slug '${slug}' not found`,
+            'The article you are trying to delete does not exist.'
+          );
+        } else if (existingCheck.rows[0].is_deleted) {
+          throw new DatabaseServiceError(
+            DatabaseErrorType.VALIDATION_ERROR,
+            `Article with slug '${slug}' is already deleted`,
+            'This article is already in the trash.'
+          );
+        }
+      }
+    } catch (error) {
+      if (error instanceof DatabaseServiceError) {
+        throw error;
+      }
+      const dbError = handleDatabaseError(error);
+      logDatabaseError(dbError, 'Soft Delete Article');
+      throw dbError;
+    }
+  }
+
+  /**
+   * Restore a soft-deleted article
+   */
+  async restoreArticle(slug: string): Promise<void> {
+    try {
+      if (!slug || slug.trim().length === 0) {
+        throw new DatabaseServiceError(
+          DatabaseErrorType.VALIDATION_ERROR,
+          'Slug cannot be empty',
+          'Article identifier cannot be empty.'
+        );
+      }
+
+      const now = new Date();
+
+      const result = await database.query(
+        `UPDATE articles 
+         SET is_deleted = FALSE, deleted_at = NULL, updated_at = $1
+         WHERE slug = $2 AND is_deleted = TRUE`,
+        [now, slug]
+      );
+
+      if (result.rowCount === 0) {
+        // Check if article exists but is not deleted
+        const existingCheck = await database.query(
+          'SELECT is_deleted FROM articles WHERE slug = $1',
+          [slug]
+        );
+        
+        if (existingCheck.rows.length === 0) {
+          throw new DatabaseServiceError(
+            DatabaseErrorType.NOT_FOUND,
+            `Article with slug '${slug}' not found`,
+            'The article you are trying to restore does not exist.'
+          );
+        } else if (!existingCheck.rows[0].is_deleted) {
+          throw new DatabaseServiceError(
+            DatabaseErrorType.VALIDATION_ERROR,
+            `Article with slug '${slug}' is not deleted`,
+            'This article is not in the trash and cannot be restored.'
+          );
+        }
+      }
+    } catch (error) {
+      if (error instanceof DatabaseServiceError) {
+        throw error;
+      }
+      const dbError = handleDatabaseError(error);
+      logDatabaseError(dbError, 'Restore Article');
+      throw dbError;
+    }
+  }
+
+  /**
+   * List deleted articles (trash)
+   */
+  async listTrash(limit?: number): Promise<ArticleMetadata[]> {
+    try {
+      let query = `
+        SELECT slug, title, folder, is_public, is_deleted, created_at, updated_at, deleted_at
+        FROM articles
+        WHERE is_deleted = TRUE
+        ORDER BY deleted_at DESC
+      `;
+      const params: any[] = [];
+
+      if (limit !== undefined) {
+        params.push(limit);
+        query += ` LIMIT $${params.length}`;
+      }
+
+      const result = await database.query(query, params);
+      return result.rows.map(row => this.dbRowToMetadata(row));
+    } catch (error) {
+      if (error instanceof DatabaseServiceError) {
+        throw error;
+      }
+      const dbError = handleDatabaseError(error);
+      logDatabaseError(dbError, 'List Trash');
       throw dbError;
     }
   }

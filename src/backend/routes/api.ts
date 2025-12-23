@@ -10,6 +10,9 @@ import {
   createArticle,
   updateArticle,
   deleteArticle,
+  softDeleteArticle,
+  restoreArticle,
+  listTrash,
   isArticlePublic,
   setArticlePublic,
   getArticleBySlug,
@@ -552,11 +555,11 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       }
 
-      // Regular article deletion
+      // Regular article deletion (now uses soft delete)
       const filename = fullPath;
-      await deleteArticle(filename);
+      await softDeleteArticle(filename);
 
-      return new Response(JSON.stringify({ success: true }), {
+      return new Response(JSON.stringify({ success: true, message: 'Article moved to trash' }), {
         headers: { 'Content-Type': 'application/json' }
       });
     }
@@ -589,6 +592,46 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       return new Response(JSON.stringify({ success: true, isPublic }), {
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+
+    // GET /api/trash - List deleted articles
+    if (path === '/api/trash' && request.method === 'GET') {
+      try {
+        const trash = await listTrash();
+        return new Response(JSON.stringify(trash), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to retrieve trash');
+      }
+    }
+
+    // POST /api/articles/:slug/restore - Restore a deleted article
+    if (path.match(/^\/api\/articles\/[^\/]+\/restore$/) && request.method === 'POST') {
+      try {
+        const filename = path.replace('/api/articles/', '').replace('/restore', '');
+        await restoreArticle(filename);
+
+        return new Response(JSON.stringify({ success: true, message: 'Article restored successfully' }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to restore article');
+      }
+    }
+
+    // DELETE /api/articles/:slug/permanent - Permanently delete an article
+    if (path.match(/^\/api\/articles\/[^\/]+\/permanent$/) && request.method === 'DELETE') {
+      try {
+        const filename = path.replace('/api/articles/', '').replace('/permanent', '');
+        await deleteArticle(filename);
+
+        return new Response(JSON.stringify({ success: true, message: 'Article permanently deleted' }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to permanently delete article');
+      }
     }
 
     // GET /api/import/status - Get import status
