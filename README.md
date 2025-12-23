@@ -121,6 +121,9 @@ You can test the MCP server using the MCP Inspector tool:
 bun run dc:db
 bun run dc:ui
 bun run mcp:inspect
+
+# when you are done Ctrl+C to stop the inspector then
+docker compose down
 ```
 
 This will open the MCP Inspector connected to your running MCP Markdown Manager instance. To connect you will need the `AUTH_TOKEN` and `PORT` you set in your `.env` file.
