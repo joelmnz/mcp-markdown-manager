@@ -15,6 +15,9 @@ const MCP_MULTI_SEARCH_LIMIT = Number.parseInt(process.env.MCP_MULTI_SEARCH_LIMI
 export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
   listArticles: async (args) => {
     const { folder, maxArticles } = args as { folder: string; maxArticles?: number };
+    if (folder === undefined || folder === null || typeof folder !== 'string') {
+      throw new Error('folder parameter is required and must be a string (use "" for all folders)');
+    }
     const folderParam = folder === '' ? undefined : folder;
     const limit = maxArticles || 100;
     const articles = await listArticles(folderParam, limit);
@@ -32,6 +35,9 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
 
   searchArticles: async (args) => {
     const { query, folder } = args as { query: string; folder?: string };
+    if (!query || typeof query !== 'string' || query.trim() === '') {
+      throw new Error('query parameter is required and must be a non-empty string');
+    }
     const folderParam = folder === '' ? undefined : folder;
     const results = await searchArticles(query, folderParam);
     return {
@@ -43,6 +49,9 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
     const { titles, folder } = args as { titles: string[]; folder?: string };
     if (!Array.isArray(titles)) throw new Error('titles must be an array');
     if (titles.length === 0) throw new Error('titles array cannot be empty');
+    if (titles.some(t => typeof t !== 'string' || t.trim() === '')) {
+      throw new Error('all titles must be non-empty strings');
+    }
     if (titles.length > MCP_MULTI_SEARCH_LIMIT) throw new Error(`titles array cannot exceed ${MCP_MULTI_SEARCH_LIMIT} items`);
 
     const allResults = await Promise.all(titles.map(title => searchArticles(title, folder)));
@@ -58,6 +67,9 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
   semanticSearch: async (args) => {
     if (!SEMANTIC_SEARCH_ENABLED) throw new Error('Semantic search is not enabled');
     const { query, k, folder } = args as { query: string; k?: number; folder?: string };
+    if (!query || typeof query !== 'string' || query.trim() === '') {
+      throw new Error('query parameter is required and must be a non-empty string');
+    }
     const folderParam = folder === '' ? undefined : folder;
     const results = await semanticSearch(query, k || 5, folderParam);
     return {
@@ -70,6 +82,9 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
     const { queries, k, folder } = args as { queries: string[]; k?: number; folder?: string };
     if (!Array.isArray(queries)) throw new Error('queries must be an array');
     if (queries.length === 0) throw new Error('queries array cannot be empty');
+    if (queries.some(q => typeof q !== 'string' || q.trim() === '')) {
+      throw new Error('all queries must be non-empty strings');
+    }
     if (queries.length > MCP_MULTI_SEARCH_LIMIT) throw new Error(`queries array cannot exceed ${MCP_MULTI_SEARCH_LIMIT} items`);
 
     const resultsPerQuery = k || 5;
@@ -95,6 +110,9 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
 
   readArticle: async (args) => {
     const { filename } = args as { filename: string };
+    if (!filename || typeof filename !== 'string' || filename.trim() === '') {
+      throw new Error('filename parameter is required and must be a non-empty string');
+    }
     const article = await readArticle(filename);
     if (!article) throw new Error(`Article ${filename} not found`);
     return {
@@ -104,6 +122,12 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
 
   createArticle: async (args) => {
     const { title, content, folder } = args as { title: string; content: string; folder?: string };
+    if (!title || typeof title !== 'string' || title.trim() === '') {
+      throw new Error('title parameter is required and must be a non-empty string');
+    }
+    if (!content || typeof content !== 'string' || content.trim() === '') {
+      throw new Error('content parameter is required and must be a non-empty string');
+    }
     const article = await createArticle(title, content, folder, undefined, { embeddingPriority: 'normal' });
     return {
       content: [{ type: 'text', text: JSON.stringify(article, null, 2) }],
@@ -112,6 +136,15 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
 
   updateArticle: async (args) => {
     const { filename, title, content, folder } = args as { filename: string; title: string; content: string; folder?: string };
+    if (!filename || typeof filename !== 'string' || filename.trim() === '') {
+      throw new Error('filename parameter is required and must be a non-empty string');
+    }
+    if (!title || typeof title !== 'string' || title.trim() === '') {
+      throw new Error('title parameter is required and must be a non-empty string');
+    }
+    if (!content || typeof content !== 'string' || content.trim() === '') {
+      throw new Error('content parameter is required and must be a non-empty string');
+    }
     const article = await updateArticle(filename, title, content, folder, undefined, { embeddingPriority: 'normal' });
     return {
       content: [{ type: 'text', text: JSON.stringify(article, null, 2) }],
@@ -120,6 +153,9 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
 
   deleteArticle: async (args) => {
     const { filename } = args as { filename: string };
+    if (!filename || typeof filename !== 'string' || filename.trim() === '') {
+      throw new Error('filename parameter is required and must be a non-empty string');
+    }
     await deleteArticle(filename);
     return {
       content: [{ type: 'text', text: JSON.stringify({ success: true, filename }, null, 2) }],
