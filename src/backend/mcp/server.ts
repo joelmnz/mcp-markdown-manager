@@ -106,6 +106,11 @@ function enforceSessionLimits(ip: string, token: string): Response | null {
   return null;
 }
 
+function getSessionId(request: Request): string | null {
+  const url = new URL(request.url);
+  return request.headers.get('mcp-session-id') || url.searchParams.get('sessionId');
+}
+
 function getAuthorizedSession(request: Request, sessionId: string | null): { entry: McpSessionEntry; sessionId: string } | Response {
   const token = getBearerToken(request);
   if (!isAuthorizedToken(token)) {
@@ -116,12 +121,15 @@ function getAuthorizedSession(request: Request, sessionId: string | null): { ent
   }
 
   if (!sessionId) {
-    return new Response('Invalid or missing session ID', { status: 400 });
+    return new Response('Missing session ID', { status: 400 });
   }
 
   const entry = sessions[sessionId];
   if (!entry) {
-    return new Response('Invalid or missing session ID', { status: 400 });
+    loggingService.log(LogLevel.WARN, LogCategory.ERROR_HANDLING, `MCP session not found: ${sessionId}`, {
+      metadata: { ip: getClientIp(request), sessionId }
+    });
+    return new Response('Session not found', { status: 404 });
   }
 
   if (entry.token !== token) {
@@ -370,7 +378,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
   let body: any;
   try {
     body = await request.json();
-    const sessionId = request.headers.get('mcp-session-id');
+    const sessionId = getSessionId(request);
 
     if (isInitializeRequest(body)) {
       const ip = getClientIp(request);
@@ -407,30 +415,12 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
       return handleTransportRequest(transport, request, body, newSessionId);
     }
 
-    if (!sessionId) {
-      return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id || null, error: { code: -32000, message: 'No valid session ID provided' } }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+    const authorized = getAuthorizedSession(request, sessionId);
+    if (authorized instanceof Response) return authorized;
 
-    const entry = sessions[sessionId];
-    if (!entry) {
-      return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id || null, error: { code: -32000, message: 'Invalid session ID' } }), {
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    if (entry.token !== token || (MCP_BIND_SESSION_TO_IP && entry.ip !== getClientIp(request))) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
+    const { entry } = authorized;
     entry.lastSeenAtMs = nowMs;
-    return handleTransportRequest(entry.transport, request, body, sessionId);
+    return handleTransportRequest(entry.transport, request, body, sessionId ?? undefined);
 
   } catch (error) {
     loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, 'MCP POST error', { error: error instanceof Error ? error : new Error(String(error)) });
@@ -442,7 +432,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
 }
 
 export async function handleMCPGetRequest(request: Request): Promise<Response> {
-  const sessionId = request.headers.get('mcp-session-id');
+  const sessionId = getSessionId(request);
   const nowMs = Date.now();
   cleanupExpiredSessions(nowMs);
 
@@ -571,7 +561,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
 }
 
 export async function handleMCPDeleteRequest(request: Request): Promise<Response> {
-  const sessionId = request.headers.get('mcp-session-id');
+  const sessionId = getSessionId(request);
   const nowMs = Date.now();
   cleanupExpiredSessions(nowMs);
 

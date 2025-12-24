@@ -16,6 +16,9 @@ export async function handleTransportRequest(
   sessionId?: string
 ): Promise<Response> {
   const nodeReq = await convertBunRequestToNode(bunReq, body);
+  if (sessionId) {
+    nodeReq.headers['mcp-session-id'] = sessionId;
+  }
   const nodeRes = createNodeResponse();
   await transport.handleRequest(nodeReq, nodeRes, body);
   return convertNodeResponseToBun(nodeRes, sessionId);
@@ -228,8 +231,24 @@ export async function convertNodeResponseToBun(nodeRes: any, sessionId?: string)
   const state = nodeRes._getState();
   const { statusCode, headers, chunks } = state;
 
-  // Combine all chunks
-  const body = chunks.length > 0 ? chunks.join('') : '';
+  // Combine all chunks into a single Uint8Array if they are not all strings
+  let body: BodyInit;
+  if (chunks.length === 0) {
+    body = '';
+  } else if (chunks.every((c: any) => typeof c === 'string')) {
+    body = chunks.join('');
+  } else {
+    // Mixed or binary data - convert to Uint8Array
+    const totalLength = chunks.reduce((acc: number, c: any) => acc + (c.length || 0), 0);
+    const combined = new Uint8Array(totalLength);
+    let offset = 0;
+    for (const chunk of chunks) {
+      const array = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk;
+      combined.set(array, offset);
+      offset += array.length;
+    }
+    body = combined;
+  }
 
   // Convert headers to Headers object
   const responseHeaders = new Headers();
