@@ -246,7 +246,8 @@ export class DatabaseEmbeddingService {
           params.push('');
         } else {
           // Include the folder itself and all subfolders to match listArticles behavior
-          sql += ' WHERE (a.folder = $2 OR a.folder LIKE $3)';
+          // Use ILIKE for case-insensitive matching
+          sql += ' WHERE (a.folder ILIKE $2 OR a.folder ILIKE $3)';
           params.push(normalizedFolder, `${normalizedFolder}/%`);
         }
       }
@@ -271,7 +272,8 @@ export class DatabaseEmbeddingService {
           params.push('');
         } else {
           // Include the folder itself and all subfolders
-          sql += ' WHERE (a.folder = $1 OR a.folder LIKE $2)';
+          // Use ILIKE for case-insensitive matching
+          sql += ' WHERE (a.folder ILIKE $1 OR a.folder ILIKE $2)';
           params.push(normalizedFolder, `${normalizedFolder}/%`);
         }
       }
