@@ -14,13 +14,9 @@ const MCP_MULTI_SEARCH_LIMIT = Number.parseInt(process.env.MCP_MULTI_SEARCH_LIMI
 
 export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
   listArticles: async (args) => {
-    const { folder, maxArticles } = args as { folder: string; maxArticles?: number };
-    if (folder === undefined || folder === null || typeof folder !== 'string') {
-      throw new Error('folder parameter is required and must be a string (use "" for all folders)');
-    }
-    const folderParam = folder === '' ? undefined : folder;
+    const { folder, maxArticles } = args as { folder?: string; maxArticles?: number };
     const limit = maxArticles || 100;
-    const articles = await listArticles(folderParam, limit);
+    const articles = await listArticles(folder, limit);
     return {
       content: [{ type: 'text', text: JSON.stringify(articles, null, 2) }],
     };
@@ -38,8 +34,7 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
     if (!query || typeof query !== 'string' || query.trim() === '') {
       throw new Error('query parameter is required and must be a non-empty string');
     }
-    const folderParam = folder === '' ? undefined : folder;
-    const results = await searchArticles(query, folderParam);
+    const results = await searchArticles(query, folder);
     return {
       content: [{ type: 'text', text: JSON.stringify(results, null, 2) }],
     };
@@ -70,8 +65,7 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
     if (!query || typeof query !== 'string' || query.trim() === '') {
       throw new Error('query parameter is required and must be a non-empty string');
     }
-    const folderParam = folder === '' ? undefined : folder;
-    const results = await semanticSearch(query, k || 5, folderParam);
+    const results = await semanticSearch(query, k || 5, folder);
     return {
       content: [{ type: 'text', text: JSON.stringify(results, null, 2) }],
     };
@@ -89,7 +83,7 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
 
     const resultsPerQuery = k || 5;
     const allResults = await Promise.all(queries.map(query => semanticSearch(query, resultsPerQuery, folder)));
-    
+
     const seenChunks = new Map<string, SearchResult>();
     const uniqueResults: SearchResult[] = [];
 

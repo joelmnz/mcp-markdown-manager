@@ -124,15 +124,17 @@ export class DatabaseArticleService {
       `;
       const params: any[] = [];
 
-      if (folder !== undefined) {
+      // Only apply filter if folder is provided and not an empty string
+      // folder = "" means ALL folders
+      // folder = "/" means ROOT folder
+      if (folder !== undefined && folder !== null && folder !== '') {
         const normalizedFolder = this.normalizeFolder(folder);
-        await this.validateFolder(normalizedFolder);
         // Use LIKE pattern to include subfolders
         // e.g., 'projects' matches 'projects', 'projects/web-dev', 'projects/project-1', etc.
-        if (normalizedFolder === '') {
-          // Empty folder means root - show all articles
+        if (folder === '/') {
+          // Root folder only (stored as empty string in DB)
           query += ' WHERE folder = $1';
-          params.push(normalizedFolder);
+          params.push('');
         } else {
           // Include the folder itself and all subfolders
           query += ' WHERE (folder = $1 OR folder LIKE $2)';
@@ -170,14 +172,17 @@ export class DatabaseArticleService {
     `;
     const params: any[] = [`%${query}%`];
 
-    if (folder !== undefined) {
+    // Only apply filter if folder is provided and not an empty string
+    // folder = "" means ALL folders
+    // folder = "/" means ROOT folder
+    if (folder !== undefined && folder !== null && folder !== '') {
       const normalizedFolder = this.normalizeFolder(folder);
       // Use LIKE pattern to include subfolders
       // e.g., 'projects' matches 'projects', 'projects/web-dev', 'projects/project-1', etc.
-      if (normalizedFolder === '') {
-        // Empty folder means root - exact match only
+      if (folder === '/') {
+        // Root folder only (stored as empty string in DB)
         sql += ' AND folder = $2';
-        params.push(normalizedFolder);
+        params.push('');
       } else {
         // Include the folder itself and all subfolders
         sql += ' AND (folder = $2 OR folder LIKE $3)';

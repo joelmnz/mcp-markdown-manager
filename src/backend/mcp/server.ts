@@ -175,14 +175,14 @@ function createConfiguredMCPServer() {
           properties: {
             folder: {
               type: 'string',
-              description: 'Folder to list articles from. Use "" for all folders, "/" for root folder only.',
+              description: 'Optional folder path. Use "" (default) for all folders, "/" for root folder only.',
             },
             maxArticles: {
               type: 'number',
               description: 'Maximum number of articles to return (default: 100)',
             },
           },
-          required: ['folder'],
+          required: [],
         },
       },
       {
@@ -217,7 +217,10 @@ function createConfiguredMCPServer() {
               items: { type: 'string' },
               maxItems: MCP_MULTI_SEARCH_LIMIT,
             },
-            folder: { type: 'string', description: 'Optional folder path' },
+            folder: {
+              type: 'string',
+              description: 'Optional folder path. Use "" (default) for all folders, "/" for root folder only.',
+            },
           },
           required: ['titles'],
         },
@@ -241,7 +244,7 @@ function createConfiguredMCPServer() {
           properties: {
             title: { type: 'string', description: 'Title of the article' },
             content: { type: 'string', description: 'Markdown content of the article' },
-            folder: { type: 'string', description: 'Optional folder path' },
+            folder: { type: 'string', description: 'Optional folder path. Use "/" or "" for root folder.' },
           },
           required: ['title', 'content'],
         },
@@ -255,7 +258,7 @@ function createConfiguredMCPServer() {
             filename: { type: 'string', description: 'Filename of the article to update' },
             title: { type: 'string', description: 'New title of the article' },
             content: { type: 'string', description: 'New markdown content of the article' },
-            folder: { type: 'string', description: 'New folder path' },
+            folder: { type: 'string', description: 'New folder path. Use "/" or "" for root folder.' },
           },
           required: ['filename', 'title', 'content'],
         },
@@ -282,7 +285,10 @@ function createConfiguredMCPServer() {
           properties: {
             query: { type: 'string', description: 'Search query' },
             k: { type: 'number', description: 'Number of results (default: 5)' },
-            folder: { type: 'string', description: 'Optional folder path' },
+            folder: {
+              type: 'string',
+              description: 'Optional folder path. Use "" (default) for all folders, "/" for root folder only.',
+            },
           },
           required: ['query'],
         },
@@ -301,7 +307,10 @@ function createConfiguredMCPServer() {
               maxItems: MCP_MULTI_SEARCH_LIMIT,
             },
             k: { type: 'number', description: 'Number of results per query' },
-            folder: { type: 'string', description: 'Optional folder path' },
+            folder: {
+              type: 'string',
+              description: 'Optional folder path. Use "" (default) for all folders, "/" for root folder only.',
+            },
           },
           required: ['queries'],
         },
