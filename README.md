@@ -20,6 +20,18 @@ A complete full-stack TypeScript monolithic markdown article management system d
 - 📊 **Request logging** for monitoring and debugging
 - 📦 **Import utility** for migrating existing markdown files
 
+### 🛡️ Security Features (New)
+
+- ✅ **Input validation** with comprehensive security checks
+- ✅ **Rate limiting** per session and per tool (prevents abuse)
+- ✅ **Security audit logging** with event tracking
+- ✅ **Prompt injection detection** for AI safety
+- ✅ **Session security** with IP binding and fingerprinting
+- ✅ **Authentication logging** for monitoring
+- ✅ **Secure deployment guides** based on Docker's MCP security research
+
+See [Security Documentation](docs/SECURITY.md) for details.
+
 ## Architecture
 
 ### Monolithic Structure
@@ -165,6 +177,53 @@ The PWA implementation includes:
 - `sw.js` - Service worker for offline caching and asset management
 - PWA meta tags in HTML for proper installation behavior
 - Automatic service worker registration on app load
+
+## Security
+
+### Overview
+
+This application implements comprehensive security measures based on Docker's MCP security research and industry best practices. See [Security Documentation](docs/SECURITY.md) for complete details.
+
+### Key Security Features
+
+- ✅ **Input Validation**: Comprehensive validation prevents injection attacks (XSS, SQL, path traversal, prompt injection)
+- ✅ **Rate Limiting**: Per-session and per-tool limits prevent abuse and resource exhaustion
+- ✅ **Security Audit Logging**: Track authentication, session events, and suspicious activity
+- ✅ **Session Security**: IP binding, token verification, and automatic expiration
+- ✅ **Authentication**: Bearer token authentication for all interfaces
+- ✅ **Docker Security**: Non-root user, capability dropping, resource limits
+
+### Quick Security Setup
+
+1. **Generate Strong Credentials**
+   ```bash
+   export AUTH_TOKEN=$(openssl rand -base64 32)
+   export DB_PASSWORD=$(openssl rand -base64 32)
+   ```
+
+2. **Enable Security Features** (in `.env`)
+   ```bash
+   # Recommended for production
+   MCP_BIND_SESSION_TO_IP=true
+   SECURITY_AUDIT_ENABLED=true
+   RATE_LIMIT_TOOL_CALLS_PER_WINDOW=100
+   ```
+
+3. **Review Security Documentation**
+   - [Security Assessment](docs/SECURITY.md) - Comprehensive security analysis
+   - [Secure Deployment Guide](docs/SECURE_DEPLOYMENT.md) - Production hardening
+   - [Security Implementation](docs/SECURITY_IMPLEMENTATION.md) - Technical details
+
+### Security Monitoring
+
+The application logs security-relevant events including:
+- Authentication failures
+- Rate limit violations
+- Suspicious input patterns
+- Session security events
+- Tool call auditing
+
+See [Security Documentation](docs/SECURITY.md#monitoring-and-alerting) for monitoring setup.
 
 ## Docker Deployment
 
