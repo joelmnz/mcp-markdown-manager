@@ -4,6 +4,12 @@
 - **Build**: `bun run build` (builds frontend with hashed assets)
 - **Typecheck**: `bun run typecheck` (run this after changes)
 - **Dev**: `bun run dev:backend` (backend) and `bun run dev:frontend` (frontend, separate terminals)
+- **Docker**:
+  - `bun run dc:ui` - Quick start (down, build, up in one command)
+  - `docker compose up -d` - Start containers
+  - `docker compose down` - Stop containers
+  - `docker compose down && docker compose build --no-cache article-manager && docker compose up -d` - Full rebuild and restart
+  - `docker logs mcp-markdown-manager` - View backend logs
 - **Tests**: No formal test runner. Run individual scripts in `scripts/`:
   - `bun scripts/test-parsing.ts` - Markdown parsing
   - `bun scripts/test-import.ts` - Import functionality

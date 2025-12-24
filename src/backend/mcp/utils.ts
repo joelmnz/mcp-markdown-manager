@@ -8,18 +8,54 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 /**
  * Handle HTTP requests using the provided transport.
  * This is a helper to encapsulate the bridging logic.
+ * 
+ * Per MCP Streamable HTTP spec:
+ * - JSON-RPC requests must return a response (either application/json or SSE stream)
+ * - JSON-RPC notifications/responses must return 202 Accepted
+ * 
+ * @param isInitialize - If true, this is the initialization request
  */
 export async function handleTransportRequest(
   transport: StreamableHTTPServerTransport,
   bunReq: Request,
   body?: any,
-  sessionId?: string
+  sessionId?: string,
+  isInitialize: boolean = false
 ): Promise<Response> {
   const nodeReq = await convertBunRequestToNode(bunReq, body);
   if (sessionId) {
     nodeReq.headers['mcp-session-id'] = sessionId;
   }
   const nodeRes = createNodeResponse();
+  
+  // Check if this is a JSON-RPC request (has 'method' and 'id') vs notification/response
+  const isRequest = body && typeof body === 'object' && 'method' in body && 'id' in body;
+  const isNotificationOrResponse = !isRequest;
+  
+  // For initialize or any JSON-RPC request, wait for completion and return full response
+  if (isInitialize || isRequest) {
+    await transport.handleRequest(nodeReq, nodeRes, body);
+    return convertNodeResponseToBun(nodeRes, sessionId);
+  }
+  
+  // For notifications/responses, trigger handling without waiting and return 202 Accepted
+  if (isNotificationOrResponse) {
+    transport.handleRequest(nodeReq, nodeRes, body).catch(error => {
+      console.error('Error handling MCP notification/response:', error);
+    });
+    
+    // Return 202 Accepted immediately per MCP spec
+    const headers = new Headers({ 'Content-Type': 'application/json' });
+    if (sessionId) {
+      headers.set('mcp-session-id', sessionId);
+    }
+    return new Response('', {
+      status: 202,
+      headers,
+    });
+  }
+  
+  // Fallback: wait for completion
   await transport.handleRequest(nodeReq, nodeRes, body);
   return convertNodeResponseToBun(nodeRes, sessionId);
 }
@@ -233,10 +269,14 @@ export async function convertNodeResponseToBun(nodeRes: any, sessionId?: string)
 
   // Combine all chunks into a single Uint8Array if they are not all strings
   let body: BodyInit;
+  let bodyLength = 0;
+  
   if (chunks.length === 0) {
     body = '';
+    bodyLength = 0;
   } else if (chunks.every((c: any) => typeof c === 'string')) {
     body = chunks.join('');
+    bodyLength = new TextEncoder().encode(body as string).length;
   } else {
     // Mixed or binary data - convert to Uint8Array
     const totalLength = chunks.reduce((acc: number, c: any) => acc + (c.length || 0), 0);
@@ -248,6 +288,7 @@ export async function convertNodeResponseToBun(nodeRes: any, sessionId?: string)
       offset += array.length;
     }
     body = combined;
+    bodyLength = totalLength;
   }
 
   // Convert headers to Headers object
@@ -263,6 +304,16 @@ export async function convertNodeResponseToBun(nodeRes: any, sessionId?: string)
   // Add session ID header if provided
   if (sessionId) {
     responseHeaders.set('mcp-session-id', sessionId);
+  }
+  
+  // Ensure Content-Length is set for clean connection closure
+  if (!responseHeaders.has('content-length') && !responseHeaders.has('transfer-encoding')) {
+    responseHeaders.set('content-length', String(bodyLength));
+  }
+  
+  // Ensure Connection header is properly set
+  if (!responseHeaders.has('connection')) {
+    responseHeaders.set('connection', 'close');
   }
 
   return new Response(body, {
