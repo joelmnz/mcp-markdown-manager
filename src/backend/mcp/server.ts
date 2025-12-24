@@ -486,14 +486,29 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
       const data = typeof chunk === 'string' ? new TextEncoder().encode(chunk) : chunk;
       controller.enqueue(data);
     },
-    onEnd: () => {
-      // If headers were never written but end is called, resolve with default headers
+    onEnd: (_data, headersObj) => {
+      // If headers were never written but end is called, resolve with accumulated or default headers
       if (!headersResolved) {
-        const defaultHeaders = new Headers();
-        defaultHeaders.set('Content-Type', 'text/event-stream');
-        defaultHeaders.set('Cache-Control', 'no-cache');
-        defaultHeaders.set('Connection', 'keep-alive');
-        resolveHeadersSafely(defaultHeaders);
+        const responseHeaders = new Headers();
+        if (headersObj) {
+          Object.entries(headersObj).forEach(([key, value]) => {
+            if (Array.isArray(value)) value.forEach(v => responseHeaders.append(key, v));
+            else if (value) responseHeaders.set(key, value as string);
+          });
+        }
+
+        // Apply defaults if they weren't set via setHeader
+        if (!responseHeaders.has('Content-Type')) {
+          responseHeaders.set('Content-Type', 'text/event-stream');
+        }
+        if (!responseHeaders.has('Cache-Control')) {
+          responseHeaders.set('Cache-Control', 'no-cache');
+        }
+        if (!responseHeaders.has('Connection')) {
+          responseHeaders.set('Connection', 'keep-alive');
+        }
+
+        resolveHeadersSafely(responseHeaders);
       }
       try { controller.close(); } catch (e) { }
     },

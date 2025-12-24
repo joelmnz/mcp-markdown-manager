@@ -28,8 +28,8 @@ export async function convertBunRequestToNode(bunReq: Request, parsedBody?: any)
   const socketMock = {
     remoteAddress: '127.0.0.1',
     encrypted: false,
-    on: () => {},
-    destroy: () => {},
+    on: () => { },
+    destroy: () => { },
   };
 
   const nodeReq: any = {
@@ -37,7 +37,7 @@ export async function convertBunRequestToNode(bunReq: Request, parsedBody?: any)
     url: url.pathname + url.search,
     headers: {} as Record<string, string>,
     body: parsedBody,
-    
+
     // EventEmitter implementation
     on(event: string, listener: Function) {
       if (!listeners[event]) listeners[event] = [];
@@ -67,7 +67,7 @@ export async function convertBunRequestToNode(bunReq: Request, parsedBody?: any)
       }
       return false;
     },
-    
+
     // Mock socket
     socket: socketMock,
     connection: socketMock, // Alias for socket
@@ -85,7 +85,7 @@ export async function convertBunRequestToNode(bunReq: Request, parsedBody?: any)
 
 export interface NodeResponseCallbacks {
   onWrite?: (chunk: any) => void;
-  onEnd?: (data?: any) => void;
+  onEnd?: (data?: any, headers?: Record<string, string | string[]>) => void;
   onHeader?: (name: string, value: string | string[]) => void;
   onWriteHead?: (code: number, headers?: Record<string, string | string[]>) => void;
   onFlushHeaders?: (headers?: Record<string, string | string[]>) => void;
@@ -125,7 +125,7 @@ export function createNodeResponse(callbacks?: NodeResponseCallbacks): any {
     writeHead(code: number, message?: string | Record<string, string>, headersObj?: Record<string, string>) {
       statusCode = code;
       let finalHeaders: Record<string, string | string[]> = {};
-      
+
       if (typeof message === 'string') {
         statusMessage = message;
         if (headersObj) {
@@ -142,11 +142,11 @@ export function createNodeResponse(callbacks?: NodeResponseCallbacks): any {
       }
       this.headersSent = true;
       this.statusCode = code;
-      
+
       callbacks?.onWriteHead?.(code, finalHeaders);
       return this;
     },
-    
+
     flushHeaders() {
       this.headersSent = true;
       callbacks?.onFlushHeaders?.(headers);
@@ -165,7 +165,7 @@ export function createNodeResponse(callbacks?: NodeResponseCallbacks): any {
       }
       finished = true;
       this.finished = true;
-      callbacks?.onEnd?.(data);
+      callbacks?.onEnd?.(data, headers);
       // Trigger finish event
       this.emit('finish');
       // Resolve the finish promise
