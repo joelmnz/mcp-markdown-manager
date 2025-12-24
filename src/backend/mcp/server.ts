@@ -5,11 +5,11 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { randomUUID } from 'crypto';
-import { 
-  convertBunRequestToNode, 
-  createNodeResponse, 
+import {
+  convertBunRequestToNode,
+  createNodeResponse,
   convertNodeResponseToBun,
-  handleTransportRequest 
+  handleTransportRequest
 } from './utils.ts';
 import { toolHandlers } from './handlers.ts';
 import { loggingService, LogLevel, LogCategory } from '../services/logging.ts';
@@ -320,7 +320,7 @@ function createConfiguredMCPServer() {
       if (!handler) throw new Error(`Unknown tool: ${toolName}`);
 
       const result = await handler(request.params.arguments);
-      
+
       loggingService.logPerformanceMetric(`mcp_tool_${toolName}`, Date.now() - startTime, {
         metadata: { success: true }
       });
@@ -399,7 +399,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
     }
 
     if (!sessionId) {
-      return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id || null, error: { code: -32000, message: 'No valid session ID provided' } }), { 
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id || null, error: { code: -32000, message: 'No valid session ID provided' } }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -407,14 +407,14 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
 
     const entry = sessions[sessionId];
     if (!entry) {
-      return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id || null, error: { code: -32000, message: 'Invalid session ID' } }), { 
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id || null, error: { code: -32000, message: 'Invalid session ID' } }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
       });
     }
 
     if (entry.token !== token || (MCP_BIND_SESSION_TO_IP && entry.ip !== getClientIp(request))) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), { 
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' }
       });
@@ -425,7 +425,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
 
   } catch (error) {
     loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, 'MCP POST error', { error: error instanceof Error ? error : new Error(String(error)) });
-    return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id, error: { code: -32000, message: error instanceof Error ? error.message : 'Internal error' } }), { 
+    return new Response(JSON.stringify({ jsonrpc: '2.0', id: body?.id, error: { code: -32000, message: error instanceof Error ? error.message : 'Internal error' } }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' }
     });
@@ -461,6 +461,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
 
   let headersResolved = false;
 
+  let timeoutId: Timer;
   const resolveHeadersSafely = (headers: Headers) => {
     if (headersResolved) return;
     headersResolved = true;
@@ -476,7 +477,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
   };
 
   // Add timeout to prevent indefinite hanging if headers are never written
-  const timeoutId = setTimeout(() => {
+  timeoutId = setTimeout(() => {
     rejectHeadersSafely(new Error('Timeout waiting for response headers'));
   }, MCP_SSE_HEADERS_TIMEOUT_MS);
 
@@ -494,7 +495,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
         defaultHeaders.set('Connection', 'keep-alive');
         resolveHeadersSafely(defaultHeaders);
       }
-      try { controller.close(); } catch (e) {}
+      try { controller.close(); } catch (e) { }
     },
     onWriteHead: (_code, headersObj) => {
       const responseHeaders = new Headers();
@@ -521,7 +522,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
   entry.transport.handleRequest(nodeReq, nodeRes).catch(error => {
     loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, `SSE Stream error for session ${sessionId}`, { error });
     rejectHeadersSafely(error);
-    try { controller.error(error); } catch (e) {}
+    try { controller.error(error); } catch (e) { }
   });
 
   try {
