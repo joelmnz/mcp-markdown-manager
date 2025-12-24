@@ -72,7 +72,7 @@ function cleanupExpiredSessions(nowMs: number) {
       }
       delete sessions[sessionId];
       loggingService.log(LogLevel.INFO, LogCategory.TASK_LIFECYCLE, `MCP session cleaned up: ${sessionId}`, {
-        metadata: { reason: idleExpired ? 'idle' : 'ttl' }
+        metadata: { reason: idleExpired ? 'idle' : 'ttl', sessionId }
       });
     }
   }
@@ -126,7 +126,7 @@ function getAuthorizedSession(request: Request, sessionId: string | null): { ent
 
   if (entry.token !== token) {
     loggingService.log(LogLevel.WARN, LogCategory.ERROR_HANDLING, `MCP Token mismatch for session ${sessionId}`, {
-      metadata: { ip: getClientIp(request) }
+      metadata: { ip: getClientIp(request), sessionId }
     });
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
@@ -138,7 +138,7 @@ function getAuthorizedSession(request: Request, sessionId: string | null): { ent
     const ip = getClientIp(request);
     if (entry.ip !== ip) {
       loggingService.log(LogLevel.WARN, LogCategory.ERROR_HANDLING, `MCP IP mismatch for session ${sessionId}`, {
-        metadata: { originalIp: entry.ip, currentIp: ip }
+        metadata: { originalIp: entry.ip, currentIp: ip, sessionId }
       });
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
@@ -392,7 +392,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
       await server.connect(transport);
 
       loggingService.log(LogLevel.INFO, LogCategory.TASK_LIFECYCLE, `New MCP session initialized: ${newSessionId}`, {
-        metadata: { ip, userAgent }
+        metadata: { ip, userAgent, sessionId: newSessionId }
       });
 
       return handleTransportRequest(transport, request, body, newSessionId);
@@ -535,7 +535,10 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
   });
 
   entry.transport.handleRequest(nodeReq, nodeRes).catch(error => {
-    loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, `SSE Stream error for session ${sessionId}`, { error });
+    loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, `SSE Stream error for session ${sessionId}`, {
+      error: error instanceof Error ? error : new Error(String(error)),
+      metadata: { sessionId }
+    });
     rejectHeadersSafely(error);
     try { controller.error(error); } catch (e) { }
   });
@@ -549,7 +552,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
       LogLevel.ERROR,
       LogCategory.ERROR_HANDLING,
       `Failed to establish SSE stream for session ${sessionId}`,
-      { error: errorObj }
+      { error: errorObj, metadata: { sessionId } }
     );
     return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
       status: 500,
@@ -573,6 +576,8 @@ export async function handleMCPDeleteRequest(request: Request): Promise<Response
   const nodeRes = createNodeResponse();
   await entry.transport.handleRequest(nodeReq, nodeRes);
 
-  loggingService.log(LogLevel.INFO, LogCategory.TASK_LIFECYCLE, `MCP session terminated: ${sessionId}`);
+  loggingService.log(LogLevel.INFO, LogCategory.TASK_LIFECYCLE, `MCP session terminated: ${sessionId}`, {
+    metadata: { sessionId }
+  });
   return convertNodeResponseToBun(nodeRes, sessionId ?? undefined);
 }
