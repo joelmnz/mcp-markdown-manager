@@ -16,6 +16,9 @@ import {
 } from '../services/articles';
 import { semanticSearch, SearchResult } from '../services/vectorIndex';
 import { randomUUID } from 'crypto';
+import { inputValidation } from '../services/inputValidation.js';
+import { securityAuditService } from '../services/securityAudit.js';
+import { rateLimitService } from '../services/rateLimit.js';
 
 type McpSessionEntry = {
   transport: StreamableHTTPServerTransport;
@@ -80,6 +83,10 @@ function cleanupExpiredSessions(nowMs: number) {
       } catch {
         // ignore
       }
+      // Log session expiration
+      securityAuditService.logSessionExpired(sessionId, idleExpired ? 'idle' : 'ttl');
+      // Clean up rate limiting data
+      rateLimitService.clearSession(sessionId);
       delete sessions[sessionId];
     }
   }
@@ -88,6 +95,7 @@ function cleanupExpiredSessions(nowMs: number) {
 function enforceSessionLimits(ip: string, token: string): Response | null {
   const allSessions = Object.values(sessions);
   if (allSessions.length >= MCP_MAX_SESSIONS_TOTAL) {
+    securityAuditService.logSessionLimitExceeded(ip, 'total');
     return new Response(JSON.stringify({ error: 'Too many active sessions' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' },
@@ -96,6 +104,7 @@ function enforceSessionLimits(ip: string, token: string): Response | null {
 
   const ipCount = allSessions.filter((s) => s.ip === ip).length;
   if (ipCount >= MCP_MAX_SESSIONS_PER_IP) {
+    securityAuditService.logSessionLimitExceeded(ip, 'per-ip');
     return new Response(JSON.stringify({ error: 'Too many active sessions for IP' }), {
       status: 429,
       headers: { 'Content-Type': 'application/json' },
@@ -104,6 +113,7 @@ function enforceSessionLimits(ip: string, token: string): Response | null {
 
   const tokenCount = allSessions.filter((s) => s.token === token).length;
   if (tokenCount >= MCP_MAX_SESSIONS_PER_TOKEN) {
+    securityAuditService.logSessionLimitExceeded(ip, 'per-token');
     return new Response(JSON.stringify({ error: 'Too many active sessions for token' }), {
       status: 429,
       headers: { 'Content-Type': 'application/json' },
@@ -115,7 +125,10 @@ function enforceSessionLimits(ip: string, token: string): Response | null {
 
 function getAuthorizedSession(request: Request, sessionId: string | null): { entry: McpSessionEntry; sessionId: string } | Response {
   const token = getBearerToken(request);
+  const ip = getClientIp(request);
+  
   if (!isAuthorizedToken(token)) {
+    securityAuditService.logAuthFailure(ip, request.headers.get('user-agent'), 'Invalid or missing token');
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
@@ -132,6 +145,7 @@ function getAuthorizedSession(request: Request, sessionId: string | null): { ent
   }
 
   if (entry.token !== token) {
+    securityAuditService.logSessionTokenMismatch(sessionId, ip);
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
@@ -139,8 +153,8 @@ function getAuthorizedSession(request: Request, sessionId: string | null): { ent
   }
 
   if (MCP_BIND_SESSION_TO_IP) {
-    const ip = getClientIp(request);
     if (entry.ip !== ip) {
+      securityAuditService.logSessionIpMismatch(sessionId, entry.ip, ip);
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
@@ -149,6 +163,21 @@ function getAuthorizedSession(request: Request, sessionId: string | null): { ent
   }
 
   return { entry, sessionId };
+}
+
+// Helper to get session ID from request context (for HTTP transport)
+// For stdio transport, we use a placeholder since there's no HTTP session
+let currentSessionId: string | null = null;
+let currentClientIp: string | null = null;
+
+function setRequestContext(sessionId: string | null, ip: string | null) {
+  currentSessionId = sessionId;
+  currentClientIp = ip;
+}
+
+function clearRequestContext() {
+  currentSessionId = null;
+  currentClientIp = null;
 }
 
 // Create a configured MCP server instance (shared logic for stdio and HTTP)
@@ -543,15 +572,41 @@ function createConfiguredMCPServer() {
         }
 
         case 'createArticle': {
+          // Rate limiting check
+          if (currentSessionId) {
+            const rateLimitCheck = rateLimitService.checkRateLimit(currentSessionId, 'createArticle', currentClientIp || undefined);
+            if (!rateLimitCheck.allowed) {
+              throw new Error(`Rate limit exceeded: ${rateLimitCheck.reason}. Retry after ${rateLimitCheck.retryAfter} seconds.`);
+            }
+          }
+          
           const { title, content, folder } = request.params.arguments as {
             title: string;
             content: string;
             folder?: string;
           };
-          // Use background embedding for immediate response without waiting for embedding completion
-          const article = await createArticle(title, content, folder, undefined, {
-            embeddingPriority: 'normal'
-          });
+          
+          // Input validation
+          const validation = inputValidation.validateCreateArticle({ title, content, folder });
+          if (!validation.isValid) {
+            securityAuditService.logValidationFailure(validation.errors, { title, content, folder }, currentClientIp || undefined);
+            throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
+          }
+          
+          // Log tool call
+          if (currentSessionId) {
+            securityAuditService.logToolCall('createArticle', currentSessionId, currentClientIp || 'unknown');
+          }
+          
+          // Use validated and sanitized values
+          const article = await createArticle(
+            validation.sanitized.title,
+            validation.sanitized.content,
+            validation.sanitized.folder,
+            undefined,
+            { embeddingPriority: 'normal' }
+          );
+          
           return {
             content: [
               {
@@ -563,16 +618,43 @@ function createConfiguredMCPServer() {
         }
 
         case 'updateArticle': {
+          // Rate limiting check
+          if (currentSessionId) {
+            const rateLimitCheck = rateLimitService.checkRateLimit(currentSessionId, 'updateArticle', currentClientIp || undefined);
+            if (!rateLimitCheck.allowed) {
+              throw new Error(`Rate limit exceeded: ${rateLimitCheck.reason}. Retry after ${rateLimitCheck.retryAfter} seconds.`);
+            }
+          }
+          
           const { filename, title, content, folder } = request.params.arguments as {
             filename: string;
             title: string;
             content: string;
             folder?: string;
           };
-          // Use background embedding for immediate response without waiting for embedding completion
-          const article = await updateArticle(filename, title, content, folder, undefined, {
-            embeddingPriority: 'normal'
-          });
+          
+          // Input validation
+          const validation = inputValidation.validateUpdateArticle({ filename, title, content, folder });
+          if (!validation.isValid) {
+            securityAuditService.logValidationFailure(validation.errors, { filename, title, content, folder }, currentClientIp || undefined);
+            throw new Error(`Validation failed: ${validation.errors.join(', ')}`);
+          }
+          
+          // Log tool call
+          if (currentSessionId) {
+            securityAuditService.logToolCall('updateArticle', currentSessionId, currentClientIp || 'unknown');
+          }
+          
+          // Use validated and sanitized values
+          const article = await updateArticle(
+            validation.sanitized.filename,
+            validation.sanitized.title,
+            validation.sanitized.content,
+            validation.sanitized.folder,
+            undefined,
+            { embeddingPriority: 'normal' }
+          );
+          
           return {
             content: [
               {
@@ -584,13 +666,34 @@ function createConfiguredMCPServer() {
         }
 
         case 'deleteArticle': {
+          // Rate limiting check
+          if (currentSessionId) {
+            const rateLimitCheck = rateLimitService.checkRateLimit(currentSessionId, 'deleteArticle', currentClientIp || undefined);
+            if (!rateLimitCheck.allowed) {
+              throw new Error(`Rate limit exceeded: ${rateLimitCheck.reason}. Retry after ${rateLimitCheck.retryAfter} seconds.`);
+            }
+          }
+          
           const { filename } = request.params.arguments as { filename: string };
-          await deleteArticle(filename);
+          
+          // Validate filename
+          const filenameValidation = inputValidation.validateFilename(filename);
+          if (!filenameValidation.isValid) {
+            securityAuditService.logValidationFailure(filenameValidation.errors, { filename }, currentClientIp || undefined);
+            throw new Error(`Validation failed: ${filenameValidation.errors.join(', ')}`);
+          }
+          
+          // Log tool call
+          if (currentSessionId) {
+            securityAuditService.logToolCall('deleteArticle', currentSessionId, currentClientIp || 'unknown');
+          }
+          
+          await deleteArticle(filenameValidation.sanitized);
           return {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify({ success: true, filename }, null, 2),
+                text: JSON.stringify({ success: true, filename: filenameValidation.sanitized }, null, 2),
               },
             ],
           };
@@ -632,8 +735,12 @@ function isInitializeRequest(body: any): boolean {
 export async function handleMCPPostRequest(request: Request): Promise<Response> {
   // Check authentication
   const token = getBearerToken(request);
+  const ip = getClientIp(request);
+  const userAgent = request.headers.get('user-agent');
+  
   if (!isAuthorizedToken(token)) {
     console.log('MCP auth failed');
+    securityAuditService.logAuthFailure(ip, userAgent, 'Invalid token');
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' }
@@ -653,9 +760,6 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
     // Handle initialize request - this is the first request from the client
     if (isInitializeRequest(body)) {
       console.log('Handling initialize request');
-
-      const ip = getClientIp(request);
-      const userAgent = request.headers.get('user-agent');
 
       const limitResponse = enforceSessionLimits(ip, token);
       if (limitResponse) {
@@ -680,9 +784,14 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
         userAgent,
       };
 
+      // Log session creation
+      securityAuditService.logSessionCreated(newSessionId, ip, userAgent);
+
       // Set up transport close handler
       transport.onclose = () => {
         console.log(`Transport closed for session ${newSessionId}`);
+        securityAuditService.logSessionTerminated(newSessionId);
+        rateLimitService.clearSession(newSessionId);
         delete sessions[newSessionId];
       };
 
@@ -690,12 +799,18 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
       const server = createConfiguredMCPServer();
       await server.connect(transport);
 
+      // Set request context for tool calls
+      setRequestContext(newSessionId, ip);
+
       // Convert Bun Request to Node.js-compatible request object
       const nodeReq = await convertBunRequestToNode(request, body);
       const nodeRes = createNodeResponse();
 
       // Handle the request with the transport
       await transport.handleRequest(nodeReq, nodeRes, body);
+
+      // Clear request context
+      clearRequestContext();
 
       // Convert Node.js response back to Bun Response
       return convertNodeResponseToBun(nodeRes, newSessionId);
@@ -756,11 +871,17 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
 
     entry.lastSeenAtMs = nowMs;
 
+    // Set request context for tool calls
+    setRequestContext(sessionId, entry.ip);
+
     // Handle the request with the existing transport
     const nodeReq = await convertBunRequestToNode(request, body);
     const nodeRes = createNodeResponse();
 
     await entry.transport.handleRequest(nodeReq, nodeRes, body);
+
+    // Clear request context
+    clearRequestContext();
 
     return convertNodeResponseToBun(nodeRes);
 

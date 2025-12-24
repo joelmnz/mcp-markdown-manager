@@ -192,6 +192,10 @@ const envValidation = basePathService.validateEnvironmentConfiguration();
 async function gracefulShutdown(signal: string) {
   console.log(`\n🛑 Received ${signal}, shutting down gracefully...`);
   
+  // Log shutdown event
+  const { securityAuditService } = await import('./services/securityAudit.js');
+  securityAuditService.logServerShutdown(signal);
+  
   try {
     // Stop background worker first
     if (backgroundWorkerService.isRunning()) {
@@ -199,6 +203,10 @@ async function gracefulShutdown(signal: string) {
       await backgroundWorkerService.stop();
       console.log('✅ Background embedding worker stopped');
     }
+    
+    // Stop rate limiting service
+    const { rateLimitService } = await import('./services/rateLimit.js');
+    rateLimitService.stop();
     
     // Close database connections
     console.log('🔄 Closing database connections...');
@@ -364,6 +372,10 @@ console.log(`📡 Server: http://localhost:${PORT}`);
 console.log(`🗄️  Database: PostgreSQL`);
 console.log(`🔒 Authentication: ${process.env.AUTH_TOKEN ? 'Enabled' : 'MISSING - Set AUTH_TOKEN!'}`);
 console.log(`🤖 MCP Server: ${MCP_SERVER_ENABLED ? 'Enabled at /mcp' : 'Disabled'}`);
+
+// Log server start event
+const { securityAuditService } = await import('./services/securityAudit.js');
+securityAuditService.logServerStart();
 
 // Embedding queue configuration logging
 const queueConfig = embeddingQueueConfigService.getConfig();
