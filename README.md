@@ -89,6 +89,15 @@ Using docker is easiest
 bun run dc:ui
 ```
 
+If you want to run locally without docker
+
+```bash
+# Start backend server
+bun run dev:backend
+# In another terminal, start frontend dev server
+bun run dev:frontend
+```
+
 #### 5. Access the application
 
 - Web UI: http://localhost:5000

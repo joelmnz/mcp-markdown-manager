@@ -252,7 +252,7 @@ function createConfiguredMCPServer() {
           properties: {
             title: { type: 'string', description: 'Title of the article' },
             content: { type: 'string', description: 'Markdown content of the article' },
-            folder: { type: 'string', description: 'Optional folder path. Use "/" or "" for root folder.' },
+            folder: { type: 'string', description: 'Optional folder path.' },
           },
           required: ['title', 'content'],
         },
@@ -266,7 +266,7 @@ function createConfiguredMCPServer() {
             filename: { type: 'string', description: 'Filename of the article to update' },
             title: { type: 'string', description: 'New title of the article' },
             content: { type: 'string', description: 'New markdown content of the article' },
-            folder: { type: 'string', description: 'New folder path. Use "/" or "" for root folder.' },
+            folder: { type: 'string', description: 'New folder path.' },
           },
           required: ['filename', 'title', 'content'],
         },
