@@ -6,14 +6,22 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 // we need to manually bridge these interfaces.
 
 /**
- * Handle HTTP requests using the provided transport.
- * This is a helper to encapsulate the bridging logic.
- * 
- * Per MCP Streamable HTTP spec:
- * - JSON-RPC requests must return a response (either application/json or SSE stream)
- * - JSON-RPC notifications/responses must return 202 Accepted
- * 
- * @param isInitialize - If true, this is the initialization request
+ * Handle MCP HTTP requests using the provided transport, bridging Bun Request/Response
+ * to the Node.js-style interfaces expected by the MCP SDK.
+ *
+ * This helper implements the MCP Streamable HTTP semantics for distinguishing between:
+ * - JSON-RPC requests (which include a `method` and `id` and must wait for a full response,
+ *   either as `application/json` or an SSE stream), and
+ * - JSON-RPC notifications/responses (which must return `202 Accepted` immediately while
+ *   the request is processed asynchronously).
+ *
+ * The `isInitialize` flag is used for the special MCP initialization request, which must
+ * always be treated as a full JSON-RPC request: when `isInitialize` is true, this function
+ * waits for the transport to complete handling and returns the full response instead of
+ * returning `202 Accepted` immediately.
+ *
+ * @param isInitialize - If true, treat this as the MCP initialization request and wait for
+ *   the full JSON-RPC response instead of responding with 202 immediately.
  */
 export async function handleTransportRequest(
   transport: StreamableHTTPServerTransport,
