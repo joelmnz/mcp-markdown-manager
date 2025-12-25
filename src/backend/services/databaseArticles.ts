@@ -124,14 +124,12 @@ export class DatabaseArticleService {
       `;
       const params: any[] = [];
 
-      // Only apply filter if folder is provided and not an empty string
-      // folder = "" means ALL folders
-      // folder = "/" means ROOT folder
-      if (folder !== undefined && folder !== null && folder !== '') {
+      // Only apply filter if folder is provided (undefined/null means ALL folders)
+      // folder = "" or "/" means ROOT folder
+      if (folder !== undefined && folder !== null) {
         const normalizedFolder = this.normalizeFolder(folder);
-        // Use LIKE pattern to include subfolders
-        // e.g., 'projects' matches 'projects', 'projects/web-dev', 'projects/project-1', etc.
-        if (folder === '/') {
+        
+        if (normalizedFolder === '') {
           // Root folder only (stored as empty string in DB)
           query += ' WHERE folder = $1';
           params.push('');
@@ -173,14 +171,12 @@ export class DatabaseArticleService {
     `;
     const params: any[] = [`%${query}%`];
 
-    // Only apply filter if folder is provided and not an empty string
-    // folder = "" means ALL folders
-    // folder = "/" means ROOT folder
-    if (folder !== undefined && folder !== null && folder !== '') {
+    // Only apply filter if folder is provided (undefined/null means ALL folders)
+    // folder = "" or "/" means ROOT folder
+    if (folder !== undefined && folder !== null) {
       const normalizedFolder = this.normalizeFolder(folder);
-      // Use LIKE pattern to include subfolders
-      // e.g., 'projects' matches 'projects', 'projects/web-dev', 'projects/project-1', etc.
-      if (folder === '/') {
+      
+      if (normalizedFolder === '') {
         // Root folder only (stored as empty string in DB)
         sql += ' AND folder = $2';
         params.push('');
@@ -533,9 +529,11 @@ export class DatabaseArticleService {
       // Validate new folder name format
       await this.validateFolder(normalizedNewFolder);
 
-      // Check if old folder exists
+      // Check if old folder exists (case-insensitive check)
       const folders = await this.getFolderHierarchy();
-      if (!folders.includes(normalizedOldFolder)) {
+      const folderExists = folders.some(f => f.toLowerCase() === normalizedOldFolder.toLowerCase());
+      
+      if (!folderExists) {
         throw new DatabaseServiceError(
           DatabaseErrorType.NOT_FOUND,
           `Folder '${oldFolderName}' not found`,
@@ -543,11 +541,11 @@ export class DatabaseArticleService {
         );
       }
 
-      // Update all articles with the old folder name
+      // Update all articles with the old folder name (case-insensitive)
       const result = await database.query(
         `UPDATE articles 
          SET folder = $1, updated_at = $2
-         WHERE folder = $3`,
+         WHERE folder ILIKE $3`,
         [normalizedNewFolder, new Date(), normalizedOldFolder]
       );
 

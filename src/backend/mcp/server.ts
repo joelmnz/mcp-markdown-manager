@@ -183,7 +183,7 @@ function createConfiguredMCPServer() {
           properties: {
             folder: {
               type: 'string',
-              description: 'Optional folder path. Use "" (default) for all folders, "/" for root folder only.',
+              description: 'Optional folder path. Omit for all folders. Use "" or "/" for root folder only.',
             },
             maxArticles: {
               type: 'number',
@@ -207,7 +207,7 @@ function createConfiguredMCPServer() {
             query: { type: 'string', description: 'Search query to match against article titles' },
             folder: {
               type: 'string',
-              description: 'Optional folder path. Use "" (default) for all folders, "/" for root folder only.',
+              description: 'Optional folder path. Omit for all folders. Use "" or "/" for root folder only.',
             },
           },
           required: ['query'],
@@ -227,7 +227,7 @@ function createConfiguredMCPServer() {
             },
             folder: {
               type: 'string',
-              description: 'Optional folder path. Use "" (default) for all folders, "/" for root folder only.',
+              description: 'Optional folder path. Omit for all folders. Use "" or "/" for root folder only.',
             },
           },
           required: ['titles'],
@@ -295,7 +295,7 @@ function createConfiguredMCPServer() {
             k: { type: 'number', description: 'Number of results (default: 5)' },
             folder: {
               type: 'string',
-              description: 'Optional folder path. Use "" (default) for all folders, "/" for root folder only.',
+              description: 'Optional folder path. Omit for all folders. Use "" or "/" for root folder only.',
             },
           },
           required: ['query'],
@@ -317,7 +317,7 @@ function createConfiguredMCPServer() {
             k: { type: 'number', description: 'Number of results per query' },
             folder: {
               type: 'string',
-              description: 'Optional folder path. Use "" (default) for all folders, "/" for root folder only.',
+              description: 'Optional folder path. Omit for all folders. Use "" or "/" for root folder only.',
             },
           },
           required: ['queries'],

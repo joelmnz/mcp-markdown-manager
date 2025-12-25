@@ -236,12 +236,12 @@ export class DatabaseEmbeddingService {
       `;
       params = [`[${queryVector.join(',')}]`];
 
-      if (folder !== undefined && folder !== null && folder !== '') {
+      if (folder !== undefined && folder !== null) {
         const normalizedFolder = folder === '/' ? '' : folder;
         // Note: For consistency with listArticles, we could use LIKE here for subfolders,
         // but for now we'll stick to exact match or subfolders if we want to be consistent.
         // The user specifically asked for "" and "/" handling.
-        if (folder === '/') {
+        if (normalizedFolder === '') {
           sql += ' WHERE a.folder = $2';
           params.push('');
         } else {
@@ -265,9 +265,9 @@ export class DatabaseEmbeddingService {
       `;
       params = [];
 
-      if (folder !== undefined && folder !== null && folder !== '') {
+      if (folder !== undefined && folder !== null) {
         const normalizedFolder = folder === '/' ? '' : folder;
-        if (folder === '/') {
+        if (normalizedFolder === '') {
           sql += ' WHERE a.folder = $1';
           params.push('');
         } else {
