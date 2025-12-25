@@ -30,7 +30,6 @@ export async function handleTransportRequest(
   
   // Check if this is a JSON-RPC request (has 'method' and 'id') vs notification/response
   const isRequest = body && typeof body === 'object' && 'method' in body && 'id' in body;
-  const isNotificationOrResponse = !isRequest;
   
   // For initialize or any JSON-RPC request, wait for completion and return full response
   if (isInitialize || isRequest) {
@@ -39,25 +38,19 @@ export async function handleTransportRequest(
   }
   
   // For notifications/responses, trigger handling without waiting and return 202 Accepted
-  if (isNotificationOrResponse) {
-    transport.handleRequest(nodeReq, nodeRes, body).catch(error => {
-      console.error('Error handling MCP notification/response:', error);
-    });
-    
-    // Return 202 Accepted immediately per MCP spec
-    const headers = new Headers({ 'Content-Type': 'application/json' });
-    if (sessionId) {
-      headers.set('mcp-session-id', sessionId);
-    }
-    return new Response('', {
-      status: 202,
-      headers,
-    });
-  }
+  transport.handleRequest(nodeReq, nodeRes, body).catch(error => {
+    console.error('Error handling MCP notification/response:', error);
+  });
   
-  // Fallback: wait for completion
-  await transport.handleRequest(nodeReq, nodeRes, body);
-  return convertNodeResponseToBun(nodeRes, sessionId);
+  // Return 202 Accepted immediately per MCP spec
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  if (sessionId) {
+    headers.set('mcp-session-id', sessionId);
+  }
+  return new Response('', {
+    status: 202,
+    headers,
+  });
 }
 
 export async function convertBunRequestToNode(bunReq: Request, parsedBody?: any): Promise<any> {
