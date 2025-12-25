@@ -121,7 +121,7 @@ function getAuthorizedSession(request: Request, sessionId: string | null): { ent
   }
 
   if (!sessionId) {
-    return new Response('Missing session ID', { status: 400 });
+    return new Response('Invalid or missing session ID', { status: 400 });
   }
 
   const entry = sessions[sessionId];
