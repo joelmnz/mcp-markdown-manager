@@ -192,7 +192,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       const query = url.searchParams.get('query');
       const k = parseInt(url.searchParams.get('k') || '5', 10);
       const mode = url.searchParams.get('mode') || 'hybrid'; // 'semantic' or 'hybrid'
-      const folder = url.searchParams.get('folder') || undefined;
+      const folder = url.searchParams.get('folder') ?? undefined;
 
       if (!query) {
         return new Response(JSON.stringify({ error: 'Query parameter is required' }), {
@@ -402,7 +402,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // GET /api/articles - List all articles
     if (path === '/api/articles' && request.method === 'GET') {
       const query = url.searchParams.get('q');
-      const folder = url.searchParams.get('folder') || undefined;
+      const folder = url.searchParams.get('folder') ?? undefined;
 
       if (query) {
         // Search articles

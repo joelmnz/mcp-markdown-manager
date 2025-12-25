@@ -1352,7 +1352,6 @@ body {
 .page-header-actions {
   display: flex;
   gap: 0.5rem;
-  align-items: center;
 }
 
 /* RAG Status Page Styles */

@@ -217,6 +217,13 @@ export function Home({ token, onNavigate }: HomeProps) {
         <h1>Articles</h1>
         <div className="page-header-actions">
           <button
+            className="button"
+            onClick={loadArticles}
+            title="Refresh articles list"
+          >
+            🗘 Refresh
+          </button>
+          <button
             className="button button-primary"
             onClick={() => {
               const url = selectedFolder ? `/new?folder=${encodeURIComponent(selectedFolder)}` : '/new';

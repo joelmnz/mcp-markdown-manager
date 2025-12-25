@@ -124,18 +124,19 @@ export class DatabaseArticleService {
       `;
       const params: any[] = [];
 
-      if (folder !== undefined) {
+      // Only apply filter if folder is provided (undefined/null means ALL folders)
+      // folder = "" or "/" means ROOT folder
+      if (folder !== undefined && folder !== null) {
         const normalizedFolder = this.normalizeFolder(folder);
-        await this.validateFolder(normalizedFolder);
-        // Use LIKE pattern to include subfolders
-        // e.g., 'projects' matches 'projects', 'projects/web-dev', 'projects/project-1', etc.
+        
         if (normalizedFolder === '') {
-          // Empty folder means root - show all articles
+          // Root folder only (stored as empty string in DB)
           query += ' WHERE folder = $1';
-          params.push(normalizedFolder);
+          params.push('');
         } else {
           // Include the folder itself and all subfolders
-          query += ' WHERE (folder = $1 OR folder LIKE $2)';
+          // Use ILIKE for case-insensitive matching
+          query += ' WHERE (folder ILIKE $1 OR folder ILIKE $2)';
           params.push(normalizedFolder, `${normalizedFolder}/%`);
         }
       }
@@ -170,17 +171,19 @@ export class DatabaseArticleService {
     `;
     const params: any[] = [`%${query}%`];
 
-    if (folder !== undefined) {
+    // Only apply filter if folder is provided (undefined/null means ALL folders)
+    // folder = "" or "/" means ROOT folder
+    if (folder !== undefined && folder !== null) {
       const normalizedFolder = this.normalizeFolder(folder);
-      // Use LIKE pattern to include subfolders
-      // e.g., 'projects' matches 'projects', 'projects/web-dev', 'projects/project-1', etc.
+      
       if (normalizedFolder === '') {
-        // Empty folder means root - exact match only
+        // Root folder only (stored as empty string in DB)
         sql += ' AND folder = $2';
-        params.push(normalizedFolder);
+        params.push('');
       } else {
         // Include the folder itself and all subfolders
-        sql += ' AND (folder = $2 OR folder LIKE $3)';
+        // Use ILIKE for case-insensitive matching
+        sql += ' AND (folder ILIKE $2 OR folder ILIKE $3)';
         params.push(normalizedFolder, `${normalizedFolder}/%`);
       }
     }
@@ -477,20 +480,20 @@ export class DatabaseArticleService {
     let params: any[];
 
     if (includeSubfolders) {
-      // Include articles in subfolders using LIKE pattern
+      // Include articles in subfolders using ILIKE pattern for case-insensitivity
       query = `
         SELECT slug, title, folder, is_public, created_at, updated_at
         FROM articles
-        WHERE folder LIKE $1
+        WHERE folder ILIKE $1
         ORDER BY updated_at DESC
       `;
       params = [normalizedFolder === '' ? '%' : `${normalizedFolder}%`];
     } else {
-      // Exact folder match
+      // Exact folder match (case-insensitive)
       query = `
         SELECT slug, title, folder, is_public, created_at, updated_at
         FROM articles
-        WHERE folder = $1
+        WHERE folder ILIKE $1
         ORDER BY updated_at DESC
       `;
       params = [normalizedFolder];
@@ -526,9 +529,11 @@ export class DatabaseArticleService {
       // Validate new folder name format
       await this.validateFolder(normalizedNewFolder);
 
-      // Check if old folder exists
+      // Check if old folder exists (case-insensitive check)
       const folders = await this.getFolderHierarchy();
-      if (!folders.includes(normalizedOldFolder)) {
+      const folderExists = folders.some(f => f.toLowerCase() === normalizedOldFolder.toLowerCase());
+      
+      if (!folderExists) {
         throw new DatabaseServiceError(
           DatabaseErrorType.NOT_FOUND,
           `Folder '${oldFolderName}' not found`,
@@ -536,11 +541,11 @@ export class DatabaseArticleService {
         );
       }
 
-      // Update all articles with the old folder name
+      // Update all articles with the old folder name (case-insensitive)
       const result = await database.query(
         `UPDATE articles 
          SET folder = $1, updated_at = $2
-         WHERE folder = $3`,
+         WHERE folder ILIKE $3`,
         [normalizedNewFolder, new Date(), normalizedOldFolder]
       );
 

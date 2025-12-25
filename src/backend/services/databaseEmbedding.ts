@@ -3,11 +3,11 @@ import { databaseArticleService, ArticleMetadata } from './databaseArticles.js';
 import { generateEmbedding, cosineSimilarity } from './embedding.js';
 import { chunkMarkdown, Chunk, calculateContentHash } from './chunking.js';
 import { createHash } from 'crypto';
-import { 
-  handleDatabaseError, 
-  DatabaseServiceError, 
-  DatabaseErrorType, 
-  logDatabaseError 
+import {
+  handleDatabaseError,
+  DatabaseServiceError,
+  DatabaseErrorType,
+  logDatabaseError
 } from './databaseErrors.js';
 import { databaseConstraintService } from './databaseConstraints.js';
 
@@ -139,7 +139,7 @@ export class DatabaseEmbeddingService {
             logDatabaseError(error, `Embedding Chunk ${chunk.id}`);
             throw error; // Don't continue if validation fails
           }
-          
+
           const dbError = handleDatabaseError(error);
           logDatabaseError(dbError, `Embedding Chunk ${chunk.id}`);
           console.error(`Error storing embedding for chunk ${chunk.id}:`, dbError.message);
@@ -236,10 +236,20 @@ export class DatabaseEmbeddingService {
       `;
       params = [`[${queryVector.join(',')}]`];
 
-      if (folder !== undefined) {
+      if (folder !== undefined && folder !== null) {
         const normalizedFolder = folder === '/' ? '' : folder;
-        sql += ' WHERE a.folder = $2';
-        params.push(normalizedFolder);
+        // Note: For consistency with listArticles, we could use LIKE here for subfolders,
+        // but for now we'll stick to exact match or subfolders if we want to be consistent.
+        // The user specifically asked for "" and "/" handling.
+        if (normalizedFolder === '') {
+          sql += ' WHERE a.folder = $2';
+          params.push('');
+        } else {
+          // Include the folder itself and all subfolders to match listArticles behavior
+          // Use ILIKE for case-insensitive matching
+          sql += ' WHERE (a.folder ILIKE $2 OR a.folder ILIKE $3)';
+          params.push(normalizedFolder, `${normalizedFolder}/%`);
+        }
       }
 
       sql += ' ORDER BY e.vector <=> $1::vector LIMIT $' + (params.length + 1);
@@ -255,10 +265,17 @@ export class DatabaseEmbeddingService {
       `;
       params = [];
 
-      if (folder !== undefined) {
+      if (folder !== undefined && folder !== null) {
         const normalizedFolder = folder === '/' ? '' : folder;
-        sql += ' WHERE a.folder = $1';
-        params.push(normalizedFolder);
+        if (normalizedFolder === '') {
+          sql += ' WHERE a.folder = $1';
+          params.push('');
+        } else {
+          // Include the folder itself and all subfolders
+          // Use ILIKE for case-insensitive matching
+          sql += ' WHERE (a.folder ILIKE $1 OR a.folder ILIKE $2)';
+          params.push(normalizedFolder, `${normalizedFolder}/%`);
+        }
       }
     }
 
@@ -295,7 +312,7 @@ export class DatabaseEmbeddingService {
       const resultsWithScores = result.rows.map(row => {
         const vector = JSON.parse(row.vector_data);
         const score = cosineSimilarity(queryVector, vector);
-        
+
         return {
           chunk: {
             id: row.chunk_id,
@@ -327,11 +344,11 @@ export class DatabaseEmbeddingService {
 
     // Deduplicate by article (keep highest scoring chunk per article)
     const bestBySlug = new Map<string, SearchResult>();
-    
+
     for (const result of searchResults) {
       const slug = result.articleMetadata.slug;
       const existing = bestBySlug.get(slug);
-      
+
       if (!existing || result.score > existing.score) {
         bestBySlug.set(slug, result);
       }
