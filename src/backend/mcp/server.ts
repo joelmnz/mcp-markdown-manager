@@ -509,7 +509,13 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
 
         resolveHeadersSafely(responseHeaders);
       }
-      try { controller.close(); } catch (e) { }
+      try {
+        controller.close();
+      } catch (e) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('Failed to close SSE controller:', e);
+        }
+      }
     },
     onWriteHead: (_code, headersObj) => {
       const responseHeaders = new Headers();
