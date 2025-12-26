@@ -8,6 +8,17 @@ import {
   getFolders
 } from '../services/articles';
 import { semanticSearch, SearchResult } from '../services/vectorIndex';
+import {
+  validateFilename,
+  validateTitle,
+  validateContent,
+  validateFolder,
+  validateQuery,
+  validateArray,
+  validateNumber,
+  logSecurityEvent,
+  detectSecurityThreats,
+} from './validation';
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 const MCP_MULTI_SEARCH_LIMIT = Number.parseInt(process.env.MCP_MULTI_SEARCH_LIMIT ?? '10', 10);
@@ -15,7 +26,30 @@ const MCP_MULTI_SEARCH_LIMIT = Number.parseInt(process.env.MCP_MULTI_SEARCH_LIMI
 export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
   listArticles: async (args) => {
     const { folder, maxArticles } = args as { folder?: string; maxArticles?: number };
-    const limit = maxArticles || 100;
+    
+    // Validate folder if provided
+    if (folder !== undefined && folder !== null) {
+      const folderValidation = validateFolder(folder);
+      if (!folderValidation.valid) {
+        throw new Error(folderValidation.error);
+      }
+    }
+    
+    // Validate maxArticles if provided
+    let limit = 100;
+    if (maxArticles !== undefined) {
+      const limitValidation = validateNumber(maxArticles, 'maxArticles', {
+        required: false,
+        min: 1,
+        max: 1000,
+        integer: true,
+      });
+      if (!limitValidation.valid) {
+        throw new Error(limitValidation.error);
+      }
+      limit = limitValidation.sanitized || 100;
+    }
+    
     const articles = await listArticles(folder, limit);
     return {
       content: [{ type: 'text', text: JSON.stringify(articles, null, 2) }],
@@ -31,10 +65,33 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
 
   searchArticles: async (args) => {
     const { query, folder } = args as { query: string; folder?: string };
-    if (!query || typeof query !== 'string' || query.trim() === '') {
-      throw new Error('query parameter is required and must be a non-empty string');
+    
+    // Validate query
+    const queryValidation = validateQuery(query);
+    if (!queryValidation.valid) {
+      throw new Error(queryValidation.error);
     }
-    const results = await searchArticles(query, folder);
+    
+    // Check for security threats in query
+    const threats = detectSecurityThreats(queryValidation.sanitized!);
+    if (threats.length > 0) {
+      logSecurityEvent({
+        timestamp: new Date().toISOString(),
+        event: 'suspicious_search_query',
+        severity: 'medium',
+        details: { query, threats },
+      });
+    }
+    
+    // Validate folder if provided
+    if (folder !== undefined && folder !== null) {
+      const folderValidation = validateFolder(folder);
+      if (!folderValidation.valid) {
+        throw new Error(folderValidation.error);
+      }
+    }
+    
+    const results = await searchArticles(queryValidation.sanitized!, folder);
     return {
       content: [{ type: 'text', text: JSON.stringify(results, null, 2) }],
     };
@@ -42,14 +99,30 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
 
   multiSearchArticles: async (args) => {
     const { titles, folder } = args as { titles: string[]; folder?: string };
-    if (!Array.isArray(titles)) throw new Error('titles must be an array');
-    if (titles.length === 0) throw new Error('titles array cannot be empty');
-    if (titles.some(t => typeof t !== 'string' || t.trim() === '')) {
-      throw new Error('all titles must be non-empty strings');
+    
+    // Validate titles array
+    const titlesValidation = validateArray(titles, 'titles', {
+      required: true,
+      maxLength: MCP_MULTI_SEARCH_LIMIT,
+      minLength: 1,
+      itemValidator: (item, index) => validateQuery(item),
+    });
+    
+    if (!titlesValidation.valid) {
+      throw new Error(titlesValidation.error);
     }
-    if (titles.length > MCP_MULTI_SEARCH_LIMIT) throw new Error(`titles array cannot exceed ${MCP_MULTI_SEARCH_LIMIT} items`);
+    
+    // Validate folder if provided
+    if (folder !== undefined && folder !== null) {
+      const folderValidation = validateFolder(folder);
+      if (!folderValidation.valid) {
+        throw new Error(folderValidation.error);
+      }
+    }
 
-    const allResults = await Promise.all(titles.map(title => searchArticles(title, folder)));
+    const allResults = await Promise.all(
+      titlesValidation.sanitized!.map((title: string) => searchArticles(title, folder))
+    );
     const uniqueResults = Array.from(
       new Map(allResults.flat().map(article => [article.filename, article])).values()
     );
@@ -62,10 +135,37 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
   semanticSearch: async (args) => {
     if (!SEMANTIC_SEARCH_ENABLED) throw new Error('Semantic search is not enabled');
     const { query, k, folder } = args as { query: string; k?: number; folder?: string };
-    if (!query || typeof query !== 'string' || query.trim() === '') {
-      throw new Error('query parameter is required and must be a non-empty string');
+    
+    // Validate query
+    const queryValidation = validateQuery(query);
+    if (!queryValidation.valid) {
+      throw new Error(queryValidation.error);
     }
-    const results = await semanticSearch(query, k || 5, folder);
+    
+    // Validate k if provided
+    let resultCount = 5;
+    if (k !== undefined) {
+      const kValidation = validateNumber(k, 'k', {
+        required: false,
+        min: 1,
+        max: 100,
+        integer: true,
+      });
+      if (!kValidation.valid) {
+        throw new Error(kValidation.error);
+      }
+      resultCount = kValidation.sanitized || 5;
+    }
+    
+    // Validate folder if provided
+    if (folder !== undefined && folder !== null) {
+      const folderValidation = validateFolder(folder);
+      if (!folderValidation.valid) {
+        throw new Error(folderValidation.error);
+      }
+    }
+    
+    const results = await semanticSearch(queryValidation.sanitized!, resultCount, folder);
     return {
       content: [{ type: 'text', text: JSON.stringify(results, null, 2) }],
     };
@@ -74,15 +174,45 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
   multiSemanticSearch: async (args) => {
     if (!SEMANTIC_SEARCH_ENABLED) throw new Error('Semantic search is not enabled');
     const { queries, k, folder } = args as { queries: string[]; k?: number; folder?: string };
-    if (!Array.isArray(queries)) throw new Error('queries must be an array');
-    if (queries.length === 0) throw new Error('queries array cannot be empty');
-    if (queries.some(q => typeof q !== 'string' || q.trim() === '')) {
-      throw new Error('all queries must be non-empty strings');
+    
+    // Validate queries array
+    const queriesValidation = validateArray(queries, 'queries', {
+      required: true,
+      maxLength: MCP_MULTI_SEARCH_LIMIT,
+      minLength: 1,
+      itemValidator: (item, index) => validateQuery(item),
+    });
+    
+    if (!queriesValidation.valid) {
+      throw new Error(queriesValidation.error);
     }
-    if (queries.length > MCP_MULTI_SEARCH_LIMIT) throw new Error(`queries array cannot exceed ${MCP_MULTI_SEARCH_LIMIT} items`);
+    
+    // Validate k if provided
+    let resultsPerQuery = 5;
+    if (k !== undefined) {
+      const kValidation = validateNumber(k, 'k', {
+        required: false,
+        min: 1,
+        max: 100,
+        integer: true,
+      });
+      if (!kValidation.valid) {
+        throw new Error(kValidation.error);
+      }
+      resultsPerQuery = kValidation.sanitized || 5;
+    }
+    
+    // Validate folder if provided
+    if (folder !== undefined && folder !== null) {
+      const folderValidation = validateFolder(folder);
+      if (!folderValidation.valid) {
+        throw new Error(folderValidation.error);
+      }
+    }
 
-    const resultsPerQuery = k || 5;
-    const allResults = await Promise.all(queries.map(query => semanticSearch(query, resultsPerQuery, folder)));
+    const allResults = await Promise.all(
+      queriesValidation.sanitized!.map((query: string) => semanticSearch(query, resultsPerQuery, folder))
+    );
 
     const seenChunks = new Map<string, SearchResult>();
     const uniqueResults: SearchResult[] = [];
@@ -104,11 +234,15 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
 
   readArticle: async (args) => {
     const { filename } = args as { filename: string };
-    if (!filename || typeof filename !== 'string' || filename.trim() === '') {
-      throw new Error('filename parameter is required and must be a non-empty string');
+    
+    // Validate filename
+    const filenameValidation = validateFilename(filename);
+    if (!filenameValidation.valid) {
+      throw new Error(filenameValidation.error);
     }
-    const article = await readArticle(filename);
-    if (!article) throw new Error(`Article ${filename} not found`);
+    
+    const article = await readArticle(filenameValidation.sanitized!);
+    if (!article) throw new Error(`Article ${filenameValidation.sanitized} not found`);
     return {
       content: [{ type: 'text', text: JSON.stringify(article, null, 2) }],
     };
@@ -116,13 +250,36 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
 
   createArticle: async (args) => {
     const { title, content, folder } = args as { title: string; content: string; folder?: string };
-    if (!title || typeof title !== 'string' || title.trim() === '') {
-      throw new Error('title parameter is required and must be a non-empty string');
+    
+    // Validate title
+    const titleValidation = validateTitle(title);
+    if (!titleValidation.valid) {
+      throw new Error(titleValidation.error);
     }
-    if (!content || typeof content !== 'string' || content.trim() === '') {
-      throw new Error('content parameter is required and must be a non-empty string');
+    
+    // Validate content
+    const contentValidation = validateContent(content);
+    if (!contentValidation.valid) {
+      throw new Error(contentValidation.error);
     }
-    const article = await createArticle(title, content, folder, undefined, { embeddingPriority: 'normal' });
+    
+    // Validate folder if provided
+    let sanitizedFolder = undefined;
+    if (folder !== undefined && folder !== null) {
+      const folderValidation = validateFolder(folder);
+      if (!folderValidation.valid) {
+        throw new Error(folderValidation.error);
+      }
+      sanitizedFolder = folderValidation.sanitized;
+    }
+    
+    const article = await createArticle(
+      titleValidation.sanitized!,
+      contentValidation.sanitized!,
+      sanitizedFolder,
+      undefined,
+      { embeddingPriority: 'normal' }
+    );
     return {
       content: [{ type: 'text', text: JSON.stringify(article, null, 2) }],
     };
@@ -130,16 +287,43 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
 
   updateArticle: async (args) => {
     const { filename, title, content, folder } = args as { filename: string; title: string; content: string; folder?: string };
-    if (!filename || typeof filename !== 'string' || filename.trim() === '') {
-      throw new Error('filename parameter is required and must be a non-empty string');
+    
+    // Validate filename
+    const filenameValidation = validateFilename(filename);
+    if (!filenameValidation.valid) {
+      throw new Error(filenameValidation.error);
     }
-    if (!title || typeof title !== 'string' || title.trim() === '') {
-      throw new Error('title parameter is required and must be a non-empty string');
+    
+    // Validate title
+    const titleValidation = validateTitle(title);
+    if (!titleValidation.valid) {
+      throw new Error(titleValidation.error);
     }
-    if (!content || typeof content !== 'string' || content.trim() === '') {
-      throw new Error('content parameter is required and must be a non-empty string');
+    
+    // Validate content
+    const contentValidation = validateContent(content);
+    if (!contentValidation.valid) {
+      throw new Error(contentValidation.error);
     }
-    const article = await updateArticle(filename, title, content, folder, undefined, { embeddingPriority: 'normal' });
+    
+    // Validate folder if provided
+    let sanitizedFolder = undefined;
+    if (folder !== undefined && folder !== null) {
+      const folderValidation = validateFolder(folder);
+      if (!folderValidation.valid) {
+        throw new Error(folderValidation.error);
+      }
+      sanitizedFolder = folderValidation.sanitized;
+    }
+    
+    const article = await updateArticle(
+      filenameValidation.sanitized!,
+      titleValidation.sanitized!,
+      contentValidation.sanitized!,
+      sanitizedFolder,
+      undefined,
+      { embeddingPriority: 'normal' }
+    );
     return {
       content: [{ type: 'text', text: JSON.stringify(article, null, 2) }],
     };
@@ -147,12 +331,16 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
 
   deleteArticle: async (args) => {
     const { filename } = args as { filename: string };
-    if (!filename || typeof filename !== 'string' || filename.trim() === '') {
-      throw new Error('filename parameter is required and must be a non-empty string');
+    
+    // Validate filename
+    const filenameValidation = validateFilename(filename);
+    if (!filenameValidation.valid) {
+      throw new Error(filenameValidation.error);
     }
-    await deleteArticle(filename);
+    
+    await deleteArticle(filenameValidation.sanitized!);
     return {
-      content: [{ type: 'text', text: JSON.stringify({ success: true, filename }, null, 2) }],
+      content: [{ type: 'text', text: JSON.stringify({ success: true, filename: filenameValidation.sanitized }, null, 2) }],
     };
   },
 };

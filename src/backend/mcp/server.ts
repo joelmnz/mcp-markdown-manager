@@ -13,6 +13,7 @@ import {
 } from './utils.ts';
 import { toolHandlers } from './handlers.ts';
 import { loggingService, LogLevel, LogCategory } from '../services/logging.ts';
+import { logSecurityEvent } from './validation.ts';
 
 type McpSessionEntry = {
   transport: StreamableHTTPServerTransport;
@@ -21,6 +22,8 @@ type McpSessionEntry = {
   lastSeenAtMs: number;
   ip: string;
   userAgent: string | null;
+  requestCount: number; // Track request count for rate limiting
+  lastRequestMs: number; // Track last request time
 };
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
@@ -34,6 +37,11 @@ const MCP_MAX_SESSIONS_TOTAL = Number.parseInt(process.env.MCP_MAX_SESSIONS_TOTA
 const MCP_MAX_SESSIONS_PER_IP = Number.parseInt(process.env.MCP_MAX_SESSIONS_PER_IP ?? '50', 10);
 const MCP_MAX_SESSIONS_PER_TOKEN = Number.parseInt(process.env.MCP_MAX_SESSIONS_PER_TOKEN ?? '100', 10);
 const MCP_BIND_SESSION_TO_IP = process.env.MCP_BIND_SESSION_TO_IP?.toLowerCase() === 'true';
+
+// Rate limiting configuration
+const MCP_RATE_LIMIT_WINDOW_MS = Number.parseInt(process.env.MCP_RATE_LIMIT_WINDOW_MS ?? '60000', 10); // 1 minute
+const MCP_RATE_LIMIT_MAX_REQUESTS = Number.parseInt(process.env.MCP_RATE_LIMIT_MAX_REQUESTS ?? '100', 10);
+const MCP_MAX_REQUEST_SIZE_BYTES = Number.parseInt(process.env.MCP_MAX_REQUEST_SIZE_BYTES ?? String(10 * 1024 * 1024), 10); // 10MB
 
 // Session management for HTTP transport
 const sessions: Record<string, McpSessionEntry> = {};
@@ -58,6 +66,88 @@ function getClientIp(request: Request): string {
   const forwardedFor = request.headers.get('x-forwarded-for');
   if (forwardedFor) return forwardedFor.split(',')[0].trim();
   return request.headers.get('x-real-ip') || 'unknown';
+}
+
+/**
+ * Check rate limit for a session
+ * Returns error response if rate limit exceeded
+ */
+function checkRateLimit(entry: McpSessionEntry, nowMs: number): Response | null {
+  // Reset counter if outside the time window
+  if (nowMs - entry.lastRequestMs > MCP_RATE_LIMIT_WINDOW_MS) {
+    entry.requestCount = 0;
+    entry.lastRequestMs = nowMs;
+  }
+
+  entry.requestCount++;
+
+  if (entry.requestCount > MCP_RATE_LIMIT_MAX_REQUESTS) {
+    logSecurityEvent({
+      timestamp: new Date(nowMs).toISOString(),
+      event: 'rate_limit_exceeded',
+      severity: 'medium',
+      details: {
+        ip: entry.ip,
+        requestCount: entry.requestCount,
+        window: MCP_RATE_LIMIT_WINDOW_MS,
+        limit: MCP_RATE_LIMIT_MAX_REQUESTS,
+      },
+      ip: entry.ip,
+    });
+
+    return new Response(
+      JSON.stringify({
+        error: 'Rate limit exceeded',
+        retryAfter: Math.ceil((entry.lastRequestMs + MCP_RATE_LIMIT_WINDOW_MS - nowMs) / 1000),
+      }),
+      {
+        status: 429,
+        headers: {
+          'Content-Type': 'application/json',
+          'Retry-After': String(Math.ceil((entry.lastRequestMs + MCP_RATE_LIMIT_WINDOW_MS - nowMs) / 1000)),
+        },
+      }
+    );
+  }
+
+  return null;
+}
+
+/**
+ * Validate request size to prevent DoS attacks
+ */
+async function validateRequestSize(request: Request): Promise<Response | null> {
+  const contentLength = request.headers.get('content-length');
+  
+  if (contentLength) {
+    const size = parseInt(contentLength, 10);
+    if (size > MCP_MAX_REQUEST_SIZE_BYTES) {
+      logSecurityEvent({
+        timestamp: new Date().toISOString(),
+        event: 'oversized_request',
+        severity: 'medium',
+        details: {
+          contentLength: size,
+          limit: MCP_MAX_REQUEST_SIZE_BYTES,
+          ip: getClientIp(request),
+        },
+        ip: getClientIp(request),
+      });
+
+      return new Response(
+        JSON.stringify({
+          error: 'Request too large',
+          maxSize: MCP_MAX_REQUEST_SIZE_BYTES,
+        }),
+        {
+          status: 413,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+  }
+
+  return null;
 }
 
 function cleanupExpiredSessions(nowMs: number) {
@@ -399,6 +489,8 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
         lastSeenAtMs: nowMs,
         ip,
         userAgent,
+        requestCount: 1,
+        lastRequestMs: nowMs,
       };
 
       transport.onclose = () => {
@@ -440,6 +532,11 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
   if (authorized instanceof Response) return authorized;
 
   const { entry } = authorized;
+  
+  // Check rate limit
+  const rateLimitCheck = checkRateLimit(entry, nowMs);
+  if (rateLimitCheck) return rateLimitCheck;
+  
   entry.lastSeenAtMs = nowMs;
 
   const nodeReq = await convertBunRequestToNode(request);

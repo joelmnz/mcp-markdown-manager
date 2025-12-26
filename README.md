@@ -2,6 +2,24 @@
 
 A complete full-stack TypeScript monolithic markdown article management system designed for AI agents to save and manage research content. This self-hosted single-user system handles hundreds of markdown articles with PostgreSQL database backend and multiple interfaces: Web UI, REST API, and MCP server.
 
+## 🔒 Security
+
+This project implements comprehensive security measures based on [Docker's MCP security recommendations](https://www.docker.com/blog/mcp-security-issues-threatening-ai-infrastructure/). See our detailed security documentation:
+
+- **[Security Guide](docs/SECURITY.md)** - Comprehensive security best practices, configuration, and hardening
+- **[Security Analysis](docs/SECURITY_ANALYSIS.md)** - Threat analysis and recommendations based on Docker's MCP report
+
+Key security features:
+- Bearer token authentication for all interfaces
+- Input validation and sanitization to prevent injection attacks
+- Rate limiting and DoS protection
+- Parameterized database queries (SQL injection prevention)
+- Path traversal prevention
+- Session management with configurable limits and timeouts
+- Security event logging and monitoring
+- Non-root container execution
+- Request size limits
+
 ## Features
 
 - 📝 **Database-backed articles** with structured metadata storage
