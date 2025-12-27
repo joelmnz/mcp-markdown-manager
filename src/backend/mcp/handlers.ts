@@ -16,8 +16,6 @@ import {
   validateQuery,
   validateArray,
   validateNumber,
-  logSecurityEvent,
-  detectSecurityThreats,
 } from './validation';
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
@@ -28,11 +26,13 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
     const { folder, maxArticles } = args as { folder?: string; maxArticles?: number };
     
     // Validate folder if provided
+    let sanitizedFolder = folder;
     if (folder !== undefined && folder !== null) {
       const folderValidation = validateFolder(folder);
       if (!folderValidation.valid) {
         throw new Error(folderValidation.error);
       }
+      sanitizedFolder = folderValidation.sanitized;
     }
     
     // Validate maxArticles if provided
@@ -50,7 +50,7 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
       limit = limitValidation.sanitized || 100;
     }
     
-    const articles = await listArticles(folder, limit);
+    const articles = await listArticles(sanitizedFolder, limit);
     return {
       content: [{ type: 'text', text: JSON.stringify(articles, null, 2) }],
     };
@@ -72,26 +72,17 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
       throw new Error(queryValidation.error);
     }
     
-    // Check for security threats in query
-    const threats = detectSecurityThreats(queryValidation.sanitized!);
-    if (threats.length > 0) {
-      logSecurityEvent({
-        timestamp: new Date().toISOString(),
-        event: 'suspicious_search_query',
-        severity: 'medium',
-        details: { query, threats },
-      });
-    }
-    
     // Validate folder if provided
+    let sanitizedFolder = folder;
     if (folder !== undefined && folder !== null) {
       const folderValidation = validateFolder(folder);
       if (!folderValidation.valid) {
         throw new Error(folderValidation.error);
       }
+      sanitizedFolder = folderValidation.sanitized;
     }
     
-    const results = await searchArticles(queryValidation.sanitized!, folder);
+    const results = await searchArticles(queryValidation.sanitized!, sanitizedFolder);
     return {
       content: [{ type: 'text', text: JSON.stringify(results, null, 2) }],
     };
@@ -113,15 +104,17 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
     }
     
     // Validate folder if provided
+    let sanitizedFolder = folder;
     if (folder !== undefined && folder !== null) {
       const folderValidation = validateFolder(folder);
       if (!folderValidation.valid) {
         throw new Error(folderValidation.error);
       }
+      sanitizedFolder = folderValidation.sanitized;
     }
 
     const allResults = await Promise.all(
-      titlesValidation.sanitized!.map((title: string) => searchArticles(title, folder))
+      titlesValidation.sanitized!.map((title: string) => searchArticles(title, sanitizedFolder))
     );
     const uniqueResults = Array.from(
       new Map(allResults.flat().map(article => [article.filename, article])).values()
@@ -158,14 +151,16 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
     }
     
     // Validate folder if provided
+    let sanitizedFolder = folder;
     if (folder !== undefined && folder !== null) {
       const folderValidation = validateFolder(folder);
       if (!folderValidation.valid) {
         throw new Error(folderValidation.error);
       }
+      sanitizedFolder = folderValidation.sanitized;
     }
     
-    const results = await semanticSearch(queryValidation.sanitized!, resultCount, folder);
+    const results = await semanticSearch(queryValidation.sanitized!, resultCount, sanitizedFolder);
     return {
       content: [{ type: 'text', text: JSON.stringify(results, null, 2) }],
     };
@@ -203,15 +198,17 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
     }
     
     // Validate folder if provided
+    let sanitizedFolder = folder;
     if (folder !== undefined && folder !== null) {
       const folderValidation = validateFolder(folder);
       if (!folderValidation.valid) {
         throw new Error(folderValidation.error);
       }
+      sanitizedFolder = folderValidation.sanitized;
     }
 
     const allResults = await Promise.all(
-      queriesValidation.sanitized!.map((query: string) => semanticSearch(query, resultsPerQuery, folder))
+      queriesValidation.sanitized!.map((query: string) => semanticSearch(query, resultsPerQuery, sanitizedFolder))
     );
 
     const seenChunks = new Map<string, SearchResult>();

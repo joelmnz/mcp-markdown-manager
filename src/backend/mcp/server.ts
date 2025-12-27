@@ -79,9 +79,8 @@ function checkRateLimit(entry: McpSessionEntry, nowMs: number): Response | null 
     entry.lastRequestMs = nowMs;
   }
 
-  entry.requestCount++;
-
-  if (entry.requestCount > MCP_RATE_LIMIT_MAX_REQUESTS) {
+  // Check limit before incrementing to prevent unbounded growth
+  if (entry.requestCount >= MCP_RATE_LIMIT_MAX_REQUESTS) {
     logSecurityEvent({
       timestamp: new Date(nowMs).toISOString(),
       event: 'rate_limit_exceeded',
@@ -110,6 +109,7 @@ function checkRateLimit(entry: McpSessionEntry, nowMs: number): Response | null 
     );
   }
 
+  entry.requestCount++;
   return null;
 }
 
@@ -462,6 +462,10 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
+  // Validate request size before processing
+  const sizeCheck = await validateRequestSize(request);
+  if (sizeCheck) return sizeCheck;
+
   const nowMs = Date.now();
   cleanupExpiredSessions(nowMs);
 
@@ -511,6 +515,11 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
     if (authorized instanceof Response) return authorized;
 
     const { entry } = authorized;
+    
+    // Check rate limit for POST requests
+    const rateLimitCheck = checkRateLimit(entry, nowMs);
+    if (rateLimitCheck) return rateLimitCheck;
+    
     entry.lastSeenAtMs = nowMs;
     return handleTransportRequest(entry.transport, request, body, sessionId ?? undefined);
 

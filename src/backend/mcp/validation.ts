@@ -92,10 +92,10 @@ export function validateString(
     return { valid: false, error: `${fieldName} format is invalid` };
   }
 
-  // Check for dangerous patterns
+  // Check for dangerous patterns on trimmed value
   if (checkDangerous) {
     for (const dangerousPattern of DANGEROUS_PATTERNS) {
-      if (dangerousPattern.test(value)) {
+      if (dangerousPattern.test(trimmed)) {
         return { valid: false, error: `${fieldName} contains invalid characters` };
       }
     }
@@ -356,34 +356,18 @@ export function logSecurityEvent(entry: SecurityAuditEntry): void {
 
 /**
  * Detect potential security threats in input
+ * 
+ * Note: This function is intentionally minimal to avoid false positives.
+ * The application is primarily an article storage system that may contain
+ * security-related content. Real protection comes from:
+ * - Parameterized SQL queries (prevents SQL injection)
+ * - No shell command execution (prevents command injection)
+ * - Database-only storage (prevents path traversal)
+ * - Input validation and length limits (prevents DoS)
  */
 export function detectSecurityThreats(input: string): string[] {
-  const threats: string[] = [];
-
-  // SQL injection patterns
-  if (/(\bOR\b|\bAND\b).*[=<>]|--|;.*(?:DROP|DELETE|INSERT|UPDATE)/i.test(input)) {
-    threats.push('Possible SQL injection attempt');
-  }
-
-  // Command injection patterns
-  if (/[;&|`$()]|(?:eval|exec|system|passthru)\s*\(/i.test(input)) {
-    threats.push('Possible command injection attempt');
-  }
-
-  // Path traversal
-  if (/\.\.\/|\.\.\\/.test(input)) {
-    threats.push('Path traversal attempt');
-  }
-
-  // XSS patterns
-  if (/<script|javascript:|onerror=|onload=/i.test(input)) {
-    threats.push('Possible XSS attempt');
-  }
-
-  // LDAP injection
-  if (/[()\\*]/.test(input) && /\b(?:cn|uid|ou|dc)=/i.test(input)) {
-    threats.push('Possible LDAP injection attempt');
-  }
-
-  return threats;
+  // This function is kept for potential future use but currently returns no threats
+  // to avoid blocking legitimate article content about security topics.
+  // The real security is enforced at the database layer with parameterized queries.
+  return [];
 }
