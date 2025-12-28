@@ -14,6 +14,8 @@ import {
 import { toolHandlers } from './handlers.ts';
 import { loggingService, LogLevel, LogCategory } from '../services/logging.ts';
 import { logSecurityEvent } from './validation.ts';
+import { createRateLimiter, RateLimitPresets } from '../middleware/rateLimit';
+import { createRequestSizeValidator, RequestSizePresets } from '../middleware/requestSize';
 
 type McpSessionEntry = {
   transport: StreamableHTTPServerTransport;
@@ -68,88 +70,6 @@ function getClientIp(request: Request): string {
   return request.headers.get('x-real-ip') || 'unknown';
 }
 
-/**
- * Check rate limit for a session
- * Returns error response if rate limit exceeded
- */
-function checkRateLimit(entry: McpSessionEntry, nowMs: number): Response | null {
-  // Reset counter if outside the time window
-  if (nowMs - entry.lastRequestMs > MCP_RATE_LIMIT_WINDOW_MS) {
-    entry.requestCount = 0;
-    entry.lastRequestMs = nowMs;
-  }
-
-  // Check limit before incrementing to prevent unbounded growth
-  if (entry.requestCount >= MCP_RATE_LIMIT_MAX_REQUESTS) {
-    logSecurityEvent({
-      timestamp: new Date(nowMs).toISOString(),
-      event: 'rate_limit_exceeded',
-      severity: 'medium',
-      details: {
-        ip: entry.ip,
-        requestCount: entry.requestCount,
-        window: MCP_RATE_LIMIT_WINDOW_MS,
-        limit: MCP_RATE_LIMIT_MAX_REQUESTS,
-      },
-      ip: entry.ip,
-    });
-
-    return new Response(
-      JSON.stringify({
-        error: 'Rate limit exceeded',
-        retryAfter: Math.ceil((entry.lastRequestMs + MCP_RATE_LIMIT_WINDOW_MS - nowMs) / 1000),
-      }),
-      {
-        status: 429,
-        headers: {
-          'Content-Type': 'application/json',
-          'Retry-After': String(Math.ceil((entry.lastRequestMs + MCP_RATE_LIMIT_WINDOW_MS - nowMs) / 1000)),
-        },
-      }
-    );
-  }
-
-  entry.requestCount++;
-  return null;
-}
-
-/**
- * Validate request size to prevent DoS attacks
- */
-async function validateRequestSize(request: Request): Promise<Response | null> {
-  const contentLength = request.headers.get('content-length');
-  
-  if (contentLength) {
-    const size = parseInt(contentLength, 10);
-    if (size > MCP_MAX_REQUEST_SIZE_BYTES) {
-      logSecurityEvent({
-        timestamp: new Date().toISOString(),
-        event: 'oversized_request',
-        severity: 'medium',
-        details: {
-          contentLength: size,
-          limit: MCP_MAX_REQUEST_SIZE_BYTES,
-          ip: getClientIp(request),
-        },
-        ip: getClientIp(request),
-      });
-
-      return new Response(
-        JSON.stringify({
-          error: 'Request too large',
-          maxSize: MCP_MAX_REQUEST_SIZE_BYTES,
-        }),
-        {
-          status: 413,
-          headers: { 'Content-Type': 'application/json' },
-        }
-      );
-    }
-  }
-
-  return null;
-}
-
 function cleanupExpiredSessions(nowMs: number) {
   for (const [sessionId, entry] of Object.entries(sessions)) {
     const idleExpired = nowMs - entry.lastSeenAtMs > MCP_SESSION_IDLE_MS;
@@ -200,6 +120,20 @@ function getSessionId(request: Request): string | null {
   const url = new URL(request.url);
   return request.headers.get('mcp-session-id') || url.searchParams.get('sessionId');
 }
+
+// Create MCP-specific rate limiter with session-based key generation
+const mcpRateLimiter = createRateLimiter({
+  ...RateLimitPresets.MCP_SESSION,
+  keyGenerator: (request: Request) => {
+    const sessionId = getSessionId(request);
+    return sessionId || 'no-session';
+  }
+});
+
+// Create request size validator for MCP
+const mcpSizeValidator = createRequestSizeValidator({
+  maxBytes: MCP_MAX_REQUEST_SIZE_BYTES
+});
 
 function getAuthorizedSession(request: Request, sessionId: string | null): { entry: McpSessionEntry; sessionId: string } | Response {
   const token = getBearerToken(request);
@@ -463,7 +397,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
   }
 
   // Validate request size before processing
-  const sizeCheck = await validateRequestSize(request);
+  const sizeCheck = await mcpSizeValidator(request);
   if (sizeCheck) return sizeCheck;
 
   const nowMs = Date.now();
@@ -515,11 +449,11 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
     if (authorized instanceof Response) return authorized;
 
     const { entry } = authorized;
-    
+
     // Check rate limit for POST requests
-    const rateLimitCheck = checkRateLimit(entry, nowMs);
+    const rateLimitCheck = mcpRateLimiter(request);
     if (rateLimitCheck) return rateLimitCheck;
-    
+
     entry.lastSeenAtMs = nowMs;
     return handleTransportRequest(entry.transport, request, body, sessionId ?? undefined);
 
@@ -541,11 +475,11 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
   if (authorized instanceof Response) return authorized;
 
   const { entry } = authorized;
-  
+
   // Check rate limit
-  const rateLimitCheck = checkRateLimit(entry, nowMs);
+  const rateLimitCheck = mcpRateLimiter(request);
   if (rateLimitCheck) return rateLimitCheck;
-  
+
   entry.lastSeenAtMs = nowMs;
 
   const nodeReq = await convertBunRequestToNode(request);
@@ -681,6 +615,11 @@ export async function handleMCPDeleteRequest(request: Request): Promise<Response
   if (authorized instanceof Response) return authorized;
 
   const { entry } = authorized;
+
+  // Check rate limit for DELETE requests
+  const rateLimitCheck = mcpRateLimiter(request);
+  if (rateLimitCheck) return rateLimitCheck;
+
   entry.lastSeenAtMs = nowMs;
 
   const nodeReq = await convertBunRequestToNode(request);
