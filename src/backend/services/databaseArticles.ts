@@ -580,7 +580,7 @@ export class DatabaseArticleService {
 
       // Update all articles with the folder to have empty folder
       const result = await database.query(
-        `UPDATE articles 
+        `UPDATE articles
          SET folder = '', updated_at = $1
          WHERE folder = $2`,
         [new Date(), normalizedFolder]
@@ -593,6 +593,85 @@ export class DatabaseArticleService {
       }
       const dbError = handleDatabaseError(error);
       logDatabaseError(dbError, 'Delete Folder');
+      throw dbError;
+    }
+  }
+
+  /**
+   * Rename an article slug
+   * Validates that the new slug is unique before renaming
+   */
+  async renameArticleSlug(oldSlug: string, newSlug: string): Promise<Article> {
+    try {
+      // Validate inputs
+      if (!oldSlug || oldSlug.trim().length === 0) {
+        throw new DatabaseServiceError(
+          DatabaseErrorType.VALIDATION_ERROR,
+          'Old slug cannot be empty',
+          'Article identifier cannot be empty.'
+        );
+      }
+
+      if (!newSlug || newSlug.trim().length === 0) {
+        throw new DatabaseServiceError(
+          DatabaseErrorType.VALIDATION_ERROR,
+          'New slug cannot be empty',
+          'New article identifier cannot be empty.'
+        );
+      }
+
+      // Normalize new slug
+      const normalizedNewSlug = newSlug.toLowerCase().trim();
+
+      // Get existing article with ID
+      const existingResult = await database.query(
+        'SELECT * FROM articles WHERE slug = $1',
+        [oldSlug]
+      );
+
+      if (existingResult.rows.length === 0) {
+        throw new DatabaseServiceError(
+          DatabaseErrorType.NOT_FOUND,
+          `Article with slug '${oldSlug}' not found`,
+          'The article you are trying to rename does not exist.'
+        );
+      }
+
+      const existingRow = existingResult.rows[0];
+      const articleId = existingRow.id;
+
+      // If slugs are the same, no need to rename
+      if (oldSlug === normalizedNewSlug) {
+        return this.dbRowToArticle(existingRow);
+      }
+
+      // Validate new slug format and uniqueness (exclude current article by ID)
+      await this.validateSlug(normalizedNewSlug, articleId);
+
+      // Update slug
+      const result = await database.query(
+        `UPDATE articles
+         SET slug = $1, updated_at = $2
+         WHERE id = $3
+         RETURNING *`,
+        [normalizedNewSlug, new Date(), articleId]
+      );
+
+      if (result.rows.length === 0) {
+        throw new DatabaseServiceError(
+          DatabaseErrorType.UNKNOWN,
+          `Failed to rename article slug from '${oldSlug}' to '${normalizedNewSlug}'`,
+          'An error occurred while renaming the article.'
+        );
+      }
+
+      return this.dbRowToArticle(result.rows[0]);
+    } catch (error) {
+      if (error instanceof DatabaseServiceError) {
+        throw error;
+      }
+      const dbError = handleDatabaseError(error);
+      logDatabaseError(dbError, 'Rename Article Slug');
       throw dbError;
     }
   }
