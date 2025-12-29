@@ -13,6 +13,8 @@
  */
 
 import { logSecurityEvent, type SecurityAuditEntry } from '../mcp/validation';
+import { parseEnvInt } from '../utils/config';
+
 
 export interface RateLimitConfig {
   windowMs: number;
@@ -139,25 +141,25 @@ export function createRateLimiter(config: RateLimitConfig): RateLimitMiddleware 
 export const RateLimitPresets = {
   /** General API endpoints - 60 requests per minute */
   API_GENERAL: {
-    windowMs: Number.parseInt(process.env.API_RATE_LIMIT_WINDOW_MS ?? '60000', 10),
-    maxRequests: Number.parseInt(process.env.API_RATE_LIMIT_MAX_REQUESTS ?? '60', 10),
+    windowMs: parseEnvInt(process.env.API_RATE_LIMIT_WINDOW_MS, 60000, 'API_RATE_LIMIT_WINDOW_MS'),
+    maxRequests: parseEnvInt(process.env.API_RATE_LIMIT_MAX_REQUESTS, 60, 'API_RATE_LIMIT_MAX_REQUESTS'),
   },
 
   /** Expensive operations (reindex, etc.) - 5 requests per minute */
   API_EXPENSIVE: {
-    windowMs: Number.parseInt(process.env.API_RATE_LIMIT_WINDOW_MS ?? '60000', 10),
-    maxRequests: Number.parseInt(process.env.API_RATE_LIMIT_EXPENSIVE_MAX_REQUESTS ?? '5', 10),
+    windowMs: parseEnvInt(process.env.API_RATE_LIMIT_WINDOW_MS, 60000, 'API_RATE_LIMIT_WINDOW_MS'),
+    maxRequests: parseEnvInt(process.env.API_RATE_LIMIT_EXPENSIVE_MAX_REQUESTS, 5, 'API_RATE_LIMIT_EXPENSIVE_MAX_REQUESTS'),
   },
 
   /** MCP session endpoints - 100 requests per minute (matches current implementation) */
   MCP_SESSION: {
-    windowMs: Number.parseInt(process.env.MCP_RATE_LIMIT_WINDOW_MS ?? '60000', 10),
-    maxRequests: Number.parseInt(process.env.MCP_RATE_LIMIT_MAX_REQUESTS ?? '100', 10),
+    windowMs: parseEnvInt(process.env.MCP_RATE_LIMIT_WINDOW_MS, 60000, 'MCP_RATE_LIMIT_WINDOW_MS'),
+    maxRequests: parseEnvInt(process.env.MCP_RATE_LIMIT_MAX_REQUESTS, 100, 'MCP_RATE_LIMIT_MAX_REQUESTS'),
   },
 
   /** Public endpoints - 30 requests per minute */
   PUBLIC_LIGHT: {
-    windowMs: Number.parseInt(process.env.API_RATE_LIMIT_WINDOW_MS ?? '60000', 10),
-    maxRequests: Number.parseInt(process.env.API_RATE_LIMIT_PUBLIC_MAX_REQUESTS ?? '30', 10),
+    windowMs: parseEnvInt(process.env.API_RATE_LIMIT_WINDOW_MS, 60000, 'API_RATE_LIMIT_WINDOW_MS'),
+    maxRequests: parseEnvInt(process.env.API_RATE_LIMIT_PUBLIC_MAX_REQUESTS, 30, 'API_RATE_LIMIT_PUBLIC_MAX_REQUESTS'),
   },
 };

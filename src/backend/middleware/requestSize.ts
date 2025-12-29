@@ -14,6 +14,8 @@
 
 import { logSecurityEvent, type SecurityAuditEntry } from '../mcp/validation';
 import { getClientIp } from './rateLimit';
+import { parseEnvInt } from '../utils/config';
+
 
 export interface RequestSizeConfig {
   maxBytes: number;
@@ -93,7 +95,7 @@ export function createRequestSizeValidator(config: RequestSizeConfig): RequestSi
 export const RequestSizePresets = {
   /** Article content - 10MB (matches MCP limit) */
   ARTICLE_CONTENT: {
-    maxBytes: Number.parseInt(process.env.API_MAX_REQUEST_SIZE_BYTES ?? String(10 * 1024 * 1024), 10),
+    maxBytes: parseEnvInt(process.env.API_MAX_REQUEST_SIZE_BYTES, 10 * 1024 * 1024, 'API_MAX_REQUEST_SIZE_BYTES'),
   },
 
   /** Small payloads - 1MB for metadata and small operations */

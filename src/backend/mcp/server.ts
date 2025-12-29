@@ -16,6 +16,8 @@ import { loggingService, LogLevel, LogCategory } from '../services/logging.ts';
 import { logSecurityEvent } from './validation.ts';
 import { createRateLimiter, RateLimitPresets } from '../middleware/rateLimit';
 import { createRequestSizeValidator, RequestSizePresets } from '../middleware/requestSize';
+import { parseEnvInt } from '../utils/config';
+
 
 type McpSessionEntry = {
   transport: StreamableHTTPServerTransport;
@@ -30,20 +32,20 @@ type McpSessionEntry = {
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
-const MCP_MULTI_SEARCH_LIMIT = Number.parseInt(process.env.MCP_MULTI_SEARCH_LIMIT ?? '10', 10);
+const MCP_MULTI_SEARCH_LIMIT = parseEnvInt(process.env.MCP_MULTI_SEARCH_LIMIT, 10, 'MCP_MULTI_SEARCH_LIMIT');
 
-const MCP_SESSION_IDLE_MS = Number.parseInt(process.env.MCP_SESSION_IDLE_MS ?? '900000', 10); // 15m
-const MCP_SSE_HEADERS_TIMEOUT_MS = Number.parseInt(process.env.MCP_SSE_HEADERS_TIMEOUT_MS ?? '30000', 10); // 30s
-const MCP_SESSION_TTL_MS = Number.parseInt(process.env.MCP_SESSION_TTL_MS ?? '3600000', 10); // 1h
-const MCP_MAX_SESSIONS_TOTAL = Number.parseInt(process.env.MCP_MAX_SESSIONS_TOTAL ?? '200', 10);
-const MCP_MAX_SESSIONS_PER_IP = Number.parseInt(process.env.MCP_MAX_SESSIONS_PER_IP ?? '50', 10);
-const MCP_MAX_SESSIONS_PER_TOKEN = Number.parseInt(process.env.MCP_MAX_SESSIONS_PER_TOKEN ?? '100', 10);
+const MCP_SESSION_IDLE_MS = parseEnvInt(process.env.MCP_SESSION_IDLE_MS, 900000, 'MCP_SESSION_IDLE_MS'); // 15m
+const MCP_SSE_HEADERS_TIMEOUT_MS = parseEnvInt(process.env.MCP_SSE_HEADERS_TIMEOUT_MS, 30000, 'MCP_SSE_HEADERS_TIMEOUT_MS'); // 30s
+const MCP_SESSION_TTL_MS = parseEnvInt(process.env.MCP_SESSION_TTL_MS, 3600000, 'MCP_SESSION_TTL_MS'); // 1h
+const MCP_MAX_SESSIONS_TOTAL = parseEnvInt(process.env.MCP_MAX_SESSIONS_TOTAL, 200, 'MCP_MAX_SESSIONS_TOTAL');
+const MCP_MAX_SESSIONS_PER_IP = parseEnvInt(process.env.MCP_MAX_SESSIONS_PER_IP, 50, 'MCP_MAX_SESSIONS_PER_IP');
+const MCP_MAX_SESSIONS_PER_TOKEN = parseEnvInt(process.env.MCP_MAX_SESSIONS_PER_TOKEN, 100, 'MCP_MAX_SESSIONS_PER_TOKEN');
 const MCP_BIND_SESSION_TO_IP = process.env.MCP_BIND_SESSION_TO_IP?.toLowerCase() === 'true';
 
 // Rate limiting configuration
-const MCP_RATE_LIMIT_WINDOW_MS = Number.parseInt(process.env.MCP_RATE_LIMIT_WINDOW_MS ?? '60000', 10); // 1 minute
-const MCP_RATE_LIMIT_MAX_REQUESTS = Number.parseInt(process.env.MCP_RATE_LIMIT_MAX_REQUESTS ?? '100', 10);
-const MCP_MAX_REQUEST_SIZE_BYTES = Number.parseInt(process.env.MCP_MAX_REQUEST_SIZE_BYTES ?? String(10 * 1024 * 1024), 10); // 10MB
+const MCP_RATE_LIMIT_WINDOW_MS = parseEnvInt(process.env.MCP_RATE_LIMIT_WINDOW_MS, 60000, 'MCP_RATE_LIMIT_WINDOW_MS'); // 1 minute
+const MCP_RATE_LIMIT_MAX_REQUESTS = parseEnvInt(process.env.MCP_RATE_LIMIT_MAX_REQUESTS, 100, 'MCP_RATE_LIMIT_MAX_REQUESTS');
+const MCP_MAX_REQUEST_SIZE_BYTES = parseEnvInt(process.env.MCP_MAX_REQUEST_SIZE_BYTES, 10 * 1024 * 1024, 'MCP_MAX_REQUEST_SIZE_BYTES'); // 10MB
 
 // Session management for HTTP transport
 const sessions: Record<string, McpSessionEntry> = {};
