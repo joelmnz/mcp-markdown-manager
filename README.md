@@ -2,6 +2,23 @@
 
 A complete full-stack TypeScript monolithic markdown article management system designed for AI agents to save and manage research content. This self-hosted single-user system handles hundreds of markdown articles with PostgreSQL database backend and multiple interfaces: Web UI, REST API, and MCP server.
 
+## 🔒 Security
+
+This project implements comprehensive security measures. See our detailed security documentation:
+
+- **[Security Guide](docs/SECURITY.md)** - Security best practices, configuration, and hardening
+
+Key security features:
+- Bearer token authentication for all interfaces
+- Input validation and sanitization
+- Rate limiting and DoS protection
+- Parameterized database queries (SQL injection prevention)
+- Path traversal prevention
+- Session management with configurable limits and timeouts
+- Security event logging
+- Non-root container execution
+- Request size limits
+
 ## Features
 
 - 📝 **Database-backed articles** with structured metadata storage

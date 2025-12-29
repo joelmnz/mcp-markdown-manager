@@ -1,4 +1,6 @@
 import { authenticate, requireAuth } from '../middleware/auth';
+import { createRateLimiter, RateLimitPresets } from '../middleware/rateLimit';
+import { createRequestSizeValidator, RequestSizePresets } from '../middleware/requestSize';
 import { DatabaseServiceError, DatabaseErrorType } from '../services/databaseErrors.js';
 import {
   listArticles,
@@ -28,6 +30,12 @@ import { embeddingQueueConfigService } from '../services/embeddingQueueConfig.js
 import { importStatusService } from '../services/importStatus.js';
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
+
+// Create middleware instances
+const apiRateLimit = createRateLimiter(RateLimitPresets.API_GENERAL);
+const expensiveRateLimit = createRateLimiter(RateLimitPresets.API_EXPENSIVE);
+const publicRateLimit = createRateLimiter(RateLimitPresets.PUBLIC_LIGHT);
+const requestSizeValidator = createRequestSizeValidator(RequestSizePresets.ARTICLE_CONTENT);
 
 /**
  * Helper to handle service errors and return appropriate HTTP responses
@@ -63,6 +71,10 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
   // Health check endpoint (no auth required)
   if (path === '/health') {
+    // Apply light rate limiting to prevent health check abuse
+    const rateLimitError = publicRateLimit(request);
+    if (rateLimitError) return rateLimitError;
+
     try {
       const isAuthenticated = authenticate(request);
 
@@ -151,6 +163,10 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
   // Public article endpoint (no auth required)
   if (path.startsWith('/api/public-articles/') && request.method === 'GET') {
+    // Apply light rate limiting to prevent abuse
+    const rateLimitError = publicRateLimit(request);
+    if (rateLimitError) return rateLimitError;
+
     try {
       const slug = path.replace('/api/public-articles/', '');
       const article = await getArticleBySlug(slug);
@@ -179,6 +195,16 @@ export async function handleApiRequest(request: Request): Promise<Response> {
   // All other API endpoints require authentication
   const authError = requireAuth(request);
   if (authError) return authError;
+
+  // Apply rate limiting to all authenticated endpoints
+  const rateLimitError = apiRateLimit(request);
+  if (rateLimitError) return rateLimitError;
+
+  // Apply request size validation to POST/PUT endpoints
+  if (request.method === 'POST' || request.method === 'PUT') {
+    const sizeError = await requestSizeValidator(request);
+    if (sizeError) return sizeError;
+  }
 
   try {
     // GET /api/search - Semantic or Hybrid search
@@ -281,6 +307,10 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
     // POST /api/rag/reindex - Rebuild entire index
     if (path === '/api/rag/reindex' && request.method === 'POST') {
+      // Apply stricter rate limiting for expensive operations
+      const expensiveRateLimitError = expensiveRateLimit(request);
+      if (expensiveRateLimitError) return expensiveRateLimitError;
+
       if (!SEMANTIC_SEARCH_ENABLED) {
         return new Response(JSON.stringify({ error: 'Semantic search is not enabled' }), {
           status: 400,
