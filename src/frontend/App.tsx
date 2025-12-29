@@ -9,6 +9,7 @@ import { ArticleEdit } from './pages/ArticleEdit';
 import { RAGStatus } from './pages/RAGStatus';
 import { ImportFiles } from './pages/ImportFiles';
 import { PublicArticleView } from './components/PublicArticleView';
+import { OAuthConsentPage } from './OAuthConsent';
 import {
   initializeRuntimeConfig,
   getRuntimeConfig,
@@ -33,7 +34,8 @@ type Route =
   | { type: 'new' }
   | { type: 'rag-status' }
   | { type: 'import-files' }
-  | { type: 'public-article'; slug: string };
+  | { type: 'public-article'; slug: string }
+  | { type: 'oauth-consent' };
 
 function App() {
   const [token, setToken] = useState<string | null>(null);
@@ -125,8 +127,8 @@ function App() {
     const path = parseRouteFromUrl(window.location.href);
     const parsedRoute = parseRoute(path);
 
-    // Allow public article routes without authentication
-    if (!savedToken && parsedRoute.type !== 'home' && parsedRoute.type !== 'public-article') {
+    // Allow public routes without authentication (home, public articles, OAuth consent)
+    if (!savedToken && parsedRoute.type !== 'home' && parsedRoute.type !== 'public-article' && parsedRoute.type !== 'oauth-consent') {
       setIntendedRoute(parsedRoute);
     } else {
       setRoute(parsedRoute);
@@ -197,6 +199,10 @@ function App() {
 
     if (normalizedPath === '/' || normalizedPath === '') {
       return { type: 'home' };
+    }
+
+    if (normalizedPath === '/oauth/consent') {
+      return { type: 'oauth-consent' };
     }
 
     if (normalizedPath === '/rag-status') {
@@ -351,6 +357,11 @@ function App() {
   }
 
   if (!token) {
+    // Allow access to OAuth consent page without authentication
+    if (route.type === 'oauth-consent') {
+      return <OAuthConsentPage />;
+    }
+
     // Allow access to public article view without authentication
     if (route.type === 'public-article') {
       return (
