@@ -928,6 +928,21 @@ body {
   border-color: var(--accent-color);
 }
 
+.edit-slug-input {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+
+.edit-slug-input:disabled {
+  opacity: 0.8;
+  cursor: not-allowed;
+}
+
 .edit-textarea {
   flex: 1;
   min-height: 500px;

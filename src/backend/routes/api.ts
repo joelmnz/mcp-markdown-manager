@@ -16,7 +16,8 @@ import {
   listArticleVersions,
   getArticleVersion,
   restoreArticleVersion,
-  deleteArticleVersions
+  deleteArticleVersions,
+  renameArticleSlug
 } from '../services/articles';
 import { semanticSearch, hybridSearch, getDetailedIndexStats, indexUnindexedArticles } from '../services/vectorIndex';
 import { databaseHealthService } from '../services/databaseHealth.js';
@@ -589,6 +590,33 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       return new Response(JSON.stringify({ success: true, isPublic }), {
         headers: { 'Content-Type': 'application/json' }
       });
+    }
+
+    // POST /api/articles/:filename/rename-slug - Rename article slug
+    if (path.match(/^\/api\/articles\/[^\/]+\/rename-slug$/) && request.method === 'POST') {
+      try {
+        const filename = path.replace('/api/articles/', '').replace('/rename-slug', '');
+        const body = await request.json();
+        const { newSlug } = body;
+
+        if (!newSlug || !newSlug.trim()) {
+          return new Response(JSON.stringify({ error: 'New slug is required' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const renamedArticle = await renameArticleSlug(filename, newSlug);
+
+        return new Response(JSON.stringify({
+          success: true,
+          article: renamedArticle
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to rename article slug');
+      }
     }
 
     // GET /api/import/status - Get import status
