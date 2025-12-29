@@ -114,6 +114,16 @@ export class OAuthStorageService {
   }
 
   /**
+   * List all OAuth clients
+   */
+  async listClients(): Promise<OAuthClient[]> {
+    const result = await database.query(
+      'SELECT * FROM oauth_clients ORDER BY created_at DESC'
+    );
+    return result.rows;
+  }
+
+  /**
    * Verify client secret
    */
   async verifyClientSecret(clientId: string, clientSecret: string): Promise<boolean> {
@@ -303,6 +313,47 @@ export class OAuthStorageService {
     const refreshTokens = await this.deleteExpiredRefreshTokens();
 
     return { codes, accessTokens, refreshTokens };
+  }
+
+  /**
+   * List all active tokens (access and refresh) with client info
+   */
+  async listTokens(): Promise<{ accessTokens: any[]; refreshTokens: any[] }> {
+    const accessTokensResult = await database.query(`
+      SELECT
+        t.token_hash,
+        t.client_id,
+        t.user_id,
+        t.scope,
+        t.expires_at,
+        t.created_at,
+        t.revoked_at,
+        c.client_name
+      FROM oauth_access_tokens t
+      LEFT JOIN oauth_clients c ON t.client_id = c.client_id
+      ORDER BY t.created_at DESC
+    `);
+
+    const refreshTokensResult = await database.query(`
+      SELECT
+        t.token_hash,
+        t.access_token_hash,
+        t.client_id,
+        t.user_id,
+        t.scope,
+        t.expires_at,
+        t.created_at,
+        t.revoked_at,
+        c.client_name
+      FROM oauth_refresh_tokens t
+      LEFT JOIN oauth_clients c ON t.client_id = c.client_id
+      ORDER BY t.created_at DESC
+    `);
+
+    return {
+      accessTokens: accessTokensResult.rows,
+      refreshTokens: refreshTokensResult.rows,
+    };
   }
 }
 

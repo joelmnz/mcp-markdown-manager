@@ -28,6 +28,7 @@ import { backgroundWorkerService } from '../services/backgroundWorker.js';
 import { embeddingQueueService } from '../services/embeddingQueue.js';
 import { embeddingQueueConfigService } from '../services/embeddingQueueConfig.js';
 import { importStatusService } from '../services/importStatus.js';
+import { oauthStorage } from '../oauth/storage.js';
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 
@@ -679,6 +680,99 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       } catch (error) {
         return handleServiceError(error, 'Import failed to start');
+      }
+    }
+
+    // OAuth Client Management Endpoints
+    const OAUTH_ENABLED = process.env.OAUTH_ENABLED?.toLowerCase() === 'true';
+
+    // GET /api/oauth/clients - List all OAuth clients
+    if (path === '/api/oauth/clients' && request.method === 'GET') {
+      if (!OAUTH_ENABLED) {
+        return new Response(JSON.stringify({ error: 'OAuth is not enabled' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      try {
+        const result = await oauthStorage.listClients();
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to list OAuth clients');
+      }
+    }
+
+    // GET /api/oauth/clients/:clientId - Get specific OAuth client
+    if (path.startsWith('/api/oauth/clients/') && request.method === 'GET') {
+      if (!OAUTH_ENABLED) {
+        return new Response(JSON.stringify({ error: 'OAuth is not enabled' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const clientId = path.replace('/api/oauth/clients/', '');
+      try {
+        const client = await oauthStorage.getClient(clientId);
+        if (!client) {
+          return new Response(JSON.stringify({ error: 'Client not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        return new Response(JSON.stringify(client), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to get OAuth client');
+      }
+    }
+
+    // DELETE /api/oauth/clients/:clientId - Delete OAuth client
+    if (path.startsWith('/api/oauth/clients/') && request.method === 'DELETE') {
+      if (!OAUTH_ENABLED) {
+        return new Response(JSON.stringify({ error: 'OAuth is not enabled' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const clientId = path.replace('/api/oauth/clients/', '');
+      try {
+        const deleted = await oauthStorage.deleteClient(clientId);
+        if (!deleted) {
+          return new Response(JSON.stringify({ error: 'Client not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to delete OAuth client');
+      }
+    }
+
+    // GET /api/oauth/tokens - List all OAuth tokens (access and refresh)
+    if (path === '/api/oauth/tokens' && request.method === 'GET') {
+      if (!OAUTH_ENABLED) {
+        return new Response(JSON.stringify({ error: 'OAuth is not enabled' }), {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      try {
+        const tokens = await oauthStorage.listTokens();
+        return new Response(JSON.stringify(tokens), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to list OAuth tokens');
       }
     }
 

@@ -8,6 +8,7 @@ import { ArticleView } from './pages/ArticleView';
 import { ArticleEdit } from './pages/ArticleEdit';
 import { RAGStatus } from './pages/RAGStatus';
 import { ImportFiles } from './pages/ImportFiles';
+import { Settings } from './pages/Settings';
 import { PublicArticleView } from './components/PublicArticleView';
 import { OAuthConsentPage } from './OAuthConsent';
 import {
@@ -34,6 +35,7 @@ type Route =
   | { type: 'new' }
   | { type: 'rag-status' }
   | { type: 'import-files' }
+  | { type: 'settings' }
   | { type: 'public-article'; slug: string }
   | { type: 'oauth-consent' };
 
@@ -211,6 +213,10 @@ function App() {
 
     if (normalizedPath === '/import-files') {
       return { type: 'import-files' };
+    }
+
+    if (normalizedPath === '/settings') {
+      return { type: 'settings' };
     }
 
     if (normalizedPath.startsWith('/public-article/')) {
@@ -393,6 +399,9 @@ function App() {
         )}
         {route.type === 'import-files' && (
           <ImportFiles token={token} onNavigate={navigate} />
+        )}
+        {route.type === 'settings' && (
+          <Settings token={token} onNavigate={navigate} />
         )}
         {route.type === 'article' && (
           <ArticleView filename={route.filename} token={token} onNavigate={navigate} />
