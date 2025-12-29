@@ -681,52 +681,12 @@ export async function listRecentBulkOperations(limit: number = 10): Promise<Arra
 }
 
 // Rename article slug
-export async function renameArticleSlug(filename: string, newSlug: string, options?: ArticleServiceOptions): Promise<Article> {
+export async function renameArticleSlug(filename: string, newSlug: string): Promise<Article> {
   const oldSlug = filenameToSlug(filename);
 
   // Rename in database (with validation)
+  // Note: Embeddings are stored by article_id, not slug, so they remain valid after rename
   const renamedArticle = await databaseArticleService.renameArticleSlug(oldSlug, newSlug);
-
-  // Handle embedding updates with failure isolation
-  if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
-    await safelyHandleEmbeddingOperation(async () => {
-      const articleId = await databaseArticleService.getArticleId(renamedArticle.slug);
-
-      if (articleId) {
-        // Queue a delete task for the old slug embeddings
-        const config = embeddingQueueConfigService.getConfig();
-        await embeddingQueueService.enqueueTask({
-          articleId,
-          slug: oldSlug,
-          operation: 'delete',
-          priority: options?.embeddingPriority || 'normal',
-          maxAttempts: config.maxRetries,
-          scheduledAt: new Date(),
-          metadata: {
-            filename,
-            reason: 'slug_rename_cleanup'
-          }
-        });
-
-        // Queue an update task for the new slug
-        await embeddingQueueService.enqueueTask({
-          articleId,
-          slug: renamedArticle.slug,
-          operation: 'update',
-          priority: options?.embeddingPriority || 'normal',
-          maxAttempts: config.maxRetries,
-          scheduledAt: new Date(),
-          metadata: {
-            filename: slugToFilename(renamedArticle.slug),
-            title: renamedArticle.title,
-            contentLength: renamedArticle.content.length,
-            reason: 'slug_rename',
-            oldSlug: oldSlug
-          }
-        });
-      }
-    }, 'article slug rename embedding task queuing');
-  }
 
   return convertToLegacyArticle(renamedArticle);
 }
