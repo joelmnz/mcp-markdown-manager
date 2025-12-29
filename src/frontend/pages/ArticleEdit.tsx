@@ -265,39 +265,6 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
 
       {error && <div className="error-message">{error}</div>}
 
-      {!isNew && (
-        <div className="public-sharing-section">
-          <label className="public-toggle-label">
-            <input
-              type="checkbox"
-              checked={isPublic}
-              onChange={(e) => handlePublicToggle(e.target.checked)}
-              className="public-toggle-checkbox"
-            />
-            <span className="public-toggle-text" title="Allow public sharing of this article - No Save necessary">Allow Public Sharing</span>
-          </label>
-
-          {isPublic && (
-            <div className="share-link-pill">
-              <button
-                className="share-link-button"
-                onClick={navigateToPublicView}
-                title="View public page"
-              >
-                🔗 Public Link
-              </button>
-              <button
-                className="copy-link-button"
-                onClick={handleCopyPublicLink}
-                title="Copy link to clipboard"
-              >
-                {copySuccess ? '✓' : '📋'}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="edit-metadata-row">
         <div className="edit-metadata-item">
           <label className="edit-label">Title</label>
@@ -323,7 +290,38 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       </div>
 
       {!isNew && (
-        <div className="edit-metadata-row">
+        <div className="edit-metadata-row" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'flex-start' }}>
+          <div className="public-sharing-section" style={{ margin: 0, height: '100%', boxSizing: 'border-box' }}>
+            <label className="public-toggle-label">
+              <input
+                type="checkbox"
+                checked={isPublic}
+                onChange={(e) => handlePublicToggle(e.target.checked)}
+                className="public-toggle-checkbox"
+              />
+              <span className="public-toggle-text" title="Allow public sharing of this article - No Save necessary">Allow Public Sharing</span>
+            </label>
+
+            {isPublic && (
+              <div className="share-link-pill">
+                <button
+                  className="share-link-button"
+                  onClick={navigateToPublicView}
+                  title="View public page"
+                >
+                  🔗 Public Link
+                </button>
+                <button
+                  className="copy-link-button"
+                  onClick={handleCopyPublicLink}
+                  title="Copy link to clipboard"
+                >
+                  {copySuccess ? '✓' : '📋'}
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="edit-metadata-item">
             <label className="edit-label">Article Slug/Filename</label>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -332,17 +330,17 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
                 value={filename}
                 disabled
                 className="edit-slug-input"
-                style={{ flex: 1 }}
               />
               <button
                 className="button button-secondary"
                 onClick={() => setShowRenameModal(true)}
                 title="Rename article slug/filename"
+                style={{ whiteSpace: 'nowrap' }}
               >
                 Rename Slug
               </button>
             </div>
-            <small style={{ color: '#666', fontSize: '0.85em', marginTop: '4px', display: 'block' }}>
+            <small style={{ color: 'var(--text-tertiary)', fontSize: '0.85em', marginTop: '4px', display: 'block' }}>
               The slug is used as the filename and in URLs. Must be unique.
             </small>
           </div>

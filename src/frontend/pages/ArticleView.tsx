@@ -240,7 +240,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
           <button
             className="button button-secondary"
             onClick={handleCopySlug}
-            title="Copy article reference for AI"
+            title={`Copy article reference '${article.title}' (${filename}.md)`}
             style={{ whiteSpace: 'nowrap' }}
           >
             {copyFeedback ? '✓ Copied!' : '📋 Copy'}
