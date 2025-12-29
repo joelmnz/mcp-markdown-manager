@@ -184,11 +184,6 @@ export function validateFolder(folder: any): ValidationResult {
   // Additional folder-specific validation
   const sanitized = result.sanitized;
   if (sanitized) {
-    // Check for path traversal attempts
-    if (sanitized.includes('..')) {
-      return { valid: false, error: 'folder path cannot contain ..' };
-    }
-
     // Validate folder path structure
     const folderPattern = /^[a-zA-Z0-9_\-\/]+$/;
     if (!folderPattern.test(sanitized)) {
