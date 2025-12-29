@@ -874,6 +874,14 @@ body {
   margin-bottom: 1.5rem;
 }
 
+.edit-metadata-row-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  align-items: flex-start;
+}
+
 .edit-metadata-item {
   display: flex;
   flex-direction: column;
@@ -1068,6 +1076,11 @@ body {
 
   .edit-metadata-row {
     grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .edit-metadata-row-two-col {
+    grid-template-columns: 1fr !important;
     gap: 1rem;
   }
 
