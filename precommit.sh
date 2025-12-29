@@ -38,6 +38,17 @@ else
 fi
 echo ""
 
+# Step 4: Build Docker image (optional - requires Docker)
+echo "🐳 Step 4: Building Docker image..."
+if command -v docker &> /dev/null; then
+    docker build -t mcp-markdown-manager:precommit-test .
+    echo "✅ Docker image build passed"
+else
+    echo "⚠️  Docker not found - skipping Docker build step"
+    echo "   (This step will run in CI/CD environments)"
+fi
+echo ""
+
 echo "=================================="
 echo "✅ All Precommit Checks Passed!"
 echo "=================================="
