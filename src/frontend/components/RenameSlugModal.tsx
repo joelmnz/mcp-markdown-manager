@@ -37,7 +37,11 @@ export function RenameSlugModal({
       return;
     }
 
-    if (newSlug.trim() === currentSlug) {
+    // Normalize the same way as backend (lowercase + trim)
+    const normalizedNewSlug = newSlug.trim().toLowerCase();
+    const normalizedCurrentSlug = currentSlug.trim().toLowerCase();
+
+    if (normalizedNewSlug === normalizedCurrentSlug) {
       setError('New slug must be different from the current slug');
       return;
     }
