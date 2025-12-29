@@ -35,6 +35,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
   const [currentVersionIndex, setCurrentVersionIndex] = useState(-1); // -1 means current version
   const [loadingVersion, setLoadingVersion] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(false);
   const articleContentRef = useRef<HTMLElement>(null);
   const { isFullscreen, toggleFullscreen } = useFullscreen();
 
@@ -194,6 +195,21 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
     });
   };
 
+  const handleCopySlug = async () => {
+    if (!article) return;
+
+    // Format: "Read article 'Article Title' (filename.md)"
+    const copyText = `Read article '${article.title}' (${filename}.md)`;
+
+    try {
+      await navigator.clipboard.writeText(copyText);
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
   const isViewingHistory = currentVersionIndex !== -1;
   const canNavigateBack = currentVersionIndex === -1 ? versions.length > 0 : currentVersionIndex < versions.length - 1;
   const canNavigateForward = currentVersionIndex > -1;
@@ -217,9 +233,19 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
   return (
     <div className="page">
       <div className="article-header">
-        <button className="button button-secondary" onClick={() => onNavigate('/')}>
-          ← Back
-        </button>
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button className="button button-secondary" onClick={() => onNavigate('/')}>
+            ← Back
+          </button>
+          <button
+            className="button button-secondary"
+            onClick={handleCopySlug}
+            title="Copy article reference for AI"
+            style={{ whiteSpace: 'nowrap' }}
+          >
+            {copyFeedback ? '✓ Copied!' : '📋 Copy'}
+          </button>
+        </div>
         <div className="article-actions">
           {versions.length > 0 && (
             <>
