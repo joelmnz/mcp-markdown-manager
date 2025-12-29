@@ -355,7 +355,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         </div>
       )}
 
-      <div className={`edit-container ${showPreview ? 'preview-visible' : 'preview-hidden'}`}>
+      <div className={`edit-container ${!showPreview ? 'preview-hidden' : ''}`}>
         <div className="edit-section">
           <label className="edit-label">Content (Markdown)</label>
           <textarea
