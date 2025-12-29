@@ -40,6 +40,7 @@
     "deploy": "bash scripts/deploy-production.sh",
     "deploy:windows": "powershell -ExecutionPolicy Bypass -File scripts/deploy-production.ps1",
     "typecheck": "tsc --noEmit",
+    "precommit": "bash precommit.sh",
     "prepare": "bun run setup-hooks",
     "setup-hooks": "test -d .git && echo '#!/bin/sh\nbun run typecheck' > .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit || exit 0"
   },
