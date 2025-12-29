@@ -128,7 +128,7 @@ export class DatabaseArticleService {
       // folder = "" or "/" means ROOT folder
       if (folder !== undefined && folder !== null) {
         const normalizedFolder = this.normalizeFolder(folder);
-        
+
         if (normalizedFolder === '') {
           // Root folder only (stored as empty string in DB)
           query += ' WHERE folder = $1';
@@ -175,7 +175,7 @@ export class DatabaseArticleService {
     // folder = "" or "/" means ROOT folder
     if (folder !== undefined && folder !== null) {
       const normalizedFolder = this.normalizeFolder(folder);
-      
+
       if (normalizedFolder === '') {
         // Root folder only (stored as empty string in DB)
         sql += ' AND folder = $2';
@@ -532,7 +532,7 @@ export class DatabaseArticleService {
       // Check if old folder exists (case-insensitive check)
       const folders = await this.getFolderHierarchy();
       const folderExists = folders.some(f => f.toLowerCase() === normalizedOldFolder.toLowerCase());
-      
+
       if (!folderExists) {
         throw new DatabaseServiceError(
           DatabaseErrorType.NOT_FOUND,
@@ -659,7 +659,7 @@ export class DatabaseArticleService {
 
       if (result.rows.length === 0) {
         throw new DatabaseServiceError(
-          DatabaseErrorType.UNKNOWN,
+          DatabaseErrorType.UNKNOWN_ERROR,
           `Failed to rename article slug from '${oldSlug}' to '${normalizedNewSlug}'`,
           'An error occurred while renaming the article.'
         );
