@@ -25,11 +25,20 @@ echo ""
 # Step 3: Verify build artifacts exist
 echo "🔍 Step 3: Verifying build artifacts..."
 if [ -d "public" ]; then
+    # Check for JavaScript bundles
     BUILD_FILES=$(find public -name "App.*.js" | wc -l)
     if [ "$BUILD_FILES" -gt 0 ]; then
-        echo "✅ Build artifacts verified (found $BUILD_FILES JS bundle(s))"
+        echo "✅ JavaScript bundles verified (found $BUILD_FILES bundle(s))"
     else
-        echo "❌ Error: No build artifacts found in public/"
+        echo "❌ Error: No JavaScript bundles found in public/"
+        exit 1
+    fi
+
+    # Check for index.html
+    if [ -f "public/index.html" ]; then
+        echo "✅ index.html verified"
+    else
+        echo "❌ Error: public/index.html not found - HTML build failed"
         exit 1
     fi
 else
