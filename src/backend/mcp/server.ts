@@ -408,6 +408,9 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
   }
 
   const token = getBearerToken(request);
+  if (!token) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+  }
 
   // Validate request size before processing
   const sizeCheck = await mcpSizeValidator(request);
@@ -458,7 +461,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
       return handleTransportRequest(transport, request, body, newSessionId);
     }
 
-    const authorized = getAuthorizedSession(request, sessionId);
+    const authorized = await getAuthorizedSession(request, sessionId);
     if (authorized instanceof Response) return authorized;
 
     const { entry } = authorized;
@@ -484,7 +487,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
   const nowMs = Date.now();
   cleanupExpiredSessions(nowMs);
 
-  const authorized = getAuthorizedSession(request, sessionId);
+  const authorized = await getAuthorizedSession(request, sessionId);
   if (authorized instanceof Response) return authorized;
 
   const { entry } = authorized;
@@ -592,7 +595,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
     }
   });
 
-  entry.transport.handleRequest(nodeReq, nodeRes).catch(error => {
+  entry.transport.handleRequest(nodeReq, nodeRes).catch((error: unknown) => {
     loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, `SSE Stream error for session ${sessionId}`, {
       error: error instanceof Error ? error : new Error(String(error)),
       metadata: { sessionId }
@@ -624,7 +627,7 @@ export async function handleMCPDeleteRequest(request: Request): Promise<Response
   const nowMs = Date.now();
   cleanupExpiredSessions(nowMs);
 
-  const authorized = getAuthorizedSession(request, sessionId);
+  const authorized = await getAuthorizedSession(request, sessionId);
   if (authorized instanceof Response) return authorized;
 
   const { entry } = authorized;

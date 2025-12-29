@@ -132,7 +132,7 @@ export class OAuthStorageService {
       'DELETE FROM oauth_clients WHERE client_id = $1',
       [clientId]
     );
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   /**
@@ -180,7 +180,7 @@ export class OAuthStorageService {
     const result = await database.query(
       'DELETE FROM oauth_authorization_codes WHERE expires_at < NOW()'
     );
-    return result.rowCount;
+    return result.rowCount ?? 0;
   }
 
   /**
@@ -225,7 +225,7 @@ export class OAuthStorageService {
        WHERE token_hash = $1 AND revoked_at IS NULL`,
       [tokenHash]
     );
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   /**
@@ -235,7 +235,7 @@ export class OAuthStorageService {
     const result = await database.query(
       'DELETE FROM oauth_access_tokens WHERE expires_at < NOW()'
     );
-    return result.rowCount;
+    return result.rowCount ?? 0;
   }
 
   /**
@@ -281,7 +281,7 @@ export class OAuthStorageService {
        WHERE token_hash = $1 AND revoked_at IS NULL`,
       [tokenHash]
     );
-    return result.rowCount > 0;
+    return (result.rowCount ?? 0) > 0;
   }
 
   /**
@@ -291,7 +291,7 @@ export class OAuthStorageService {
     const result = await database.query(
       'DELETE FROM oauth_refresh_tokens WHERE expires_at < NOW()'
     );
-    return result.rowCount;
+    return result.rowCount ?? 0;
   }
 
   /**

@@ -76,7 +76,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     if (rateLimitError) return rateLimitError;
 
     try {
-      const isAuthenticated = authenticate(request);
+      const authResult = await authenticate(request);
+      const isAuthenticated = authResult.authenticated;
 
       // Simple health check that uses minimal database connections
       const basicHealthCheck = await databaseInit.healthCheck();
@@ -193,7 +194,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
   }
 
   // All other API endpoints require authentication
-  const authError = requireAuth(request);
+  const authError = await requireAuth(request);
   if (authError) return authError;
 
   // Apply rate limiting to all authenticated endpoints
