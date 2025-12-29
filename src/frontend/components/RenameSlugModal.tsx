@@ -87,68 +87,66 @@ export function RenameSlugModal({
   if (!isOpen) return null;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+    <>
+      <div className="modal-overlay" onClick={onClose} />
+      <div className="modal-container">
         <div className="modal-header">
           <h2>Rename Article Slug</h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
 
-        <div className="modal-body">
-          <p className="modal-description">
+        <div className="modal-content">
+          <p style={{ marginBottom: '1rem', color: '#666' }}>
             The article slug is used as the filename and in URLs. It must be unique.
           </p>
 
+          {error && <div className="error-message">{error}</div>}
+          {success && <div className="success-message">{success}</div>}
+
           <div className="form-group">
-            <label htmlFor="current-slug">Current Slug</label>
+            <label htmlFor="current-slug">Current Slug:</label>
             <input
               id="current-slug"
               type="text"
               value={currentSlug}
               disabled
-              className="form-input"
+              className="input"
             />
           </div>
 
           <div className="form-group">
-            <label htmlFor="new-slug">New Slug</label>
+            <label htmlFor="new-slug">New Slug:</label>
             <input
               id="new-slug"
               type="text"
               value={newSlug}
               onChange={(e) => setNewSlug(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Enter new slug"
-              className="form-input"
+              placeholder="Enter new slug (lowercase, numbers, hyphens)"
+              className="input"
               autoFocus
               disabled={loading}
             />
-            <small className="form-hint">
-              Use lowercase letters, numbers, and hyphens only
-            </small>
           </div>
 
-          {error && <div className="error-message">{error}</div>}
-          {success && <div className="success-message">{success}</div>}
-        </div>
-
-        <div className="modal-footer">
-          <button
-            className="button button-secondary"
-            onClick={onClose}
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button
-            className="button button-primary"
-            onClick={handleRename}
-            disabled={loading || !newSlug.trim()}
-          >
-            {loading ? 'Renaming...' : 'Rename Slug'}
-          </button>
+          <div className="modal-actions">
+            <button
+              className="button button-primary"
+              onClick={handleRename}
+              disabled={loading || !newSlug.trim()}
+            >
+              {loading ? 'Renaming...' : 'Rename Slug'}
+            </button>
+            <button
+              className="button button-secondary"
+              onClick={onClose}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
