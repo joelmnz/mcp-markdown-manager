@@ -679,3 +679,14 @@ export async function listRecentBulkOperations(limit: number = 10): Promise<Arra
     return [];
   }
 }
+
+// Rename article slug
+export async function renameArticleSlug(filename: string, newSlug: string): Promise<Article> {
+  const oldSlug = filenameToSlug(filename);
+
+  // Rename in database (with validation)
+  // Note: Embeddings are stored by article_id, not slug, so they remain valid after rename
+  const renamedArticle = await databaseArticleService.renameArticleSlug(oldSlug, newSlug);
+
+  return convertToLegacyArticle(renamedArticle);
+}
