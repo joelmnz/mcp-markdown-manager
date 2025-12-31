@@ -80,12 +80,15 @@ export async function convertBunRequestToNode(bunReq: Request, parsedBody?: any)
 
     // Make the request a readable stream
     readable: true,
-    readableEnded: !parsedBody, // If no body, stream is already ended
+    readableEnded: parsedBody === undefined, // If no body provided, stream is already ended
 
     // Implement Readable stream methods
     read() {
+      // Guard: Don't emit events if stream already ended
+      if (this.readableEnded) return null;
+
       // When SDK tries to read, emit the body data if we have it
-      if (parsedBody && !bodyEmitted) {
+      if (parsedBody !== undefined && !bodyEmitted) {
         bodyEmitted = true;
         const bodyString = typeof parsedBody === 'string' ? parsedBody : JSON.stringify(parsedBody);
         const bodyBuffer = Buffer.from(bodyString, 'utf-8');
@@ -96,7 +99,7 @@ export async function convertBunRequestToNode(bunReq: Request, parsedBody?: any)
           this.emit('end');
           this.readableEnded = true;
         });
-      } else if (!parsedBody && !bodyEmitted) {
+      } else if (parsedBody === undefined && !bodyEmitted) {
         // No body - emit 'end' immediately so SDK doesn't wait indefinitely
         bodyEmitted = true;
         setImmediate(() => {
