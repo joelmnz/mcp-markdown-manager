@@ -298,7 +298,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       </div>
 
       {!isNew && (
-        <div className="edit-metadata-row" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'flex-start' }}>
+        <div className="edit-metadata-row-two-col">
           <div className="public-sharing-section" style={{ margin: 0, height: '100%', boxSizing: 'border-box' }}>
             <label className="public-toggle-label">
               <input
