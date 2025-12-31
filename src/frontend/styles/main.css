@@ -1080,7 +1080,7 @@ body {
   }
 
   .edit-metadata-row-two-col {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: 1fr;
     gap: 1rem;
   }
 
