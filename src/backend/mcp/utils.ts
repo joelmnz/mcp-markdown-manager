@@ -38,15 +38,15 @@ export async function handleTransportRequest(
   
   // Check if this is a JSON-RPC request (has 'method' and 'id') vs notification/response
   const isRequest = body && typeof body === 'object' && 'method' in body && 'id' in body;
-  
+
   // For initialize or any JSON-RPC request, wait for completion and return full response
   if (isInitialize || isRequest) {
-    await transport.handleRequest(nodeReq, nodeRes, body);
+    await transport.handleRequest(nodeReq, nodeRes);
     return convertNodeResponseToBun(nodeRes, sessionId);
   }
-  
+
   // For notifications/responses, trigger handling without waiting and return 202 Accepted
-  transport.handleRequest(nodeReq, nodeRes, body).catch(error => {
+  transport.handleRequest(nodeReq, nodeRes).catch(error => {
     console.error('Error handling MCP notification/response:', error);
   });
   
@@ -64,6 +64,7 @@ export async function handleTransportRequest(
 export async function convertBunRequestToNode(bunReq: Request, parsedBody?: any): Promise<any> {
   const url = new URL(bunReq.url);
   const listeners: Record<string, Function[]> = {};
+  let bodyEmitted = false;
 
   const socketMock = {
     remoteAddress: '127.0.0.1',
@@ -76,12 +77,66 @@ export async function convertBunRequestToNode(bunReq: Request, parsedBody?: any)
     method: bunReq.method,
     url: url.pathname + url.search,
     headers: {} as Record<string, string>,
-    body: parsedBody,
+
+    // Make the request a readable stream
+    readable: true,
+    readableEnded: false,
+
+    // Implement Readable stream methods
+    read() {
+      // When SDK tries to read, emit the body data if we have it
+      if (parsedBody && !bodyEmitted) {
+        bodyEmitted = true;
+        const bodyString = typeof parsedBody === 'string' ? parsedBody : JSON.stringify(parsedBody);
+        const bodyBuffer = Buffer.from(bodyString, 'utf-8');
+
+        // Emit data asynchronously
+        setImmediate(() => {
+          this.emit('data', bodyBuffer);
+          this.emit('end');
+          this.readableEnded = true;
+        });
+      }
+      return null;
+    },
+
+    push(chunk: any) {
+      if (chunk === null) {
+        this.emit('end');
+        this.readableEnded = true;
+      } else {
+        this.emit('data', chunk);
+      }
+      return true;
+    },
+
+    pause() {
+      return this;
+    },
+
+    resume() {
+      // Trigger read when resumed
+      this.read();
+      return this;
+    },
+
+    pipe(destination: any) {
+      this.on('data', (chunk: any) => destination.write(chunk));
+      this.on('end', () => destination.end?.());
+      this.resume();
+      return destination;
+    },
 
     // EventEmitter implementation
     on(event: string, listener: Function) {
       if (!listeners[event]) listeners[event] = [];
       listeners[event].push(listener);
+
+      // If listener is added for 'data' or 'readable', trigger read
+      if ((event === 'data' || event === 'readable') && parsedBody && !bodyEmitted) {
+        setImmediate(() => this.read());
+      }
+
       return this;
     },
     once(event: string, listener: Function) {
