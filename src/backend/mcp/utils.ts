@@ -80,7 +80,7 @@ export async function convertBunRequestToNode(bunReq: Request, parsedBody?: any)
 
     // Make the request a readable stream
     readable: true,
-    readableEnded: false,
+    readableEnded: !parsedBody, // If no body, stream is already ended
 
     // Implement Readable stream methods
     read() {
@@ -90,9 +90,16 @@ export async function convertBunRequestToNode(bunReq: Request, parsedBody?: any)
         const bodyString = typeof parsedBody === 'string' ? parsedBody : JSON.stringify(parsedBody);
         const bodyBuffer = Buffer.from(bodyString, 'utf-8');
 
-        // Emit data asynchronously
+        // Emit data asynchronously - use arrow function to preserve 'this'
         setImmediate(() => {
           this.emit('data', bodyBuffer);
+          this.emit('end');
+          this.readableEnded = true;
+        });
+      } else if (!parsedBody && !bodyEmitted) {
+        // No body - emit 'end' immediately so SDK doesn't wait indefinitely
+        bodyEmitted = true;
+        setImmediate(() => {
           this.emit('end');
           this.readableEnded = true;
         });
@@ -133,7 +140,8 @@ export async function convertBunRequestToNode(bunReq: Request, parsedBody?: any)
       listeners[event].push(listener);
 
       // If listener is added for 'data' or 'readable', trigger read
-      if ((event === 'data' || event === 'readable') && parsedBody && !bodyEmitted) {
+      // Use arrow function to preserve 'this' context
+      if ((event === 'data' || event === 'readable') && !bodyEmitted) {
         setImmediate(() => this.read());
       }
 
