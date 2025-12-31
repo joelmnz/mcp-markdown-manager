@@ -1,20 +1,46 @@
 # Agent Instructions for MCP Markdown Manager
 
 ## Commands
+- **Install**: `bun install` (install dependencies, run after git checkout or after adding new dependencies)
 - **Build**: `bun run build` (builds frontend with hashed assets)
 - **Typecheck**: `bun run typecheck` (run this after changes)
 - **Dev**: `bun run dev:backend` (backend) and `bun run dev:frontend` (frontend, separate terminals)
 - **Docker**:
+  - `bun run dc:db` - Start the database for local testing
   - `bun run dc:ui` - Quick start (down, build, up in one command)
-  - `docker compose up -d` - Start containers
-  - `docker compose down` - Stop containers
-  - `docker compose down && docker compose build --no-cache article-manager && docker compose up -d` - Full rebuild and restart
+  - `docker compose down` - Stop containers, run when you're done testing.
   - `docker logs mcp-markdown-manager` - View backend logs
 - **Tests**: No formal test runner. Run individual scripts in `scripts/`:
   - `bun scripts/test-parsing.ts` - Markdown parsing
   - `bun scripts/test-import.ts` - Import functionality
   - `bun scripts/test-error-handling.ts` - DB error handling
   - `bun scripts/test-api-client-runtime.ts` - API Client tests
+  - `bun scripts/verify-mcp.ts <AUTH_TOKEN>` - MCP server integration test (requires server running)
+
+## Verification Strategy
+
+### When Build/Typecheck Fails
+1. **Dependency issues** (`Cannot find` or `Maybe you need to 'bun install'`):
+   - Run `bun install` first, then retry verification
+2. **Backend-only changes**: Use `bun run dev:backend` to verify syntax without frontend deps
+3. **Frontend broken**: Backend changes can still be verified independently
+
+### Verification Methods (in order of preference)
+1. **Automated**: `bun run typecheck` (requires deps installed)
+2. **Backend runtime**: `bun run dev:backend` (starts server, verifies syntax)
+3. **MCP integration**:
+   ```bash
+   bun run dev:backend              # Terminal 1
+   bun scripts/verify-mcp.ts <TOKEN> # Terminal 2
+   ```
+4. **Manual code review** (fallback):
+   - Check matching braces/parentheses
+   - Verify TypeScript type compatibility in changed sections
+   - Look for similar patterns elsewhere in codebase for reference
+
+### Pre-Commit Checklist
+
+Before committing code, run `bun run precommit` to ensure the project is in a valid state and has no build errors that would prevent it from running.
 
 ## Code Style & Conventions
 - **Runtime**: Bun (`bun run`). ESM only (`"type": "module"`).
