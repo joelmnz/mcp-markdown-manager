@@ -15,6 +15,34 @@
   - `bun scripts/test-import.ts` - Import functionality
   - `bun scripts/test-error-handling.ts` - DB error handling
   - `bun scripts/test-api-client-runtime.ts` - API Client tests
+  - `bun scripts/verify-mcp.ts <AUTH_TOKEN>` - MCP server integration test (requires server running)
+
+## Verification Strategy
+
+### When Build/Typecheck Fails
+1. **Dependency issues** (`Cannot find` or `Maybe you need to 'bun install'`):
+   - Run `bun install` first, then retry verification
+2. **Backend-only changes**: Use `bun run dev:backend` to verify syntax without frontend deps
+3. **Frontend broken**: Backend changes can still be verified independently
+
+### Verification Methods (in order of preference)
+1. **Automated**: `bun run typecheck` (requires deps installed)
+2. **Backend runtime**: `bun run dev:backend` (starts server, verifies syntax)
+3. **MCP integration**:
+   ```bash
+   bun run dev:backend              # Terminal 1
+   bun scripts/verify-mcp.ts <TOKEN> # Terminal 2
+   ```
+4. **Manual code review** (fallback):
+   - Check matching braces/parentheses
+   - Verify TypeScript type compatibility in changed sections
+   - Look for similar patterns elsewhere in codebase for reference
+
+### Pre-Commit Checklist
+- [ ] Code is syntactically valid (automated or manual review)
+- [ ] Changed functions maintain their interface contracts
+- [ ] For critical paths (MCP init, auth, article ops): integration test when possible
+- [ ] No unintended reverts of linter/formatter changes
 
 ## Code Style & Conventions
 - **Runtime**: Bun (`bun run`). ESM only (`"type": "module"`).
