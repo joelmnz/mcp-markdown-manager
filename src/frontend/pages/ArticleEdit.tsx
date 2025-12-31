@@ -32,6 +32,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
   const [isPublic, setIsPublic] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
   const isNew = !filename;
 
   useEffect(() => {
@@ -254,6 +255,13 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
             {linting ? 'Linting...' : 'Lint'}
           </button>
           <button
+            className="button preview-toggle-button"
+            onClick={() => setShowPreview(!showPreview)}
+            title={showPreview ? 'Hide Preview' : 'Show Preview'}
+          >
+            {showPreview ? 'Hide Preview' : 'Show Preview'}
+          </button>
+          <button
             className="button button-primary"
             onClick={handleSave}
             disabled={saving}
@@ -347,7 +355,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         </div>
       )}
 
-      <div className="edit-container">
+      <div className={`edit-container ${!showPreview ? 'preview-hidden' : ''}`}>
         <div className="edit-section">
           <label className="edit-label">Content (Markdown)</label>
           <textarea

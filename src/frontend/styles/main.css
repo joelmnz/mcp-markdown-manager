@@ -885,6 +885,15 @@ body {
   gap: 2rem;
 }
 
+/* When preview is hidden, edit section takes full width */
+.edit-container.preview-hidden {
+  grid-template-columns: 1fr;
+}
+
+.edit-container.preview-hidden .preview-section {
+  display: none;
+}
+
 .edit-section,
 .preview-section {
   display: flex;
@@ -1076,6 +1085,11 @@ body {
   }
 
   .preview-section {
+    display: none;
+  }
+
+  /* Hide preview toggle button on mobile since preview is always hidden */
+  .preview-toggle-button {
     display: none;
   }
 
