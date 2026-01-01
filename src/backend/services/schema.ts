@@ -20,7 +20,10 @@ export class SchemaService {
       await this.createEmbeddingsTable();
       await this.createEmbeddingTasksTable();
       await this.createEmbeddingWorkerStatusTable();
-      
+
+      // Create OAuth tables
+      await this.createOAuthTablesIfEnabled();
+
       // Create indexes for performance
       await this.createIndexes();
       
@@ -215,6 +218,104 @@ export class SchemaService {
   }
 
   /**
+   * Create OAuth tables if OAuth is enabled
+   */
+  private async createOAuthTablesIfEnabled(): Promise<void> {
+    const oauthEnabled = process.env.OAUTH_ENABLED?.toLowerCase() === 'true';
+
+    if (!oauthEnabled) {
+      console.log('OAuth disabled - skipping OAuth table creation');
+      return;
+    }
+
+    console.log('Creating OAuth tables...');
+    await this.createOAuthClientsTable();
+    await this.createOAuthAuthorizationCodesTable();
+    await this.createOAuthAccessTokensTable();
+    await this.createOAuthRefreshTokensTable();
+    console.log('OAuth tables created/verified');
+  }
+
+  /**
+   * Create the oauth_clients table for Dynamic Client Registration
+   */
+  private async createOAuthClientsTable(): Promise<void> {
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS oauth_clients (
+        client_id VARCHAR(255) PRIMARY KEY,
+        client_secret_hash VARCHAR(255) NOT NULL,
+        client_name VARCHAR(255),
+        redirect_uris TEXT[] NOT NULL,
+        grant_types TEXT[] DEFAULT ARRAY['authorization_code', 'refresh_token'] NOT NULL,
+        response_types TEXT[] DEFAULT ARRAY['code'] NOT NULL,
+        token_endpoint_auth_method VARCHAR(50) DEFAULT 'client_secret_basic' NOT NULL,
+        scope VARCHAR(500),
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+      )
+    `;
+    await database.query(createTableSQL);
+  }
+
+  /**
+   * Create the oauth_authorization_codes table
+   */
+  private async createOAuthAuthorizationCodesTable(): Promise<void> {
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
+        code VARCHAR(255) PRIMARY KEY,
+        client_id VARCHAR(255) NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+        user_id VARCHAR(255),
+        code_challenge VARCHAR(255) NOT NULL,
+        code_challenge_method VARCHAR(10) NOT NULL CHECK (code_challenge_method IN ('S256', 'plain')),
+        redirect_uri TEXT NOT NULL,
+        scope VARCHAR(500),
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        used_at TIMESTAMP WITH TIME ZONE
+      )
+    `;
+    await database.query(createTableSQL);
+  }
+
+  /**
+   * Create the oauth_access_tokens table
+   */
+  private async createOAuthAccessTokensTable(): Promise<void> {
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS oauth_access_tokens (
+        token_hash VARCHAR(255) PRIMARY KEY,
+        client_id VARCHAR(255) NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+        user_id VARCHAR(255),
+        scope VARCHAR(500),
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        revoked_at TIMESTAMP WITH TIME ZONE
+      )
+    `;
+    await database.query(createTableSQL);
+  }
+
+  /**
+   * Create the oauth_refresh_tokens table
+   */
+  private async createOAuthRefreshTokensTable(): Promise<void> {
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
+        token_hash VARCHAR(255) PRIMARY KEY,
+        access_token_hash VARCHAR(255),
+        client_id VARCHAR(255) NOT NULL REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
+        user_id VARCHAR(255),
+        scope VARCHAR(500),
+        expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        revoked_at TIMESTAMP WITH TIME ZONE
+      )
+    `;
+    await database.query(createTableSQL);
+  }
+
+  /**
    * Create database indexes for performance
    */
   private async createIndexes(): Promise<void> {
@@ -243,6 +344,26 @@ export class SchemaService {
       'CREATE INDEX IF NOT EXISTS idx_embedding_tasks_created_at ON embedding_tasks(created_at)',
       'CREATE INDEX IF NOT EXISTS idx_embedding_tasks_status ON embedding_tasks(status)',
     ];
+
+    // Add OAuth indexes if OAuth is enabled
+    const oauthEnabled = process.env.OAUTH_ENABLED?.toLowerCase() === 'true';
+    if (oauthEnabled) {
+      indexes.push(
+        // OAuth authorization codes indexes
+        'CREATE INDEX IF NOT EXISTS idx_oauth_codes_client_id ON oauth_authorization_codes(client_id)',
+        'CREATE INDEX IF NOT EXISTS idx_oauth_codes_expires_at ON oauth_authorization_codes(expires_at)',
+
+        // OAuth access tokens indexes
+        'CREATE INDEX IF NOT EXISTS idx_oauth_access_tokens_client_id ON oauth_access_tokens(client_id)',
+        'CREATE INDEX IF NOT EXISTS idx_oauth_access_tokens_expires_at ON oauth_access_tokens(expires_at)',
+        'CREATE INDEX IF NOT EXISTS idx_oauth_access_tokens_revoked ON oauth_access_tokens(revoked_at) WHERE revoked_at IS NULL',
+
+        // OAuth refresh tokens indexes
+        'CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_client_id ON oauth_refresh_tokens(client_id)',
+        'CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_expires_at ON oauth_refresh_tokens(expires_at)',
+        'CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_revoked ON oauth_refresh_tokens(revoked_at) WHERE revoked_at IS NULL'
+      );
+    }
 
     // Add vector index if extension is available
     const extensionCheck = await database.query(`
@@ -280,18 +401,24 @@ export class SchemaService {
   async verifySchema(): Promise<boolean> {
     try {
       // Check if all required tables exist
-      const tableCheck = await database.query(`
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name IN ('articles', 'article_history', 'embeddings', 'embedding_tasks', 'embedding_worker_status')
-      `);
-
+      const oauthEnabled = process.env.OAUTH_ENABLED?.toLowerCase() === 'true';
       const expectedTables = ['articles', 'article_history', 'embeddings', 'embedding_tasks', 'embedding_worker_status'];
+
+      if (oauthEnabled) {
+        expectedTables.push('oauth_clients', 'oauth_authorization_codes', 'oauth_access_tokens', 'oauth_refresh_tokens');
+      }
+
+      const tableCheck = await database.query(`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name = ANY($1)
+      `, [expectedTables]);
+
       const existingTables = tableCheck.rows.map(row => row.table_name);
-      
+
       const allTablesExist = expectedTables.every(table => existingTables.includes(table));
-      
+
       if (!allTablesExist) {
         console.error('Missing required tables:', expectedTables.filter(table => !existingTables.includes(table)));
         return false;
@@ -310,8 +437,14 @@ export class SchemaService {
    */
   async dropSchema(): Promise<void> {
     console.log('Dropping database schema...');
-    
+
     const dropQueries = [
+      // Drop OAuth tables first (due to foreign key constraints)
+      'DROP TABLE IF EXISTS oauth_refresh_tokens CASCADE',
+      'DROP TABLE IF EXISTS oauth_access_tokens CASCADE',
+      'DROP TABLE IF EXISTS oauth_authorization_codes CASCADE',
+      'DROP TABLE IF EXISTS oauth_clients CASCADE',
+      // Drop existing tables
       'DROP TABLE IF EXISTS embedding_tasks CASCADE',
       'DROP TABLE IF EXISTS embedding_worker_status CASCADE',
       'DROP TABLE IF EXISTS embeddings CASCADE',

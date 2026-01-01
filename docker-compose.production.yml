@@ -99,6 +99,15 @@ services:
       - CHUNK_SIZE=${CHUNK_SIZE:-500}
       - CHUNK_OVERLAP=${CHUNK_OVERLAP:-50}
       
+      # OAuth 2.0 Configuration (for Claude Web Custom Connectors)
+      - OAUTH_ENABLED=${OAUTH_ENABLED:-false}
+      - OAUTH_ISSUER=${OAUTH_ISSUER:-}
+      - OAUTH_JWT_SECRET=${OAUTH_JWT_SECRET:-}
+      - OAUTH_ACCESS_TOKEN_TTL=${OAUTH_ACCESS_TOKEN_TTL:-3600}
+      - OAUTH_REFRESH_TOKEN_TTL=${OAUTH_REFRESH_TOKEN_TTL:-2592000}
+      - OAUTH_AUTHORIZATION_CODE_TTL=${OAUTH_AUTHORIZATION_CODE_TTL:-600}
+      - OAUTH_LEGACY_TOKEN_ENABLED=${OAUTH_LEGACY_TOKEN_ENABLED:-true}
+      
       # Production logging and monitoring
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - ENABLE_REQUEST_LOGGING=${ENABLE_REQUEST_LOGGING:-true}
@@ -154,4 +163,3 @@ networks:
   default:
     name: mcp-markdown-prod
     driver: bridge
-</content>

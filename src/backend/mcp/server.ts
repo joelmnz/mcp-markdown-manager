@@ -17,6 +17,7 @@ import { logSecurityEvent } from './validation.ts';
 import { createRateLimiter, RateLimitPresets } from '../middleware/rateLimit';
 import { createRequestSizeValidator, RequestSizePresets } from '../middleware/requestSize';
 import { parseEnvInt } from '../utils/config';
+import { authenticate } from '../middleware/auth.js';
 
 
 type McpSessionEntry = {
@@ -50,6 +51,17 @@ const MCP_MAX_REQUEST_SIZE_BYTES = parseEnvInt(process.env.MCP_MAX_REQUEST_SIZE_
 // Session management for HTTP transport
 const sessions: Record<string, McpSessionEntry> = {};
 
+/**
+ * Check if request is authorized (supports both legacy and OAuth tokens)
+ */
+async function isAuthorized(request: Request): Promise<boolean> {
+  const authResult = await authenticate(request);
+  return authResult.authenticated;
+}
+
+/**
+ * Get bearer token from request (for session tracking)
+ */
 function getBearerToken(request: Request): string | null {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) return null;
@@ -59,11 +71,6 @@ function getBearerToken(request: Request): string | null {
 
   const token = match[1].trim();
   return token ? token : null;
-}
-
-function isAuthorizedToken(token: string | null): token is string {
-  if (!token || !AUTH_TOKEN) return false;
-  return token === AUTH_TOKEN;
 }
 
 function getClientIp(request: Request): string {
@@ -137,14 +144,16 @@ const mcpSizeValidator = createRequestSizeValidator({
   maxBytes: MCP_MAX_REQUEST_SIZE_BYTES
 });
 
-function getAuthorizedSession(request: Request, sessionId: string | null): { entry: McpSessionEntry; sessionId: string } | Response {
-  const token = getBearerToken(request);
-  if (!isAuthorizedToken(token)) {
+async function getAuthorizedSession(request: Request, sessionId: string | null): Promise<{ entry: McpSessionEntry; sessionId: string } | Response> {
+  const authorized = await isAuthorized(request);
+  if (!authorized) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
     });
   }
+
+  const token = getBearerToken(request);
 
   if (!sessionId) {
     return new Response('Invalid or missing session ID', { status: 400 });
@@ -393,8 +402,13 @@ function isInitializeRequest(body: any): boolean {
 }
 
 export async function handleMCPPostRequest(request: Request): Promise<Response> {
+  const authorized = await isAuthorized(request);
+  if (!authorized) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+  }
+
   const token = getBearerToken(request);
-  if (!isAuthorizedToken(token)) {
+  if (!token) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -447,7 +461,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
       return handleTransportRequest(transport, request, body, newSessionId);
     }
 
-    const authorized = getAuthorizedSession(request, sessionId);
+    const authorized = await getAuthorizedSession(request, sessionId);
     if (authorized instanceof Response) return authorized;
 
     const { entry } = authorized;
@@ -473,7 +487,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
   const nowMs = Date.now();
   cleanupExpiredSessions(nowMs);
 
-  const authorized = getAuthorizedSession(request, sessionId);
+  const authorized = await getAuthorizedSession(request, sessionId);
   if (authorized instanceof Response) return authorized;
 
   const { entry } = authorized;
@@ -581,7 +595,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
     }
   });
 
-  entry.transport.handleRequest(nodeReq, nodeRes).catch(error => {
+  entry.transport.handleRequest(nodeReq, nodeRes).catch((error: unknown) => {
     loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, `SSE Stream error for session ${sessionId}`, {
       error: error instanceof Error ? error : new Error(String(error)),
       metadata: { sessionId }
@@ -613,7 +627,7 @@ export async function handleMCPDeleteRequest(request: Request): Promise<Response
   const nowMs = Date.now();
   cleanupExpiredSessions(nowMs);
 
-  const authorized = getAuthorizedSession(request, sessionId);
+  const authorized = await getAuthorizedSession(request, sessionId);
   if (authorized instanceof Response) return authorized;
 
   const { entry } = authorized;

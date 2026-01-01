@@ -8,7 +8,9 @@ import { ArticleView } from './pages/ArticleView';
 import { ArticleEdit } from './pages/ArticleEdit';
 import { RAGStatus } from './pages/RAGStatus';
 import { ImportFiles } from './pages/ImportFiles';
+import { Settings } from './pages/Settings';
 import { PublicArticleView } from './components/PublicArticleView';
+import { OAuthConsentPage } from './OAuthConsent';
 import {
   initializeRuntimeConfig,
   getRuntimeConfig,
@@ -33,7 +35,9 @@ type Route =
   | { type: 'new' }
   | { type: 'rag-status' }
   | { type: 'import-files' }
-  | { type: 'public-article'; slug: string };
+  | { type: 'settings' }
+  | { type: 'public-article'; slug: string }
+  | { type: 'oauth-consent' };
 
 function App() {
   const [token, setToken] = useState<string | null>(null);
@@ -125,8 +129,8 @@ function App() {
     const path = parseRouteFromUrl(window.location.href);
     const parsedRoute = parseRoute(path);
 
-    // Allow public article routes without authentication
-    if (!savedToken && parsedRoute.type !== 'home' && parsedRoute.type !== 'public-article') {
+    // Allow public routes without authentication (home, public articles, OAuth consent)
+    if (!savedToken && parsedRoute.type !== 'home' && parsedRoute.type !== 'public-article' && parsedRoute.type !== 'oauth-consent') {
       setIntendedRoute(parsedRoute);
     } else {
       setRoute(parsedRoute);
@@ -199,12 +203,20 @@ function App() {
       return { type: 'home' };
     }
 
+    if (normalizedPath === '/oauth/consent') {
+      return { type: 'oauth-consent' };
+    }
+
     if (normalizedPath === '/rag-status') {
       return { type: 'rag-status' };
     }
 
     if (normalizedPath === '/import-files') {
       return { type: 'import-files' };
+    }
+
+    if (normalizedPath === '/settings') {
+      return { type: 'settings' };
     }
 
     if (normalizedPath.startsWith('/public-article/')) {
@@ -351,6 +363,11 @@ function App() {
   }
 
   if (!token) {
+    // Allow access to OAuth consent page without authentication
+    if (route.type === 'oauth-consent') {
+      return <OAuthConsentPage />;
+    }
+
     // Allow access to public article view without authentication
     if (route.type === 'public-article') {
       return (
@@ -382,6 +399,9 @@ function App() {
         )}
         {route.type === 'import-files' && (
           <ImportFiles token={token} onNavigate={navigate} />
+        )}
+        {route.type === 'settings' && (
+          <Settings token={token} onNavigate={navigate} />
         )}
         {route.type === 'article' && (
           <ArticleView filename={route.filename} token={token} onNavigate={navigate} />

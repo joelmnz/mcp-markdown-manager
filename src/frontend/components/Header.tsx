@@ -50,6 +50,9 @@ export function Header({ theme, onThemeToggle, onLogout, onNavigate }: HeaderPro
           <button onClick={() => onNavigate('/rag-status')} className="icon-button" title="RAG Status">
             🔍
           </button>
+          <button onClick={() => onNavigate('/settings')} className="icon-button" title="Settings">
+            ⚙️
+          </button>
           <button onClick={() => setShowInfo(!showInfo)} className="icon-button" title="API & MCP Info">
             ℹ️
           </button>
@@ -152,9 +155,43 @@ export function Header({ theme, onThemeToggle, onLogout, onNavigate }: HeaderPro
               {/* Authentication */}
               <section className="info-section">
                 <h3>🔐 Authentication</h3>
-                <p>All endpoints require Bearer token authentication:</p>
+                <p>All endpoints support two authentication methods:</p>
+                
+                <h4>Bearer Token (Simple)</h4>
+                <p>Direct token authentication for scripts and MCP clients:</p>
                 <div className="info-code">
                   <pre>Authorization: Bearer YOUR_AUTH_TOKEN</pre>
+                </div>
+                
+                <h4>OAuth 2.0 with PKCE (Claude Web)</h4>
+                <p>For <a href="https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp" target="_blank" rel="noopener noreferrer">Claude Web custom connectors</a>, OAuth 2.0 is available when <code>OAUTH_ENABLED=true</code>.</p>
+                
+                <div className="info-detail">
+                  <strong>OAuth Endpoints:</strong><br/>
+                  <code>POST {apiBaseUrl}/oauth/register</code> - Dynamic Client Registration<br/>
+                  <code>GET {apiBaseUrl}/oauth/authorize</code> - Authorization (with PKCE)<br/>
+                  <code>POST {apiBaseUrl}/oauth/token</code> - Token Exchange<br/>
+                  <code>POST {apiBaseUrl}/oauth/revoke</code> - Token Revocation
+                </div>
+              </section>
+
+              {/* Claude Web Integration */}
+              <section className="info-section">
+                <h3>🌐 Claude Web Integration</h3>
+                <p>Connect this MCP server to Claude as a custom connector:</p>
+                <ol className="info-list">
+                  <li>Deploy with <code>OAUTH_ENABLED=true</code> and a public HTTPS URL</li>
+                  <li>In Claude Web → Settings → Custom Connectors → Add New</li>
+                  <li>Enter Server URL: <code>{apiBaseUrl}/mcp</code></li>
+                  <li>Click "Connect" - OAuth flow handles authentication automatically</li>
+                  <li>Approve access on the consent screen</li>
+                </ol>
+                <div className="info-detail">
+                  <strong>Requirements:</strong><br/>
+                  • HTTPS (required for OAuth)<br/>
+                  • <code>OAUTH_ENABLED=true</code> in environment<br/>
+                  • <code>OAUTH_JWT_SECRET</code> configured<br/>
+                  • Claude Pro/Team/Enterprise account
                 </div>
               </section>
 

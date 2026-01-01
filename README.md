@@ -10,6 +10,7 @@ This project implements comprehensive security measures. See our detailed securi
 
 Key security features:
 - Bearer token authentication for all interfaces
+- OAuth 2.0 with PKCE for Claude web integration
 - Input validation and sanitization
 - Rate limiting and DoS protection
 - Parameterized database queries (SQL injection prevention)
@@ -18,6 +19,7 @@ Key security features:
 - Security event logging
 - Non-root container execution
 - Request size limits
+- Token rotation and revocation support
 
 ## Features
 
@@ -30,8 +32,10 @@ Key security features:
 - 📱 **Mobile-first responsive design**
 - 📲 **Progressive Web App (PWA)** support for offline access
 - 🔐 **Bearer token authentication** for all interfaces
+- 🔑 **OAuth 2.0 authentication** for Claude web integration
 - 🌐 **REST API** for programmatic access
 - 🤖 **MCP server** integration for AI agent access
+- 🔌 **Claude web custom connector** support
 - 🐳 **Docker support** with PostgreSQL integration
 - ⚡ **Bun runtime** for fast TypeScript execution
 - 📊 **Request logging** for monitoring and debugging
@@ -153,6 +157,52 @@ docker compose down
 ```
 
 This will open the MCP Inspector connected to your running MCP Markdown Manager instance. To connect you will need the `AUTH_TOKEN` and `PORT` you set in your `.env` file.
+
+## Claude Web Integration
+
+Deploy your MCP server and connect it to Claude web as a custom connector with OAuth 2.0 authentication.
+
+### Quick Start (15 minutes)
+
+The fastest way to get connected to Claude web:
+
+**[📖 Quick Start Guide](docs/QUICKSTART_CLAUDE_WEB.md)** - Deploy to Railway and connect in 15 minutes
+
+**[📚 Complete Deployment Guide](docs/CLAUDE_WEB_DEPLOYMENT.md)** - Full documentation with Railway, Fly.io, and VPS options
+
+### What You Get
+
+Once connected to Claude web, you can:
+- Ask Claude to search and read your articles
+- Have Claude create new articles from conversations
+- Update existing articles with new information
+- Organize your knowledge base with Claude's help
+
+### Requirements
+
+- **Claude Pro/Team/Enterprise account** (for custom connectors)
+- **Public HTTPS URL** (Railway provides this automatically)
+- **OAuth 2.0 enabled** in your deployment
+
+### Example Usage
+
+After connecting to Claude web:
+
+```
+You: What articles do I have about OAuth?
+
+Claude: [Uses searchArticles tool]
+I found 2 articles about OAuth:
+1. "OAuth Implementation Guide"
+2. "Security Best Practices"
+
+Would you like me to read either of these?
+
+You: Yes, summarize the OAuth Implementation Guide
+
+Claude: [Uses readArticle tool]
+Based on your article, here's a summary...
+```
 
 ### Production Build
 

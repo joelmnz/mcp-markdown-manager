@@ -1,5 +1,6 @@
 import { handleApiRequest } from './routes/api';
 import { handleMCPPostRequest, handleMCPGetRequest, handleMCPDeleteRequest } from './mcp/server';
+import { handleOAuthRequest } from './routes/oauth.js';
 import { databaseInit } from './services/databaseInit.js';
 import { databaseHealthService } from './services/databaseHealth.js';
 import { basePathService } from './services/basePath.js';
@@ -270,6 +271,13 @@ const server = Bun.serve({
       return response;
     }
 
+    // Handle OAuth endpoints
+    if (routePath.startsWith('/oauth/')) {
+      const response = await handleOAuthRequest(request);
+      logRequest(response.status);
+      return response;
+    }
+
     // Handle API endpoints
     if (routePath.startsWith('/api/') || routePath === '/health') {
       // Create a new request with the stripped path for API handling
@@ -292,7 +300,7 @@ const server = Bun.serve({
       : './public';
 
     // Serve index.html for all non-API routes (SPA routing)
-    if (!routePath.startsWith('/api/') && !routePath.startsWith('/mcp')) {
+    if (!routePath.startsWith('/api/') && !routePath.startsWith('/mcp') && !routePath.startsWith('/oauth/')) {
       const filePath = routePath === '/' ? '/index.html' : routePath;
       const file = Bun.file(publicDir + filePath);
 
