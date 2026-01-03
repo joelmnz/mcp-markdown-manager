@@ -21,7 +21,11 @@ import {
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 const MCP_MULTI_SEARCH_LIMIT = Number.parseInt(process.env.MCP_MULTI_SEARCH_LIMIT ?? '10', 10);
 
-export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
+export interface McpHandlerContext {
+  tokenName?: string;
+}
+
+export const toolHandlers: Record<string, (args: any, context?: McpHandlerContext) => Promise<any>> = {
   listArticles: async (args) => {
     const { folder, maxArticles } = args as { folder?: string; maxArticles?: number };
     
@@ -245,7 +249,7 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
     };
   },
 
-  createArticle: async (args) => {
+  createArticle: async (args, context) => {
     const { title, content, folder } = args as { title: string; content: string; folder?: string };
     
     // Validate title
@@ -275,14 +279,15 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
       contentValidation.sanitized!,
       sanitizedFolder,
       undefined,
-      { embeddingPriority: 'normal' }
+      { embeddingPriority: 'normal' },
+      context?.tokenName
     );
     return {
       content: [{ type: 'text', text: JSON.stringify(article, null, 2) }],
     };
   },
 
-  updateArticle: async (args) => {
+  updateArticle: async (args, context) => {
     const { filename, title, content, folder } = args as { filename: string; title: string; content: string; folder?: string };
     
     // Validate filename
@@ -319,7 +324,8 @@ export const toolHandlers: Record<string, (args: any) => Promise<any>> = {
       contentValidation.sanitized!,
       sanitizedFolder,
       undefined,
-      { embeddingPriority: 'normal' }
+      { embeddingPriority: 'normal' },
+      context?.tokenName
     );
     return {
       content: [{ type: 'text', text: JSON.stringify(article, null, 2) }],
