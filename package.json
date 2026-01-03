@@ -39,6 +39,8 @@
     "import": "bun scripts/import-articles.ts",
     "deploy": "bash scripts/deploy-production.sh",
     "deploy:windows": "powershell -ExecutionPolicy Bypass -File scripts/deploy-production.ps1",
+    "test": "bun test",
+    "test:watch": "bun test --watch",
     "typecheck": "tsc --noEmit",
     "precommit": "bash precommit.sh",
     "prepare": "bun run setup-hooks",
@@ -61,12 +63,17 @@
     "turndown-plugin-gfm": "^1.0.2"
   },
   "devDependencies": {
+    "@happy-dom/global-registrator": "^20.0.11",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.1",
     "@types/bun": "latest",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@types/turndown": "^5.0.5",
     "canvas": "^3.2.0",
     "fast-check": "^4.4.0",
+    "happy-dom": "^20.0.11",
     "typescript": "^5.6.3"
   }
 }

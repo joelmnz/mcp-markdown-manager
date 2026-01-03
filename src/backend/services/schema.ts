@@ -20,7 +20,8 @@ export class SchemaService {
       await this.createEmbeddingsTable();
       await this.createEmbeddingTasksTable();
       await this.createEmbeddingWorkerStatusTable();
-      
+      await this.createAccessTokensTable();
+
       // Create indexes for performance
       await this.createIndexes();
       
@@ -215,6 +216,25 @@ export class SchemaService {
   }
 
   /**
+   * Create the access tokens table for API key management
+   */
+  private async createAccessTokensTable(): Promise<void> {
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS access_tokens (
+        id SERIAL PRIMARY KEY,
+        token VARCHAR(100) UNIQUE NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        scope VARCHAR(20) NOT NULL CHECK (scope IN ('read-only', 'write')),
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        last_used_at TIMESTAMP WITH TIME ZONE
+      )
+    `;
+
+    await database.query(createTableSQL);
+    console.log('Access tokens table created/verified');
+  }
+
+  /**
    * Create database indexes for performance
    */
   private async createIndexes(): Promise<void> {
@@ -242,6 +262,9 @@ export class SchemaService {
       'CREATE INDEX IF NOT EXISTS idx_embedding_tasks_article_id ON embedding_tasks(article_id)',
       'CREATE INDEX IF NOT EXISTS idx_embedding_tasks_created_at ON embedding_tasks(created_at)',
       'CREATE INDEX IF NOT EXISTS idx_embedding_tasks_status ON embedding_tasks(status)',
+
+      // Access tokens indexes
+      'CREATE INDEX IF NOT EXISTS idx_access_tokens_token ON access_tokens(token)',
     ];
 
     // Add vector index if extension is available
@@ -281,13 +304,13 @@ export class SchemaService {
     try {
       // Check if all required tables exist
       const tableCheck = await database.query(`
-        SELECT table_name 
-        FROM information_schema.tables 
-        WHERE table_schema = 'public' 
-        AND table_name IN ('articles', 'article_history', 'embeddings', 'embedding_tasks', 'embedding_worker_status')
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+        AND table_name IN ('articles', 'article_history', 'embeddings', 'embedding_tasks', 'embedding_worker_status', 'access_tokens')
       `);
 
-      const expectedTables = ['articles', 'article_history', 'embeddings', 'embedding_tasks', 'embedding_worker_status'];
+      const expectedTables = ['articles', 'article_history', 'embeddings', 'embedding_tasks', 'embedding_worker_status', 'access_tokens'];
       const existingTables = tableCheck.rows.map(row => row.table_name);
       
       const allTablesExist = expectedTables.every(table => existingTables.includes(table));
@@ -312,6 +335,7 @@ export class SchemaService {
     console.log('Dropping database schema...');
     
     const dropQueries = [
+      'DROP TABLE IF EXISTS access_tokens CASCADE',
       'DROP TABLE IF EXISTS embedding_tasks CASCADE',
       'DROP TABLE IF EXISTS embedding_worker_status CASCADE',
       'DROP TABLE IF EXISTS embeddings CASCADE',
