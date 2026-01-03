@@ -128,18 +128,6 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
     setTokenToDelete(null);
   };
 
-  const toggleTokenVisibility = (tokenId: number) => {
-    setVisibleTokens(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(tokenId)) {
-        newSet.delete(tokenId);
-      } else {
-        newSet.add(tokenId);
-      }
-      return newSet;
-    });
-  };
-
   const copyToClipboard = async (text: string, tokenId: number) => {
     try {
       await navigator.clipboard.writeText(text);

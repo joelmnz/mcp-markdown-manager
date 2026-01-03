@@ -107,6 +107,7 @@ body {
   .title-desktop {
     display: none;
   }
+
   .title-mobile {
     display: inline;
   }
@@ -2137,9 +2138,15 @@ body {
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
+
 /* Modal styles */
 .modal-overlay {
   position: fixed;
@@ -2225,7 +2232,6 @@ body {
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   border-radius: 4px;
-  cursor: pointer;
 }
 
 .form-group .input:focus,
