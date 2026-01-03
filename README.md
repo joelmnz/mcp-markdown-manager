@@ -9,6 +9,9 @@ This project implements comprehensive security measures. See our detailed securi
 - **[Security Guide](docs/SECURITY.md)** - Security best practices, configuration, and hardening
 
 Key security features:
+- **Scoped access token system** with read-only and write permissions
+- Separate admin authentication (AUTH_TOKEN) and API/MCP access tokens
+- Cryptographically secure token generation with sk-md- prefix
 - Bearer token authentication for all interfaces
 - Input validation and sanitization
 - Rate limiting and DoS protection
@@ -29,7 +32,7 @@ Key security features:
 - 🎨 **Dark/Light theme** toggle
 - 📱 **Mobile-first responsive design**
 - 📲 **Progressive Web App (PWA)** support for offline access
-- 🔐 **Bearer token authentication** for all interfaces
+- 🔐 **Scoped access token system** with read-only and write permissions
 - 🌐 **REST API** for programmatic access
 - 🤖 **MCP server** integration for AI agent access
 - 🐳 **Docker support** with PostgreSQL integration
@@ -86,7 +89,7 @@ bun install
 
 ```bash
 cp .env.example .env
-# Edit .env and set your AUTH_TOKEN
+# Edit .env and set your AUTH_TOKEN (used for web UI admin login only)
 ```
 
 #### 3. Start database
@@ -115,11 +118,13 @@ bun run dev:backend
 bun run dev:frontend
 ```
 
-#### 5. Access the application
+#### 5. Access the application and generate API keys
 
 - Web UI: http://localhost:5000
-- API: http://localhost:5000/api/*
-- MCP: http://localhost:5000/mcp
+- Log in with your AUTH_TOKEN
+- Navigate to Settings (⚙️) to generate access tokens for API/MCP access
+- Use generated tokens for API: http://localhost:5000/api/*
+- Use generated tokens for MCP: http://localhost:5000/mcp
 
 #### 6. Import existing articles (optional)
 
@@ -308,8 +313,29 @@ docker push ghcr.io/YOUR_USERNAME/article-manager:latest
 
 | Variable | Description |
 |----------|-------------|
-| `AUTH_TOKEN` | Authentication token for all interfaces |
+| `AUTH_TOKEN` | Admin authentication token for web UI login only |
 | `DB_PASSWORD` | PostgreSQL database password |
+
+### Authentication System
+
+The application uses a two-tier authentication system:
+
+1. **Admin Authentication (AUTH_TOKEN)**:
+   - Used exclusively for web UI admin login
+   - Set via environment variable
+   - Grants access to Settings page for token management
+
+2. **Access Tokens (Generated via Settings)**:
+   - Used for API and MCP server access
+   - Generated through the Settings page in web UI
+   - Scoped permissions:
+     - **read-only**: Can list, read, and search articles
+     - **write**: Full access (read + create/update/delete)
+   - Prefixed with `sk-md-` for identification
+   - Can be named, viewed (masked), and revoked
+   - Track last usage timestamp
+
+**Migration Note**: After upgrading, existing MCP/API integrations using `AUTH_TOKEN` will stop working. Log into the web UI and generate new access tokens in the Settings page.
 
 ### Base Path Configuration (Nginx Subpath Deployment)
 
@@ -557,11 +583,76 @@ If migrating from the previous file-based version:
 
 ## REST API Documentation
 
-All API endpoints require Bearer token authentication via the `Authorization` header:
+All API endpoints require Bearer token authentication via the `Authorization` header using an access token generated from the Settings page:
 
 ```html
+Authorization: Bearer sk-md-your-access-token-here
+```
+
+**Scope Requirements**:
+- **Read operations** (GET): Require `read-only` or `write` scope
+- **Write operations** (POST/PUT/DELETE): Require `write` scope
+- **Token management**: Requires web UI admin login (AUTH_TOKEN)
+
+### Access Token Management
+
+#### List Access Tokens
+
+```http
+GET /api/access-tokens
 Authorization: Bearer YOUR_AUTH_TOKEN
 ```
+
+List all access tokens with masked values. Requires web UI admin authentication.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "name": "Claude Desktop",
+    "scope": "write",
+    "created_at": "2025-01-15T10:30:00Z",
+    "last_used_at": "2025-01-15T12:00:00Z",
+    "masked_token": "sk-md-****...a1b2"
+  }
+]
+```
+
+#### Create Access Token
+
+```http
+POST /api/access-tokens
+Authorization: Bearer YOUR_AUTH_TOKEN
+Content-Type: application/json
+
+{
+  "name": "Production API",
+  "scope": "read-only"
+}
+```
+
+Generate a new access token. Requires web UI admin authentication. The full token is returned only once.
+
+**Response (201):**
+```json
+{
+  "id": 2,
+  "token": "sk-md-1234567890abcdef...",
+  "name": "Production API",
+  "scope": "read-only",
+  "created_at": "2025-01-15T10:30:00Z"
+}
+```
+
+#### Delete Access Token
+
+```http
+DELETE /api/access-tokens/:id
+Authorization: Bearer YOUR_AUTH_TOKEN
+```
+
+Revoke an access token by ID. Requires web UI admin authentication.
 
 ### Endpoints
 
@@ -688,6 +779,7 @@ Read a single article by filename.
 
 ```http
 POST /api/articles
+Authorization: Bearer sk-md-your-write-token
 Content-Type: application/json
 
 {
@@ -696,7 +788,7 @@ Content-Type: application/json
 }
 ```
 
-Creates a new article. Filename is auto-generated from title (e.g., "My New Article" → "my-new-article.md").
+Creates a new article. Filename is auto-generated from title (e.g., "My New Article" → "my-new-article.md"). **Requires `write` scope**.
 
 **Response (201):**
 
@@ -721,6 +813,7 @@ Creates a new article. Filename is auto-generated from title (e.g., "My New Arti
 
 ```http
 PUT /api/articles/:filename
+Authorization: Bearer sk-md-your-write-token
 Content-Type: application/json
 
 {
@@ -729,7 +822,7 @@ Content-Type: application/json
 }
 ```
 
-Updates an existing article. Preserves original creation date.
+Updates an existing article. Preserves original creation date. **Requires `write` scope**.
 
 **Response:**
 
@@ -746,9 +839,10 @@ Updates an existing article. Preserves original creation date.
 
 ```http
 DELETE /api/articles/:filename
+Authorization: Bearer sk-md-your-write-token
 ```
 
-Deletes an article.
+Deletes an article. **Requires `write` scope**.
 
 **Response:**
 
@@ -770,15 +864,33 @@ All authenticated endpoints return 401 for invalid/missing tokens:
 
 ## MCP Server Documentation
 
-The MCP (Model Context Protocol) server provides AI agents with tools to manage articles.
+The MCP (Model Context Protocol) server provides AI agents with tools to manage articles. Tools are filtered based on the access token's scope.
 
 ### Endpoint
 
 ```http
 POST /mcp
-Authorization: Bearer YOUR_AUTH_TOKEN
+Authorization: Bearer sk-md-your-access-token
 Content-Type: application/json
 ```
+
+### Token Scopes
+
+MCP tools are filtered based on access token scope:
+
+**Read-Only Scope** - Available tools:
+- `listArticles` - List all articles
+- `listFolders` - List folder structure
+- `searchArticles` - Search by title
+- `multiSearchArticles` - Batch search
+- `readArticle` - Read article content
+- `semanticSearch` - Vector similarity search (if enabled)
+- `multiSemanticSearch` - Batch semantic search (if enabled)
+
+**Write Scope** - All read-only tools PLUS:
+- `createArticle` - Create new articles
+- `updateArticle` - Update existing articles
+- `deleteArticle` - Delete articles
 
 ### Available Tools
 
@@ -881,7 +993,7 @@ Read a single article.
 
 #### createArticle
 
-Create a new article.
+Create a new article. **Requires `write` scope**.
 
 **Input Schema:**
 
@@ -900,7 +1012,7 @@ Create a new article.
 
 #### updateArticle
 
-Update an existing article.
+Update an existing article. **Requires `write` scope**.
 
 **Input Schema:**
 
@@ -920,7 +1032,7 @@ Update an existing article.
 
 #### deleteArticle
 
-Delete an article.
+Delete an article. **Requires `write` scope**.
 
 **Input Schema:**
 
@@ -957,7 +1069,15 @@ Delete an article.
      ghcr.io/joelmnz/mcp-markdown-manager:latest
    ```
 
-2. **Configure Agent Zero** by adding the following to your `tmp/settings.json` under the `mcp_servers` key:
+2. **Generate an access token**:
+   - Log into the web UI at http://localhost:8097 with your `AUTH_TOKEN`
+   - Navigate to Settings (⚙️ icon)
+   - Create a new access token:
+     - Name: "Agent Zero"
+     - Scope: "write" (for full access) or "read-only" (for search/read only)
+   - Copy the generated token (it will only be shown once)
+
+3. **Configure Agent Zero** by adding the following to your `tmp/settings.json` under the `mcp_servers` key:
    ```json
    {
      "name": "mcp-markdown-manager",
@@ -965,27 +1085,36 @@ Delete an article.
      "type": "streaming-http",
      "url": "http://localhost:8097/mcp",
      "headers": {
-       "Authorization": "Bearer your-secret-token-here"
+       "Authorization": "Bearer sk-md-your-generated-token-here"
      },
      "disabled": false
    }
    ```
 
    **Important Notes:**
-   - Replace `your-secret-token-here` with your actual `AUTH_TOKEN`
+   - Replace `sk-md-your-generated-token-here` with your actual access token from Settings
    - If running both Agent Zero and MCP server in Docker, use the appropriate network hostname instead of `localhost`
    - The `type: "streaming-http"` is required for proper MCP protocol support
    - The server uses the MCP Streamable HTTP transport specification with session management
 
-3. **Verify the connection** by checking Agent Zero logs for successful tool discovery. You should see 6 tools registered:
+4. **Verify the connection** by checking Agent Zero logs for successful tool discovery. Available tools depend on token scope:
+
+   **With write scope** (7+ tools):
    - `mcp_markdown_manager.listArticles`
    - `mcp_markdown_manager.searchArticles`
    - `mcp_markdown_manager.readArticle`
    - `mcp_markdown_manager.createArticle`
    - `mcp_markdown_manager.updateArticle`
    - `mcp_markdown_manager.deleteArticle`
+   - Plus semantic search tools if enabled
 
-4. **Use the tools** by instructing Agent Zero, for example:
+   **With read-only scope** (4+ tools):
+   - `mcp_markdown_manager.listArticles`
+   - `mcp_markdown_manager.searchArticles`
+   - `mcp_markdown_manager.readArticle`
+   - Plus semantic search tools if enabled
+
+5. **Use the tools** by instructing Agent Zero, for example:
    - "Create a new article about Python decorators"
    - "List all my articles"
    - "Search for articles about machine learning"
@@ -1053,8 +1182,22 @@ The frontmatter is extracted into database fields, and only the clean markdown c
 ### Login
 
 1. Navigate to http://localhost:5000
-2. Enter your AUTH_TOKEN
+2. Enter your AUTH_TOKEN (admin authentication)
 3. Click "Login"
+
+### Settings (Access Token Management)
+
+After logging in with AUTH_TOKEN:
+
+1. Click the Settings icon (⚙️) in the header
+2. Generate new access tokens:
+   - Enter a descriptive name (e.g., "Claude Desktop", "Production API")
+   - Choose scope: `write` (full access) or `read-only` (search/read only)
+   - Click "Generate Access Token"
+3. **Important**: Copy the token immediately - it will only be shown once
+4. Use the generated token for API and MCP access
+5. View existing tokens (masked for security)
+6. Delete tokens to revoke access
 
 ### Home Page
 
@@ -1207,12 +1350,25 @@ ls -la public/
 
 ## Security Considerations
 
-- Store AUTH_TOKEN securely (use environment variables)
-- Use HTTPS in production (reverse proxy recommended)
-- Regularly backup the data directory
+- **Store AUTH_TOKEN securely** (use environment variables, never commit to git)
+- **Generate unique access tokens** for each integration/client
+- **Use read-only scope** when possible to limit permissions
+- **Revoke unused tokens** immediately in Settings page
+- **Copy access tokens immediately** - they're only shown once at creation
+- **Use HTTPS in production** (reverse proxy recommended)
+- **Monitor token usage** via last_used_at timestamps in Settings
+- **Regularly backup** the database (includes token data)
 - Keep dependencies updated
 - Docker container runs as non-root user (UID 99, GID 100 - UNRAID compatible) for security
 - Request logging enabled for monitoring and audit trails
+
+### Token Security Best Practices
+
+1. **Never share AUTH_TOKEN** - it grants admin access to token management
+2. **Use descriptive token names** - helps identify which integration uses which token
+3. **Rotate tokens periodically** - delete old tokens and generate new ones
+4. **Use read-only tokens** for monitoring/search-only integrations
+5. **Audit token usage** - check last_used_at to identify inactive tokens
 
 ## License
 
