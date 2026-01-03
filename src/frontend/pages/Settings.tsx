@@ -231,22 +231,22 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
               <tbody>
                 {tokens.map((t) => (
                   <tr key={t.id}>
-                    <td className="token-name">{t.name}</td>
-                    <td>
+                    <td className="token-name" data-label="Name">{t.name}</td>
+                    <td data-label="Scope">
                       <span className={`scope-badge scope-${t.scope}`}>
                         {t.scope === 'write' ? 'Write' : 'Read-Only'}
                       </span>
                     </td>
-                    <td className="token-value">
+                    <td className="token-value" data-label="Token">
                       <code className="token-display">
                         {visibleTokens.has(t.id) ? t.masked_token : '••••••••••'}
                       </code>
                     </td>
-                    <td className="token-date">{formatDate(t.created_at)}</td>
-                    <td className="token-date">
+                    <td className="token-date" data-label="Created">{formatDate(t.created_at)}</td>
+                    <td className="token-date" data-label="Last Used">
                       {t.last_used_at ? formatDate(t.last_used_at) : 'Never'}
                     </td>
-                    <td className="token-actions">
+                    <td className="token-actions" data-label="Actions">
                       <button
                         onClick={() => handleDeleteToken(t.id, t.name)}
                         className="delete-button"
