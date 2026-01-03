@@ -33,6 +33,8 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
   const [newlyCreatedToken, setNewlyCreatedToken] = useState<NewTokenResult | null>(null);
   const [visibleTokens, setVisibleTokens] = useState<Set<number>>(new Set());
   const [copyFeedback, setCopyFeedback] = useState<number | null>(null);
+  const [tokenToDelete, setTokenToDelete] = useState<{ id: number; name: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadTokens();
@@ -93,14 +95,19 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
     }
   };
 
-  const handleDeleteToken = async (tokenId: number, tokenName: string) => {
-    if (!confirm(`Are you sure you want to delete "${tokenName}"? Active integrations using this token will stop working.`)) {
-      return;
-    }
+  const handleDeleteToken = (tokenId: number, tokenName: string) => {
+    setTokenToDelete({ id: tokenId, name: tokenName });
+  };
+
+  const confirmDeleteToken = async () => {
+    if (!tokenToDelete) return;
+
+    setDeleting(true);
+    setError(null);
 
     try {
       const response = await apiClient.delete(
-        `/api/access-tokens/${tokenId}`,
+        `/api/access-tokens/${tokenToDelete.id}`,
         authToken
       );
 
@@ -108,10 +115,17 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
         throw new Error('Failed to delete token');
       }
 
+      setTokenToDelete(null);
       await loadTokens();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete token');
+    } finally {
+      setDeleting(false);
     }
+  };
+
+  const cancelDeleteToken = () => {
+    setTokenToDelete(null);
   };
 
   const toggleTokenVisibility = (tokenId: number) => {
@@ -297,6 +311,39 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
             <button onClick={closeNewTokenModal} className="modal-close-button">
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {tokenToDelete && (
+        <div className="modal-overlay" onClick={cancelDeleteToken}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Delete Access Token</h2>
+            <div className="modal-warning">
+              ⚠️ <strong>Warning:</strong> This action cannot be undone.
+            </div>
+
+            <p className="delete-confirm-message">
+              Are you sure you want to delete <strong>"{tokenToDelete.name}"</strong>?
+              Active integrations using this token will stop working immediately.
+            </p>
+
+            <div className="modal-actions">
+              <button
+                onClick={confirmDeleteToken}
+                disabled={deleting}
+                className="delete-confirm-button"
+              >
+                {deleting ? 'Deleting...' : 'Delete Token'}
+              </button>
+              <button
+                onClick={cancelDeleteToken}
+                disabled={deleting}
+                className="cancel-button"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
