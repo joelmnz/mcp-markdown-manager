@@ -17,11 +17,13 @@ import { logSecurityEvent } from './validation.ts';
 import { createRateLimiter, RateLimitPresets } from '../middleware/rateLimit';
 import { createRequestSizeValidator, RequestSizePresets } from '../middleware/requestSize';
 import { parseEnvInt } from '../utils/config';
+import { validateAccessToken, type TokenScope } from '../services/accessTokens.js';
 
 
 type McpSessionEntry = {
   transport: StreamableHTTPServerTransport;
   token: string;
+  scope: TokenScope;
   createdAtMs: number;
   lastSeenAtMs: number;
   ip: string;
@@ -30,7 +32,6 @@ type McpSessionEntry = {
   lastRequestMs: number; // Track last request time
 };
 
-const AUTH_TOKEN = process.env.AUTH_TOKEN;
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 const MCP_MULTI_SEARCH_LIMIT = parseEnvInt(process.env.MCP_MULTI_SEARCH_LIMIT, 10, 'MCP_MULTI_SEARCH_LIMIT');
 
@@ -61,9 +62,14 @@ function getBearerToken(request: Request): string | null {
   return token ? token : null;
 }
 
-function isAuthorizedToken(token: string | null): token is string {
-  if (!token || !AUTH_TOKEN) return false;
-  return token === AUTH_TOKEN;
+async function isAuthorizedToken(token: string | null): Promise<{ valid: boolean; scope?: TokenScope }> {
+  if (!token) return { valid: false };
+
+  const validation = await validateAccessToken(token);
+  return {
+    valid: validation.valid,
+    scope: validation.scope,
+  };
 }
 
 function getClientIp(request: Request): string {
@@ -137,9 +143,11 @@ const mcpSizeValidator = createRequestSizeValidator({
   maxBytes: MCP_MAX_REQUEST_SIZE_BYTES
 });
 
-function getAuthorizedSession(request: Request, sessionId: string | null): { entry: McpSessionEntry; sessionId: string } | Response {
+async function getAuthorizedSession(request: Request, sessionId: string | null): Promise<{ entry: McpSessionEntry; sessionId: string } | Response> {
   const token = getBearerToken(request);
-  if (!isAuthorizedToken(token)) {
+  const authResult = await isAuthorizedToken(token);
+
+  if (!authResult.valid) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
@@ -184,8 +192,39 @@ function getAuthorizedSession(request: Request, sessionId: string | null): { ent
   return { entry, sessionId };
 }
 
-// Create a configured MCP server instance
-function createConfiguredMCPServer() {
+// Define read-only tool names
+const READ_ONLY_TOOLS = new Set([
+  'listArticles',
+  'listFolders',
+  'searchArticles',
+  'multiSearchArticles',
+  'readArticle',
+  'semanticSearch',
+  'multiSemanticSearch',
+]);
+
+// Define write-only tool names (require write scope)
+const WRITE_ONLY_TOOLS = new Set([
+  'createArticle',
+  'updateArticle',
+  'deleteArticle',
+]);
+
+/**
+ * Filter tools based on token scope
+ */
+function getToolsForScope(scope: TokenScope, allTools: any[]): any[] {
+  if (scope === 'write') {
+    // Write scope has access to all tools
+    return allTools;
+  }
+
+  // Read-only scope: filter out write-only tools
+  return allTools.filter(tool => !WRITE_ONLY_TOOLS.has(tool.name));
+}
+
+// Create a configured MCP server instance with scope-based tool filtering
+function createConfiguredMCPServer(scope: TokenScope) {
   const server = new Server(
     {
       name: 'mcp-markdown-manager',
@@ -198,9 +237,9 @@ function createConfiguredMCPServer() {
     }
   );
 
-  // List available tools
+  // List available tools (filtered by scope)
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const tools: any[] = [
+    const allTools: any[] = [
       {
         name: 'listArticles',
         description: 'List all articles with metadata (title, filename, creation date)',
@@ -311,7 +350,7 @@ function createConfiguredMCPServer() {
     ];
 
     if (SEMANTIC_SEARCH_ENABLED) {
-      tools.push({
+      allTools.push({
         name: 'semanticSearch',
         description: 'Perform semantic search across article content using vector embeddings',
         inputSchema: {
@@ -328,7 +367,7 @@ function createConfiguredMCPServer() {
         },
       });
 
-      tools.push({
+      allTools.push({
         name: 'multiSemanticSearch',
         description: 'Perform multiple semantic searches and return unique results',
         inputSchema: {
@@ -351,16 +390,24 @@ function createConfiguredMCPServer() {
       });
     }
 
-    return { tools };
+    // Filter tools based on scope
+    const filteredTools = getToolsForScope(scope, allTools);
+
+    return { tools: filteredTools };
   });
 
-  // Handle tool calls
+  // Handle tool calls (with scope validation)
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const startTime = Date.now();
     const toolName = request.params.name;
     try {
       const handler = toolHandlers[toolName];
       if (!handler) throw new Error(`Unknown tool: ${toolName}`);
+
+      // Validate scope for write operations
+      if (WRITE_ONLY_TOOLS.has(toolName) && scope !== 'write') {
+        throw new Error(`Tool "${toolName}" requires write scope, but token has ${scope} scope`);
+      }
 
       const result = await handler(request.params.arguments);
 
@@ -384,8 +431,8 @@ function createConfiguredMCPServer() {
   return server;
 }
 
-export function createMCPServer() {
-  return createConfiguredMCPServer();
+export function createMCPServer(scope: TokenScope = 'write') {
+  return createConfiguredMCPServer(scope);
 }
 
 function isInitializeRequest(body: any): boolean {
@@ -394,9 +441,13 @@ function isInitializeRequest(body: any): boolean {
 
 export async function handleMCPPostRequest(request: Request): Promise<Response> {
   const token = getBearerToken(request);
-  if (!isAuthorizedToken(token)) {
+  const authResult = await isAuthorizedToken(token);
+
+  if (!authResult.valid || !authResult.scope) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
+
+  const tokenScope = authResult.scope;
 
   // Validate request size before processing
   const sizeCheck = await mcpSizeValidator(request);
@@ -414,7 +465,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
       const ip = getClientIp(request);
       const userAgent = request.headers.get('user-agent');
 
-      const limitResponse = enforceSessionLimits(ip, token);
+      const limitResponse = enforceSessionLimits(ip, token!);
       if (limitResponse) return limitResponse;
 
       const newSessionId = randomUUID();
@@ -424,7 +475,8 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
 
       sessions[newSessionId] = {
         transport,
-        token,
+        token: token!,
+        scope: tokenScope,
         createdAtMs: nowMs,
         lastSeenAtMs: nowMs,
         ip,
@@ -437,7 +489,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
         delete sessions[newSessionId];
       };
 
-      const server = createConfiguredMCPServer();
+      const server = createConfiguredMCPServer(tokenScope);
       await server.connect(transport);
 
       loggingService.log(LogLevel.INFO, LogCategory.TASK_LIFECYCLE, `New MCP session initialized: ${newSessionId}`, {
@@ -447,7 +499,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
       return handleTransportRequest(transport, request, body, newSessionId);
     }
 
-    const authorized = getAuthorizedSession(request, sessionId);
+    const authorized = await getAuthorizedSession(request, sessionId);
     if (authorized instanceof Response) return authorized;
 
     const { entry } = authorized;
@@ -473,7 +525,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
   const nowMs = Date.now();
   cleanupExpiredSessions(nowMs);
 
-  const authorized = getAuthorizedSession(request, sessionId);
+  const authorized = await getAuthorizedSession(request, sessionId);
   if (authorized instanceof Response) return authorized;
 
   const { entry } = authorized;
@@ -581,7 +633,7 @@ export async function handleMCPGetRequest(request: Request): Promise<Response> {
     }
   });
 
-  entry.transport.handleRequest(nodeReq, nodeRes).catch(error => {
+  entry.transport.handleRequest(nodeReq, nodeRes).catch((error: unknown) => {
     loggingService.log(LogLevel.ERROR, LogCategory.ERROR_HANDLING, `SSE Stream error for session ${sessionId}`, {
       error: error instanceof Error ? error : new Error(String(error)),
       metadata: { sessionId }
@@ -613,7 +665,7 @@ export async function handleMCPDeleteRequest(request: Request): Promise<Response
   const nowMs = Date.now();
   cleanupExpiredSessions(nowMs);
 
-  const authorized = getAuthorizedSession(request, sessionId);
+  const authorized = await getAuthorizedSession(request, sessionId);
   if (authorized instanceof Response) return authorized;
 
   const { entry } = authorized;

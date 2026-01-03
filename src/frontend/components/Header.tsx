@@ -50,6 +50,9 @@ export function Header({ theme, onThemeToggle, onLogout, onNavigate }: HeaderPro
           <button onClick={() => onNavigate('/rag-status')} className="icon-button" title="RAG Status">
             🔍
           </button>
+          <button onClick={() => onNavigate('/settings')} className="icon-button" title="Settings">
+            ⚙️
+          </button>
           <button onClick={() => setShowInfo(!showInfo)} className="icon-button" title="API & MCP Info">
             ℹ️
           </button>
