@@ -31,6 +31,7 @@ export interface Article {
   folder: string;
   created: string;
   isPublic: boolean;
+  updatedBy?: string;
 }
 
 export interface ArticleMetadata {
@@ -40,6 +41,7 @@ export interface ArticleMetadata {
   created: string;
   modified: string;
   isPublic: boolean;
+  updatedBy?: string;
 }
 
 /**
@@ -95,7 +97,8 @@ export class DatabaseArticleService {
       content: row.content,
       folder: row.folder,
       created: row.created_at.toISOString(),
-      isPublic: row.is_public
+      isPublic: row.is_public,
+      updatedBy: row.updated_by
     };
   }
 
@@ -109,7 +112,8 @@ export class DatabaseArticleService {
       folder: row.folder,
       created: row.created_at.toISOString(),
       modified: row.updated_at.toISOString(),
-      isPublic: row.is_public
+      isPublic: row.is_public,
+      updatedBy: row.updated_by
     };
   }
 
@@ -119,7 +123,7 @@ export class DatabaseArticleService {
   async listArticles(folder?: string, limit?: number): Promise<ArticleMetadata[]> {
     try {
       let query = `
-        SELECT slug, title, folder, is_public, created_at, updated_at
+        SELECT slug, title, folder, is_public, created_at, updated_at, updated_by
         FROM articles
       `;
       const params: any[] = [];
@@ -165,7 +169,7 @@ export class DatabaseArticleService {
    */
   async searchArticles(query: string, folder?: string): Promise<ArticleMetadata[]> {
     let sql = `
-      SELECT slug, title, folder, is_public, created_at, updated_at
+      SELECT slug, title, folder, is_public, created_at, updated_at, updated_by
       FROM articles
       WHERE title ILIKE $1
     `;
@@ -266,7 +270,8 @@ export class DatabaseArticleService {
     title: string,
     content: string,
     folder?: string,
-    message?: string
+    message?: string,
+    createdBy?: string
   ): Promise<Article> {
     try {
       const normalizedFolder = this.normalizeFolder(folder);
@@ -283,10 +288,10 @@ export class DatabaseArticleService {
       const now = new Date();
 
       const result = await database.query(
-        `INSERT INTO articles (title, slug, content, folder, is_public, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
+        `INSERT INTO articles (title, slug, content, folder, is_public, created_at, updated_at, created_by, updated_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
          RETURNING *`,
-        [title.trim(), slug, content.trim(), normalizedFolder, false, now, now]
+        [title.trim(), slug, content.trim(), normalizedFolder, false, now, now, createdBy || null, createdBy || null]
       );
 
       return this.dbRowToArticle(result.rows[0]);
@@ -308,7 +313,8 @@ export class DatabaseArticleService {
     title: string,
     content: string,
     folder?: string,
-    message?: string
+    message?: string,
+    updatedBy?: string
   ): Promise<Article> {
     // Validate inputs
     if (!title || title.trim().length === 0) {
@@ -351,10 +357,10 @@ export class DatabaseArticleService {
 
     const result = await database.query(
       `UPDATE articles 
-       SET title = $1, slug = $2, content = $3, folder = $4, updated_at = $5
-       WHERE id = $6
+       SET title = $1, slug = $2, content = $3, folder = $4, updated_at = $5, updated_by = $6
+       WHERE id = $7
        RETURNING *`,
-      [title, newSlug, content, normalizedFolder, updatedAt, articleId]
+      [title, newSlug, content, normalizedFolder, updatedAt, updatedBy || null, articleId]
     );
 
     if (result.rows.length === 0) {

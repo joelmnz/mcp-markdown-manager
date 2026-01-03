@@ -13,6 +13,7 @@ export interface Article {
   folder?: string;
   created: string;
   isPublic: boolean;
+  modifiedBy?: string;
 }
 
 export interface ArticleMetadata {
@@ -22,6 +23,7 @@ export interface ArticleMetadata {
   created: string;
   modified: string;
   isPublic: boolean;
+  modifiedBy?: string;
 }
 
 export interface VersionMetadata {
@@ -107,7 +109,8 @@ function convertToLegacyArticle(dbArticle: any): Article {
     content: dbArticle.content,
     folder: dbArticle.folder,
     created: dbArticle.created,
-    isPublic: dbArticle.isPublic
+    isPublic: dbArticle.isPublic,
+    modifiedBy: dbArticle.updatedBy
   };
 }
 
@@ -119,7 +122,8 @@ function convertToLegacyMetadata(dbMetadata: any): ArticleMetadata {
     folder: dbMetadata.folder,
     created: dbMetadata.created,
     modified: dbMetadata.modified,
-    isPublic: dbMetadata.isPublic
+    isPublic: dbMetadata.isPublic,
+    modifiedBy: dbMetadata.updatedBy
   };
 }
 
@@ -216,11 +220,11 @@ export async function readArticle(filename: string): Promise<Article | null> {
 }
 
 // Create a new article
-export async function createArticle(title: string, content: string, folder: string = '', message?: string, options?: ArticleServiceOptions): Promise<Article> {
+export async function createArticle(title: string, content: string, folder: string = '', message?: string, options?: ArticleServiceOptions, createdBy?: string): Promise<Article> {
   const cleanedContent = cleanMarkdownContent(content);
 
   // Create article in database first (ensures article persistence precedes task queuing)
-  const dbArticle = await databaseArticleService.createArticle(title, cleanedContent, folder, message);
+  const dbArticle = await databaseArticleService.createArticle(title, cleanedContent, folder, message, createdBy);
 
   // Create initial version snapshot
   const filename = slugToFilename(dbArticle.slug);
@@ -256,7 +260,7 @@ export async function createArticle(title: string, content: string, folder: stri
 }
 
 // Update an existing article
-export async function updateArticle(filename: string, title: string, content: string, folder?: string, message?: string, options?: ArticleServiceOptions): Promise<Article> {
+export async function updateArticle(filename: string, title: string, content: string, folder?: string, message?: string, options?: ArticleServiceOptions, updatedBy?: string): Promise<Article> {
   const cleanedContent = cleanMarkdownContent(content);
   const slug = filenameToSlug(filename);
 
@@ -270,7 +274,7 @@ export async function updateArticle(filename: string, title: string, content: st
   const targetFolder = folder !== undefined ? folder : existing.folder;
 
   // Update article in database first (this handles slug changes automatically)
-  const updatedArticle = await databaseArticleService.updateArticle(slug, title, cleanedContent, targetFolder, message);
+  const updatedArticle = await databaseArticleService.updateArticle(slug, title, cleanedContent, targetFolder, message, updatedBy);
 
   // Create version snapshot
   const newFilename = slugToFilename(updatedArticle.slug);

@@ -172,6 +172,23 @@ export async function deleteAccessTokenById(id: number): Promise<boolean> {
 }
 
 /**
+ * Get token name by ID (for tracking purposes)
+ */
+export async function getTokenNameById(tokenId: number): Promise<string | null> {
+  try {
+    const result = await database.query<AccessToken>(
+      `SELECT name FROM access_tokens WHERE id = $1`,
+      [tokenId]
+    );
+
+    return result.rows.length > 0 ? result.rows[0].name : null;
+  } catch (error) {
+    console.error('Failed to get token name:', error);
+    return null;
+  }
+}
+
+/**
  * Delete an access token by token string
  */
 export async function deleteAccessToken(token: string): Promise<boolean> {

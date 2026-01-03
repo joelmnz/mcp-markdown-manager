@@ -1,4 +1,4 @@
-import { validateAccessToken, hasPermission, type TokenScope } from '../services/accessTokens.js';
+import { validateAccessToken, hasPermission, getTokenNameById, type TokenScope } from '../services/accessTokens.js';
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 
@@ -9,6 +9,7 @@ if (!AUTH_TOKEN) {
 export interface AuthContext {
   scope: TokenScope;
   tokenId?: number;
+  tokenName?: string;
 }
 
 /**
@@ -57,9 +58,17 @@ export async function authenticateAccessToken(request: Request): Promise<AuthCon
     return null;
   }
 
+  // Get token name for tracking
+  let tokenName: string | undefined = undefined;
+  if (validation.tokenId) {
+    const name = await getTokenNameById(validation.tokenId);
+    tokenName = name || undefined;
+  }
+
   return {
     scope: validation.scope,
     tokenId: validation.tokenId,
+    tokenName,
   };
 }
 
@@ -73,8 +82,8 @@ export async function authenticate(request: Request, useWebAuth: boolean = false
     // Web-only mode: check AUTH_TOKEN env var ONLY
     const isValid = authenticateWeb(request);
     if (isValid) {
-      // Web auth always has write scope
-      return { scope: 'write' };
+      // Web auth always has write scope and uses "admin" as token name
+      return { scope: 'write', tokenName: 'admin' };
     }
     return null;
   }
@@ -91,8 +100,8 @@ export async function authenticate(request: Request, useWebAuth: boolean = false
   // Fall back to AUTH_TOKEN for web UI compatibility
   const isWebAuth = authenticateWeb(request);
   if (isWebAuth) {
-    // AUTH_TOKEN always has write scope
-    return { scope: 'write' };
+    // AUTH_TOKEN always has write scope and uses "admin" as token name
+    return { scope: 'write', tokenName: 'admin' };
   }
 
   return null;
