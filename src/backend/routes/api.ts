@@ -650,7 +650,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       }
 
-      const article = await createArticle(title, content, folder, message);
+      const article = await createArticle(title, content, folder, message, undefined, authContext.tokenName);
       return new Response(JSON.stringify(article), {
         status: 201,
         headers: { 'Content-Type': 'application/json' }
@@ -693,7 +693,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       }
 
-      const article = await updateArticle(filename, title, content, folder, message);
+      const article = await updateArticle(filename, title, content, folder, message, undefined, authContext.tokenName);
       return new Response(JSON.stringify(article), {
         headers: { 'Content-Type': 'application/json' }
       });

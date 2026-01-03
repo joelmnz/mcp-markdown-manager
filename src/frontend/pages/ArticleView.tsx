@@ -9,6 +9,7 @@ interface Article {
   content: string;
   created: string;
   isPublic: boolean;
+  modifiedBy?: string;
 }
 
 interface VersionMetadata {
@@ -335,6 +336,9 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
               {formatDate(article.created)}
               {isViewingHistory && currentVersion && (
                 <> • Version from {formatDate(currentVersion.createdAt)}</>
+              )}
+              {!isViewingHistory && article.modifiedBy && (
+                <> • Edited by {article.modifiedBy}</>
               )}
             </span>
           </div>
