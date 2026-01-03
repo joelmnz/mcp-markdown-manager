@@ -19,11 +19,11 @@ interface NewTokenResult {
 }
 
 interface SettingsProps {
-  token: string;
+  authToken: string;
   onNavigate: (path: string) => void;
 }
 
-export function Settings({ token, onNavigate }: SettingsProps) {
+export function Settings({ authToken, onNavigate }: SettingsProps) {
   const [tokens, setTokens] = useState<AccessToken[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export function Settings({ token, onNavigate }: SettingsProps) {
     setError(null);
 
     try {
-      const response = await apiClient.get('/api/access-tokens', token);
+      const response = await apiClient.get('/api/access-tokens', authToken);
 
       if (!response.ok) {
         throw new Error('Failed to load access tokens');
@@ -73,7 +73,7 @@ export function Settings({ token, onNavigate }: SettingsProps) {
       const response = await apiClient.post(
         '/api/access-tokens',
         { name: newTokenName.trim(), scope: newTokenScope },
-        token
+        authToken
       );
 
       if (!response.ok) {
@@ -101,7 +101,7 @@ export function Settings({ token, onNavigate }: SettingsProps) {
     try {
       const response = await apiClient.delete(
         `/api/access-tokens/${tokenId}`,
-        token
+        authToken
       );
 
       if (!response.ok) {

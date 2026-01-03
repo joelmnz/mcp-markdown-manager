@@ -390,7 +390,7 @@ function App() {
           <ImportFiles token={token} onNavigate={navigate} />
         )}
         {route.type === 'settings' && (
-          <Settings token={token} onNavigate={navigate} />
+          <Settings authToken={token} onNavigate={navigate} />
         )}
         {route.type === 'article' && (
           <ArticleView filename={route.filename} token={token} onNavigate={navigate} />
