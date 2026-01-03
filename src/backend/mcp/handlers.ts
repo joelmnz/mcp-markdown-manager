@@ -26,7 +26,7 @@ export interface McpHandlerContext {
 }
 
 export const toolHandlers: Record<string, (args: any, context?: McpHandlerContext) => Promise<any>> = {
-  listArticles: async (args) => {
+  listArticles: async (args, context) => {
     const { folder, maxArticles } = args as { folder?: string; maxArticles?: number };
     
     // Validate folder if provided
@@ -60,14 +60,14 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
     };
   },
 
-  listFolders: async () => {
+  listFolders: async (args, context) => {
     const folders = await getFolders();
     return {
       content: [{ type: 'text', text: JSON.stringify(folders, null, 2) }],
     };
   },
 
-  searchArticles: async (args) => {
+  searchArticles: async (args, context) => {
     const { query, folder } = args as { query: string; folder?: string };
     
     // Validate query
@@ -92,7 +92,7 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
     };
   },
 
-  multiSearchArticles: async (args) => {
+  multiSearchArticles: async (args, context) => {
     const { titles, folder } = args as { titles: string[]; folder?: string };
     
     // Validate titles array
@@ -129,7 +129,7 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
     };
   },
 
-  semanticSearch: async (args) => {
+  semanticSearch: async (args, context) => {
     if (!SEMANTIC_SEARCH_ENABLED) throw new Error('Semantic search is not enabled');
     const { query, k, folder } = args as { query: string; k?: number; folder?: string };
     
@@ -170,7 +170,7 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
     };
   },
 
-  multiSemanticSearch: async (args) => {
+  multiSemanticSearch: async (args, context) => {
     if (!SEMANTIC_SEARCH_ENABLED) throw new Error('Semantic search is not enabled');
     const { queries, k, folder } = args as { queries: string[]; k?: number; folder?: string };
     
@@ -233,7 +233,7 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
     };
   },
 
-  readArticle: async (args) => {
+  readArticle: async (args, context) => {
     const { filename } = args as { filename: string };
     
     // Validate filename
@@ -332,7 +332,7 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
     };
   },
 
-  deleteArticle: async (args) => {
+  deleteArticle: async (args, context) => {
     const { filename } = args as { filename: string };
     
     // Validate filename

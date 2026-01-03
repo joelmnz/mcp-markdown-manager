@@ -74,7 +74,7 @@ async function isAuthorizedToken(token: string | null): Promise<{ valid: boolean
   }
 
   // Get token name for tracking
-  let tokenName: string | undefined = undefined;
+  let tokenName;
   if (validation.tokenId) {
     const name = await getTokenNameById(validation.tokenId);
     tokenName = name || undefined;

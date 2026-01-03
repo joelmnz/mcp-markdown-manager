@@ -261,8 +261,7 @@ async function runTest() {
       console.log('   ✅ Test API key deleted');
     }
     
-    // Note: Database connection is managed by databaseInit, no need to explicitly close
-    console.log('   ✅ Database connection will be closed on exit');
+    console.log('   ✅ Cleanup complete');
   }
 }
 
