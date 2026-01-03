@@ -65,12 +65,12 @@ export async function authenticateAccessToken(request: Request): Promise<AuthCon
 
 /**
  * Combined authentication: checks both web auth and access tokens
- * For web login endpoints, pass useWebAuth=true
- * For API/MCP endpoints, this checks access tokens
+ * For web-only endpoints (token management), pass useWebAuth=true to ONLY accept AUTH_TOKEN
+ * For API/MCP endpoints, this accepts BOTH access tokens and AUTH_TOKEN for flexibility
  */
 export async function authenticate(request: Request, useWebAuth: boolean = false): Promise<AuthContext | null> {
   if (useWebAuth) {
-    // Web login: check AUTH_TOKEN env var
+    // Web-only mode: check AUTH_TOKEN env var ONLY
     const isValid = authenticateWeb(request);
     if (isValid) {
       // Web auth always has write scope
@@ -79,8 +79,23 @@ export async function authenticate(request: Request, useWebAuth: boolean = false
     return null;
   }
 
-  // API/MCP: check access tokens
-  return await authenticateAccessToken(request);
+  // API/MCP mode: Try access token first, then fall back to AUTH_TOKEN
+  // This allows both web UI (using AUTH_TOKEN) and external APIs (using access tokens) to work
+
+  // First, try access token from database
+  const accessTokenAuth = await authenticateAccessToken(request);
+  if (accessTokenAuth) {
+    return accessTokenAuth;
+  }
+
+  // Fall back to AUTH_TOKEN for web UI compatibility
+  const isWebAuth = authenticateWeb(request);
+  if (isWebAuth) {
+    // AUTH_TOKEN always has write scope
+    return { scope: 'write' };
+  }
+
+  return null;
 }
 
 /**

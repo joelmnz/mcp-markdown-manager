@@ -201,11 +201,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
   }
 
   // All other API endpoints require authentication
-  // Check if this is a login validation request (uses web auth)
-  const isLoginValidation = path === '/api/articles' && request.method === 'GET' &&
-                             request.headers.get('Authorization')?.replace('Bearer ', '') === process.env.AUTH_TOKEN;
-
-  const authResult = await requireAuth(request, undefined, isLoginValidation);
+  // The middleware now accepts both AUTH_TOKEN (for web UI) and access tokens (for API/MCP)
+  const authResult = await requireAuth(request);
   if ('error' in authResult) return authResult.error;
 
   const authContext = authResult.auth;
