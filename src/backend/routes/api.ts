@@ -8,6 +8,7 @@ import {
   deleteAccessToken,
   deleteAccessTokenById,
   getAccessToken,
+  hasPermission,
   type TokenScope
 } from '../services/accessTokens.js';
 import {
@@ -206,6 +207,20 @@ export async function handleApiRequest(request: Request): Promise<Response> {
   if ('error' in authResult) return authResult.error;
 
   const authContext = authResult.auth;
+
+  // Helper function to check if token has required scope
+  const checkScope = (requiredScope: TokenScope): Response | null => {
+    if (!hasPermission(authContext.scope, requiredScope)) {
+      return new Response(JSON.stringify({
+        error: 'Insufficient permissions',
+        message: `This operation requires ${requiredScope} scope, but token has ${authContext.scope} scope`
+      }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    return null;
+  };
 
   // Apply rate limiting to all authenticated endpoints
   const rateLimitError = apiRateLimit(request);
@@ -410,8 +425,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // POST /api/rag/reindex - Rebuild entire index
     if (path === '/api/rag/reindex' && request.method === 'POST') {
       // Require write scope
-      const scopeCheck = await requireAuth(request, 'write');
-      if ('error' in scopeCheck) return scopeCheck.error;
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
 
       // Apply stricter rate limiting for expensive operations
       const expensiveRateLimitError = expensiveRateLimit(request);
@@ -450,8 +465,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // POST /api/rag/index-unindexed - Index only unindexed articles
     if (path === '/api/rag/index-unindexed' && request.method === 'POST') {
       // Require write scope
-      const scopeCheck = await requireAuth(request, 'write');
-      if ('error' in scopeCheck) return scopeCheck.error;
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
 
       if (!SEMANTIC_SEARCH_ENABLED) {
         return new Response(JSON.stringify({ error: 'Semantic search is not enabled' }), {
@@ -497,8 +512,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // PUT /api/folders/manage/:oldName - Rename a folder
     if (path.startsWith('/api/folders/manage/') && request.method === 'PUT') {
       // Require write scope
-      const scopeCheck = await requireAuth(request, 'write');
-      if ('error' in scopeCheck) return scopeCheck.error;
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
 
       try {
         const oldFolderName = decodeURIComponent(path.replace('/api/folders/manage/', ''));
@@ -530,8 +545,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // DELETE /api/folders/manage/:folderName - Delete a folder
     if (path.startsWith('/api/folders/manage/') && request.method === 'DELETE') {
       // Require write scope
-      const scopeCheck = await requireAuth(request, 'write');
-      if ('error' in scopeCheck) return scopeCheck.error;
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
 
       try {
         const folderName = decodeURIComponent(path.replace('/api/folders/manage/', ''));
@@ -622,8 +637,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // POST /api/articles - Create new article
     if (path === '/api/articles' && request.method === 'POST') {
       // Require write scope
-      const scopeCheck = await requireAuth(request, 'write');
-      if ('error' in scopeCheck) return scopeCheck.error;
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
 
       const body = await request.json();
       const { title, content, folder, message } = body;
@@ -645,8 +660,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // PUT /api/articles/:filename - Update article
     if (path.startsWith('/api/articles/') && request.method === 'PUT') {
       // Require write scope
-      const scopeCheck = await requireAuth(request, 'write');
-      if ('error' in scopeCheck) return scopeCheck.error;
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
 
       const filename = path.replace('/api/articles/', '');
 
@@ -687,8 +702,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // DELETE /api/articles/:filename - Delete article or versions
     if (path.startsWith('/api/articles/') && request.method === 'DELETE') {
       // Require write scope
-      const scopeCheck = await requireAuth(request, 'write');
-      if ('error' in scopeCheck) return scopeCheck.error;
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
 
       const fullPath = path.replace('/api/articles/', '');
 
@@ -735,8 +750,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // POST /api/articles/:filename/public - Set public status
     if (path.match(/^\/api\/articles\/[^\/]+\/public$/) && request.method === 'POST') {
       // Require write scope
-      const scopeCheck = await requireAuth(request, 'write');
-      if ('error' in scopeCheck) return scopeCheck.error;
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
 
       const filename = path.replace('/api/articles/', '').replace('/public', '');
       const body = await request.json();
@@ -759,8 +774,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // POST /api/articles/:filename/rename-slug - Rename article slug
     if (path.match(/^\/api\/articles\/[^\/]+\/rename-slug$/) && request.method === 'POST') {
       // Require write scope
-      const scopeCheck = await requireAuth(request, 'write');
-      if ('error' in scopeCheck) return scopeCheck.error;
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
 
       try {
         const filename = path.replace('/api/articles/', '').replace('/rename-slug', '');
@@ -798,8 +813,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // POST /api/import/validate - Start validation
     if (path === '/api/import/validate' && request.method === 'POST') {
       // Require write scope
-      const scopeCheck = await requireAuth(request, 'write');
-      if ('error' in scopeCheck) return scopeCheck.error;
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
 
       try {
         const result = await importStatusService.validate();
@@ -814,8 +829,8 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     // POST /api/import/start - Start import
     if (path === '/api/import/start' && request.method === 'POST') {
       // Require write scope
-      const scopeCheck = await requireAuth(request, 'write');
-      if ('error' in scopeCheck) return scopeCheck.error;
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
 
       try {
         await importStatusService.startImport();
