@@ -17,13 +17,15 @@ import { logSecurityEvent } from './validation.ts';
 import { createRateLimiter, RateLimitPresets } from '../middleware/rateLimit';
 import { createRequestSizeValidator, RequestSizePresets } from '../middleware/requestSize';
 import { parseEnvInt } from '../utils/config';
-import { validateAccessToken, type TokenScope } from '../services/accessTokens.js';
+import { validateAccessToken, getTokenNameById, type TokenScope } from '../services/accessTokens.js';
 
 
 type McpSessionEntry = {
   transport: StreamableHTTPServerTransport;
   token: string;
   scope: TokenScope;
+  tokenId?: number;
+  tokenName?: string;
   createdAtMs: number;
   lastSeenAtMs: number;
   ip: string;
@@ -62,13 +64,27 @@ function getBearerToken(request: Request): string | null {
   return token ? token : null;
 }
 
-async function isAuthorizedToken(token: string | null): Promise<{ valid: boolean; scope?: TokenScope }> {
+async function isAuthorizedToken(token: string | null): Promise<{ valid: boolean; scope?: TokenScope; tokenId?: number; tokenName?: string }> {
   if (!token) return { valid: false };
 
   const validation = await validateAccessToken(token);
+  
+  if (!validation.valid || !validation.scope) {
+    return { valid: false };
+  }
+
+  // Get token name for tracking
+  let tokenName;
+  if (validation.tokenId) {
+    const name = await getTokenNameById(validation.tokenId);
+    tokenName = name || undefined;
+  }
+
   return {
     valid: validation.valid,
     scope: validation.scope,
+    tokenId: validation.tokenId,
+    tokenName,
   };
 }
 
@@ -224,7 +240,7 @@ function getToolsForScope(scope: TokenScope, allTools: any[]): any[] {
 }
 
 // Create a configured MCP server instance with scope-based tool filtering
-function createConfiguredMCPServer(scope: TokenScope) {
+function createConfiguredMCPServer(scope: TokenScope, tokenName?: string) {
   const server = new Server(
     {
       name: 'mcp-markdown-manager',
@@ -409,7 +425,7 @@ function createConfiguredMCPServer(scope: TokenScope) {
         throw new Error(`Tool "${toolName}" requires write scope, but token has ${scope} scope`);
       }
 
-      const result = await handler(request.params.arguments);
+      const result = await handler(request.params.arguments, { tokenName });
 
       loggingService.logPerformanceMetric(`mcp_tool_${toolName}`, Date.now() - startTime, {
         metadata: { success: true }
@@ -431,8 +447,8 @@ function createConfiguredMCPServer(scope: TokenScope) {
   return server;
 }
 
-export function createMCPServer(scope: TokenScope = 'write') {
-  return createConfiguredMCPServer(scope);
+export function createMCPServer(scope: TokenScope = 'write', tokenName?: string) {
+  return createConfiguredMCPServer(scope, tokenName);
 }
 
 function isInitializeRequest(body: any): boolean {
@@ -448,6 +464,8 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
   }
 
   const tokenScope = authResult.scope;
+  const tokenId = authResult.tokenId;
+  const tokenName = authResult.tokenName;
 
   // Validate request size before processing
   const sizeCheck = await mcpSizeValidator(request);
@@ -477,6 +495,8 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
         transport,
         token: token!,
         scope: tokenScope,
+        tokenId,
+        tokenName,
         createdAtMs: nowMs,
         lastSeenAtMs: nowMs,
         ip,
@@ -489,7 +509,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
         delete sessions[newSessionId];
       };
 
-      const server = createConfiguredMCPServer(tokenScope);
+      const server = createConfiguredMCPServer(tokenScope, tokenName);
       await server.connect(transport);
 
       loggingService.log(LogLevel.INFO, LogCategory.TASK_LIFECYCLE, `New MCP session initialized: ${newSessionId}`, {
