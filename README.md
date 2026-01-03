@@ -335,7 +335,7 @@ The application uses a two-tier authentication system:
    - Can be named, viewed (masked), and revoked
    - Track last usage timestamp
 
-**Migration Note**: After upgrading, existing MCP/API integrations using `AUTH_TOKEN` will stop working. Log into the web UI and generate new access tokens in the Settings page.
+**Migration Note**: After upgrading, API and MCP endpoints use scoped access tokens by default. For backward compatibility, existing MCP/API integrations using `AUTH_TOKEN` may continue to work via a temporary fallback, but this behavior is **deprecated** and will be removed in a future release. Log into the web UI and generate new access tokens in the Settings page, then update your integrations to use those tokens.
 
 ### Base Path Configuration (Nginx Subpath Deployment)
 
