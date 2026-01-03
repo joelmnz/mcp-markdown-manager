@@ -237,7 +237,7 @@ export function Settings({ token, onNavigate }: SettingsProps) {
                     </td>
                     <td className="token-value">
                       <code className="token-display">
-                        {visibleTokens.has(t.id) ? t.masked_token : t.masked_token}
+                        {visibleTokens.has(t.id) ? t.masked_token : '••••••••••'}
                       </code>
                     </td>
                     <td className="token-date">{formatDate(t.created_at)}</td>
