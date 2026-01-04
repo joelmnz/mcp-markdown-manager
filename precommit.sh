@@ -10,20 +10,26 @@ echo "Running Precommit Checks"
 echo "=================================="
 echo ""
 
-# Step 1: TypeScript Type Checking
-echo "📝 Step 1: TypeScript Type Checking..."
+# Step 1: Run Unit Tests
+echo "🧪 Step 1: Running Unit Tests..."
+bun test
+echo "✅ All tests passed"
+echo ""
+
+# Step 2: TypeScript Type Checking
+echo "📝 Step 2: TypeScript Type Checking..."
 bun run typecheck
 echo "✅ TypeScript check passed"
 echo ""
 
-# Step 2: Build Frontend
-echo "🏗️  Step 2: Building Frontend..."
+# Step 3: Build Frontend
+echo "🏗️  Step 3: Building Frontend..."
 bun run build
 echo "✅ Frontend build passed"
 echo ""
 
-# Step 3: Verify build artifacts exist
-echo "🔍 Step 3: Verifying build artifacts..."
+# Step 4: Verify build artifacts exist
+echo "🔍 Step 4: Verifying build artifacts..."
 if [ -d "public" ]; then
     # Check for JavaScript bundles
     BUILD_FILES=$(find public -name "App.*.js" | wc -l)
@@ -47,8 +53,8 @@ else
 fi
 echo ""
 
-# Step 4: Build Docker image (optional - requires Docker)
-echo "🐳 Step 4: Building Docker image..."
+# Step 5: Build Docker image (optional - requires Docker)
+echo "🐳 Step 5: Building Docker image..."
 if command -v docker &> /dev/null; then
     docker build -t mcp-markdown-manager:precommit-test .
     echo "✅ Docker image build passed"
