@@ -1,4 +1,4 @@
-import { validateAccessToken, hasPermission, getTokenNameById, type TokenScope } from '../services/accessTokens.js';
+import { validateAccessToken, hasPermission, getTokenNameById, checkFolderAccess, type TokenScope } from '../services/accessTokens.js';
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 
@@ -10,6 +10,7 @@ export interface AuthContext {
   scope: TokenScope;
   tokenId?: number;
   tokenName?: string;
+  folderFilter?: string | null;
 }
 
 /**
@@ -69,6 +70,7 @@ export async function authenticateAccessToken(request: Request): Promise<AuthCon
     scope: validation.scope,
     tokenId: validation.tokenId,
     tokenName,
+    folderFilter: validation.folderFilter,
   };
 }
 
@@ -143,3 +145,8 @@ export async function requireAuth(
 
   return { auth: authContext };
 }
+
+/**
+ * Re-export checkFolderAccess for use in route handlers
+ */
+export { checkFolderAccess };
