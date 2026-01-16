@@ -613,7 +613,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         let results = await searchArticles(query, folder);
         
         // Filter results based on folder access
-        if (authContext.folderFilter !== undefined && authContext.tokenName !== 'admin') {
+        if (authContext.folderFilter !== null && authContext.tokenName !== 'admin') {
           results = results.filter(article => 
             checkFolderAccess(article.folder || '', authContext.folderFilter ?? null)
           );
@@ -627,7 +627,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         let articles = await listArticles(folder);
         
         // Filter results based on folder access
-        if (authContext.folderFilter !== undefined && authContext.tokenName !== 'admin') {
+        if (authContext.folderFilter !== null && authContext.tokenName !== 'admin') {
           articles = articles.filter(article => 
             checkFolderAccess(article.folder || '', authContext.folderFilter ?? null)
           );

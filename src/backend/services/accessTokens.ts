@@ -57,6 +57,10 @@ function maskToken(token: string): string {
  * Normalize and validate folder filter
  * Returns normalized filter or null for no filter
  * Empty string "" means no filter (access to all folders)
+ * 
+ * Note: This function ensures that whitespace-only filters are treated
+ * as "no filter" by trimming and checking for empty strings.
+ * The root folder "/" is also normalized to null (no filter).
  */
 function normalizeFolderFilter(folderFilter?: string | null): string | null {
   // Handle null, undefined, or empty string - all mean "no filter"
@@ -70,7 +74,7 @@ function normalizeFolderFilter(folderFilter?: string | null): string | null {
   // Remove leading/trailing slashes
   normalized = normalized.replace(/^\/+|\/+$/g, '');
   
-  // If empty after normalization, return null
+  // If empty after normalization (e.g., was "/"), return null
   if (normalized === '') {
     return null;
   }
