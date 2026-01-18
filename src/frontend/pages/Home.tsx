@@ -256,6 +256,7 @@ export function Home({ token, onNavigate }: HomeProps) {
               className="folder-manage-button"
               onClick={() => setShowFolderModal(true)}
               title="Manage folders"
+              aria-label="Manage folders"
             >
               📂
             </button>
@@ -338,6 +339,7 @@ export function Home({ token, onNavigate }: HomeProps) {
                 className="article-item-action"
                 onClick={(e) => handleLinkClick(e, () => handleEditClick(result.chunk.filename))}
                 title="Edit article"
+                aria-label={`Edit ${result.chunk.title}`}
               >
                 ✏️
               </a>
