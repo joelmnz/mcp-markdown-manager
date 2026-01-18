@@ -70,6 +70,7 @@ export function ArticleList({
             className="article-item-action"
             onClick={(e) => handleLinkClick(e, () => onEditClick(article.filename))}
             title="Edit article"
+            aria-label={`Edit ${article.title}`}
           >
             ✏️
           </a>

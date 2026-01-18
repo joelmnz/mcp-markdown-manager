@@ -323,6 +323,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
                   className="copy-link-button"
                   onClick={handleCopyPublicLink}
                   title="Copy link to clipboard"
+                  aria-label={copySuccess ? 'Link copied' : 'Copy link to clipboard'}
                 >
                   {copySuccess ? '✓' : '📋'}
                 </button>

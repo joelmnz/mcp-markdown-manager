@@ -47,19 +47,44 @@ export function Header({ theme, onThemeToggle, onLogout, onNavigate }: HeaderPro
           <span className="title-mobile">Md</span>
         </a>
         <div className="header-actions">
-          <button onClick={() => onNavigate('/rag-status')} className="icon-button" title="RAG Status">
+          <button
+            onClick={() => onNavigate('/rag-status')}
+            className="icon-button"
+            title="RAG Status"
+            aria-label="RAG Status"
+          >
             🔍
           </button>
-          <button onClick={() => onNavigate('/settings')} className="icon-button" title="Settings">
+          <button
+            onClick={() => onNavigate('/settings')}
+            className="icon-button"
+            title="Settings"
+            aria-label="Settings"
+          >
             ⚙️
           </button>
-          <button onClick={() => setShowInfo(!showInfo)} className="icon-button" title="API & MCP Info">
+          <button
+            onClick={() => setShowInfo(!showInfo)}
+            className="icon-button"
+            title="API & MCP Info"
+            aria-label="API and MCP Information"
+          >
             ℹ️
           </button>
-          <button onClick={onThemeToggle} className="icon-button" title="Toggle theme">
+          <button
+            onClick={onThemeToggle}
+            className="icon-button"
+            title="Toggle theme"
+            aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+          >
             {theme === 'dark' ? '☀️' : '🌙'}
           </button>
-          <button onClick={onLogout} className="icon-button" title="Logout">
+          <button
+            onClick={onLogout}
+            className="icon-button"
+            title="Logout"
+            aria-label="Logout"
+          >
             🚪
           </button>
         </div>
