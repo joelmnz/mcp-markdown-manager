@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MarkdownView } from './MarkdownView';
 import { useFullscreen } from '../hooks/useFullscreen';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { apiClient } from '../utils/apiClient';
 
 interface Article {
@@ -23,6 +24,9 @@ export function PublicArticleView({ slug, onNavigate }: PublicArticleViewProps) 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const articleContentRef = useRef<HTMLElement>(null);
   const { isFullscreen, toggleFullscreen } = useFullscreen();
+
+  // Update document title when article is loaded
+  useDocumentTitle(article?.title);
 
   useEffect(() => {
     // Check if user is authenticated

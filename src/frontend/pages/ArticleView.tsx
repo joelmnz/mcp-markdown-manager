@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MarkdownView } from '../components/MarkdownView';
 import { useFullscreen } from '../hooks/useFullscreen';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { apiClient } from '../utils/apiClient';
 
 interface Article {
@@ -39,6 +40,9 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
   const [copyFeedback, setCopyFeedback] = useState(false);
   const articleContentRef = useRef<HTMLElement>(null);
   const { isFullscreen, toggleFullscreen } = useFullscreen();
+
+  // Update document title when article is loaded
+  useDocumentTitle(article?.title);
 
   const loadArticle = async () => {
     try {
