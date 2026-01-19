@@ -10,10 +10,12 @@ export function useDocumentTitle(title?: string) {
     if (title) {
       document.title = title;
     }
+  }, [title]);
 
-    // Restore original title on unmount or when title changes
+  useEffect(() => {
+    // Restore original title only on unmount
     return () => {
       document.title = defaultTitle.current;
     };
-  }, [title]);
+  }, []);
 }
