@@ -58,8 +58,8 @@ export function Home({ token, onNavigate }: HomeProps) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Focus search on '/'
-      if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
+      // Focus search on Ctrl+K or Cmd+K
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         e.preventDefault();
         searchInputRef.current?.focus();
       }
@@ -305,7 +305,7 @@ export function Home({ token, onNavigate }: HomeProps) {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={searchMode === 'semantic' ? 'Search by meaning... (/)' : 'Search articles... (/)'}
+              placeholder={searchMode === 'semantic' ? 'Search by meaning... (Ctrl+K)' : 'Search articles... (Ctrl+K)'}
               className="search-input"
               aria-label="Search articles"
             />
