@@ -27,6 +27,7 @@ interface HomeProps {
 }
 
 export function Home({ token, onNavigate }: HomeProps) {
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
   const [articles, setArticles] = useState<Article[]>([]);
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -54,6 +55,19 @@ export function Home({ token, onNavigate }: HomeProps) {
     }
   });
   const [showFolderModal, setShowFolderModal] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Focus search on '/'
+      if (e.key === '/' && !['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -287,13 +301,15 @@ export function Home({ token, onNavigate }: HomeProps) {
           </div>
           <div className="search-input-row">
             <input
+              ref={searchInputRef}
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={searchMode === 'semantic' ? 'Search by meaning...' : 'Search articles...'}
+              placeholder={searchMode === 'semantic' ? 'Search by meaning... (/)' : 'Search articles... (/)'}
               className="search-input"
+              aria-label="Search articles"
             />
-            <button type="submit" className="button">Search</button>
+            <button type="submit" className="button" aria-label="Submit search">Search</button>
             {searchQuery && (
               <button
                 type="button"
@@ -378,6 +394,7 @@ export function Home({ token, onNavigate }: HomeProps) {
                     className="button button-secondary"
                     onClick={() => handlePageChange(currentPage - 1)}
                     disabled={currentPage === 1}
+                    aria-label="Go to previous page"
                   >
                     Previous
                   </button>
@@ -407,6 +424,8 @@ export function Home({ token, onNavigate }: HomeProps) {
                           key={page}
                           className={`button page-number ${page === currentPage ? 'active' : ''}`}
                           onClick={() => handlePageChange(page)}
+                          aria-label={`Go to page ${page}`}
+                          aria-current={page === currentPage ? 'page' : undefined}
                         >
                           {page}
                         </button>
@@ -418,6 +437,7 @@ export function Home({ token, onNavigate }: HomeProps) {
                     className="button button-secondary"
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
+                    aria-label="Go to next page"
                   >
                     Next
                   </button>
