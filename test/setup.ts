@@ -3,9 +3,10 @@ import { cleanup } from "@testing-library/react";
 import * as matchers from "@testing-library/jest-dom/matchers";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
+// Register Happy DOM immediately so it's available during module imports
+GlobalRegistrator.register();
+
 beforeAll(() => {
-  GlobalRegistrator.register();
-  
   if (typeof document !== 'undefined' && !document.body) {
     document.body = document.createElement('body');
   }
