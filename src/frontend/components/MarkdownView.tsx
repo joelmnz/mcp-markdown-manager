@@ -64,11 +64,70 @@ function isExternalUrl(url: string): boolean {
 /**
  * Reusable component for rendering markdown with Mermaid diagram support
  */
+function PreBlock({ children, ...props }: any) {
+  const [copied, setCopied] = React.useState(false);
+  const preRef = React.useRef<HTMLPreElement>(null);
+
+  // Check if children is MermaidDiagram to avoid double copy buttons
+  // Since we can't easily check component type equality across modules/builds sometimes,
+  // we check if it's NOT a code element with text content.
+  // Actually, we can check if the child is a React Element and its type.
+  const isMermaid = React.isValidElement(children) &&
+                    // @ts-ignore - checking type name or reference
+                    (children.type === MermaidDiagram || children.type?.name === 'MermaidDiagram');
+
+  if (isMermaid) {
+    return <pre {...props}>{children}</pre>;
+  }
+
+  const handleCopy = () => {
+    let textToCopy = '';
+
+    if (React.isValidElement(children) && children.props.children) {
+      const codeChildren = children.props.children;
+      if (Array.isArray(codeChildren)) {
+          textToCopy = codeChildren.join('');
+      } else {
+          textToCopy = String(codeChildren);
+      }
+    }
+
+    if (textToCopy) {
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }).catch((err) => {
+        console.error('Failed to copy code: ', err);
+      });
+    }
+  };
+
+  return (
+    <div className="code-block-wrapper">
+      <pre {...props} ref={preRef}>
+        {children}
+      </pre>
+      <button
+        className="code-copy-button"
+        onClick={handleCopy}
+        aria-label={copied ? "Copied" : "Copy code"}
+        title={copied ? "Copied" : "Copy code"}
+      >
+        {copied ? '✓' : '📋'}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Reusable component for rendering markdown with Mermaid diagram support
+ */
 export function MarkdownView({ content }: MarkdownViewProps) {
   return (
     <ReactMarkdown 
       remarkPlugins={[remarkGfm]}
       components={{
+        pre: PreBlock,
         a({ href, children, ...props }) {
           const safeHref = sanitizeUrl(href, 'link');
           if (!safeHref) {
