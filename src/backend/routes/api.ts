@@ -422,6 +422,47 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       }
     }
 
+    // DELETE /api/queue/tasks/failed - Clear all failed tasks
+    if (path === '/api/queue/tasks/failed' && request.method === 'DELETE') {
+      // Require write scope
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
+
+      try {
+        const count = await embeddingQueueService.clearFailedTasks();
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Cleared ${count} failed tasks`,
+          count
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to clear failed tasks');
+      }
+    }
+
+    // DELETE /api/queue/tasks/:id - Delete a specific task
+    if (path.startsWith('/api/queue/tasks/') && request.method === 'DELETE') {
+      // Require write scope
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
+
+      const taskId = path.replace('/api/queue/tasks/', '');
+
+      try {
+        await embeddingQueueService.deleteTask(taskId);
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Task deleted successfully'
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to delete task');
+      }
+    }
+
     // POST /api/rag/reindex - Rebuild entire index
     if (path === '/api/rag/reindex' && request.method === 'POST') {
       // Require write scope

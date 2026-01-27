@@ -84,6 +84,8 @@ export interface QueueManager {
   getQueueStats(): Promise<QueueStats>;
   retryFailedTasks(): Promise<number>;
   clearCompletedTasks(olderThan?: Date): Promise<number>;
+  clearFailedTasks(): Promise<number>;
+  deleteTask(taskId: string): Promise<void>;
   getQueueHealth(): Promise<QueueHealth>;
   getDetailedQueueStats(): Promise<{
     stats: QueueStats;
@@ -94,6 +96,13 @@ export interface QueueManager {
       tasksFailedLast24h: number;
       averageProcessingTime: number | null;
     };
+    recentErrors: Array<{
+      id: string;
+      slug: string;
+      operation: string;
+      errorMessage: string;
+      completedAt: Date;
+    }>;
   }>;
   // Bulk operations
   identifyArticlesNeedingEmbedding(): Promise<Array<{
@@ -544,9 +553,16 @@ class EmbeddingQueueService implements QueueManager {
       tasksFailedLast24h: number;
       averageProcessingTime: number | null;
     };
+    recentErrors: Array<{
+      id: string;
+      slug: string;
+      operation: string;
+      errorMessage: string;
+      completedAt: Date;
+    }>;
   }> {
     try {
-      const [stats, priorityResult, operationResult, recentActivityResult] = await Promise.all([
+      const [stats, priorityResult, operationResult, recentActivityResult, recentErrorsResult] = await Promise.all([
         // Get basic stats
         this.getQueueStats(),
         
@@ -579,6 +595,15 @@ class EmbeddingQueueService implements QueueManager {
               ELSE NULL 
             END) as avg_processing_seconds
           FROM embedding_tasks
+        `),
+
+        // Get recent errors
+        database.query(`
+          SELECT id, slug, operation, error_message, completed_at
+          FROM embedding_tasks
+          WHERE status = 'failed'
+          ORDER BY completed_at DESC
+          LIMIT 10
         `)
       ]);
 
@@ -602,17 +627,78 @@ class EmbeddingQueueService implements QueueManager {
         averageProcessingTime: activityRow.avg_processing_seconds ? parseFloat(activityRow.avg_processing_seconds) : null
       };
 
+      // Process recent errors
+      const recentErrors = recentErrorsResult.rows.map(row => ({
+        id: row.id,
+        slug: row.slug,
+        operation: row.operation,
+        errorMessage: row.error_message || 'Unknown error',
+        completedAt: new Date(row.completed_at)
+      }));
+
       return {
         stats,
         tasksByPriority,
         tasksByOperation,
-        recentActivity
+        recentActivity,
+        recentErrors
       };
     } catch (error) {
       throw new DatabaseServiceError(
         DatabaseErrorType.QUERY_ERROR,
         `Failed to get detailed queue statistics: ${error instanceof Error ? error.message : 'Unknown error'}`,
         'Unable to retrieve detailed queue statistics. Please try again.',
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  /**
+   * Delete a specific task by ID
+   */
+  async deleteTask(taskId: string): Promise<void> {
+    try {
+      const result = await database.query(`
+        DELETE FROM embedding_tasks
+        WHERE id = $1
+      `, [taskId]);
+
+      if (result.rowCount === 0) {
+        throw new DatabaseServiceError(
+          DatabaseErrorType.NOT_FOUND,
+          `Task with ID ${taskId} not found`,
+          'Task not found.'
+        );
+      }
+    } catch (error) {
+      if (error instanceof DatabaseServiceError) {
+        throw error;
+      }
+      throw new DatabaseServiceError(
+        DatabaseErrorType.QUERY_ERROR,
+        `Failed to delete task: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'Unable to delete task. Please try again.',
+        error instanceof Error ? error : undefined
+      );
+    }
+  }
+
+  /**
+   * Clear all failed tasks
+   */
+  async clearFailedTasks(): Promise<number> {
+    try {
+      const result = await database.query(`
+        DELETE FROM embedding_tasks
+        WHERE status = 'failed'
+      `);
+
+      return result.rowCount || 0;
+    } catch (error) {
+      throw new DatabaseServiceError(
+        DatabaseErrorType.QUERY_ERROR,
+        `Failed to clear failed tasks: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'Unable to clear failed tasks. Please try again.',
         error instanceof Error ? error : undefined
       );
     }
