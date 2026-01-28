@@ -1843,6 +1843,11 @@ body {
   line-height: 1;
 }
 
+.wake-lock-indicator {
+  margin-left: 8px;
+  cursor: help;
+}
+
 /* Public Article Header - for title and fullscreen button */
 .public-article-header {
   display: flex;

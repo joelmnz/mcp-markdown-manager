@@ -4,6 +4,7 @@ export function useFullscreen() {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [wakeLockActive, setWakeLockActive] = useState(false);
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+  const requestingRef = useRef(false);
 
   useEffect(() => {
     const handleFullscreenChange = () => {
@@ -18,10 +19,12 @@ export function useFullscreen() {
 
   const requestWakeLock = useCallback(async () => {
     // If we already have a lock that is not released, do nothing
-    if (wakeLockRef.current && !wakeLockRef.current.released) {
+    // Also check if a request is already in progress
+    if ((wakeLockRef.current && !wakeLockRef.current.released) || requestingRef.current) {
       return;
     }
 
+    requestingRef.current = true;
     try {
       if ('wakeLock' in navigator) {
         const sentinel = await navigator.wakeLock.request('screen');
@@ -34,11 +37,13 @@ export function useFullscreen() {
             setWakeLockActive(false);
             wakeLockRef.current = null;
           }
-        });
+        }, { once: true });
       }
     } catch (err) {
       // Silently fail if wake lock is denied or fails
       // console.debug('Wake lock request failed:', err);
+    } finally {
+      requestingRef.current = false;
     }
   }, []);
 
