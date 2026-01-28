@@ -39,7 +39,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
   const [restoring, setRestoring] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
   const articleContentRef = useRef<HTMLElement>(null);
-  const { isFullscreen, toggleFullscreen } = useFullscreen();
+  const { isFullscreen, toggleFullscreen, wakeLockActive } = useFullscreen();
 
   // Update document title when article is loaded
   useDocumentTitle(article?.title);
@@ -336,6 +336,11 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
             >
               Fullscreen 🖥️
             </button>
+            {wakeLockActive && (
+              <span title="Screen wake lock active" style={{ marginLeft: '8px', cursor: 'help' }}>
+                🔆
+              </span>
+            )}
             <span className="article-item-date">
               {formatDate(article.created)}
               {isViewingHistory && currentVersion && (
