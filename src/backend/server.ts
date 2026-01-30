@@ -6,6 +6,7 @@ import { basePathService } from './services/basePath.js';
 import { backgroundWorkerService } from './services/backgroundWorker.js';
 import { embeddingQueueConfigService } from './services/embeddingQueueConfig.js';
 import { parseEnvInt } from './utils/config';
+import crypto from 'node:crypto';
 
 
 const PORT = parseEnvInt(process.env.PORT, 5000, 'PORT');
@@ -79,12 +80,32 @@ async function initializeDatabase() {
 }
 
 /**
+ * Generate a random nonce for CSP
+ */
+function generateNonce(): string {
+  return crypto.randomBytes(16).toString('base64');
+}
+
+/**
+ * Get security headers with CSP nonce
+ */
+function getSecurityHeaders(nonce: string): Record<string, string> {
+  return {
+    'Content-Security-Policy': `default-src 'self'; script-src 'self' 'nonce-${nonce}'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self' data:; object-src 'none'; base-uri 'self';`,
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()'
+  };
+}
+
+/**
  * Inject base path configuration into HTML template
  * 
  * This function replaces template placeholders with runtime configuration,
  * enabling the same built assets to work with any base path deployment.
  */
-function injectBasePathConfig(htmlContent: string): string {
+function injectBasePathConfig(htmlContent: string, nonce: string): string {
   // Get current base path configuration
   const config = basePathService.getConfig();
   const clientConfig = basePathService.getClientConfig();
@@ -100,7 +121,8 @@ function injectBasePathConfig(htmlContent: string): string {
 
   return htmlContent
     .replace(/\{\{BASE_PATH\}\}/g, basePath)
-    .replace(/\{\{BASE_PATH_CONFIG\}\}/g, runtimeConfig);
+    .replace(/\{\{BASE_PATH_CONFIG\}\}/g, runtimeConfig)
+    .replace(/\{\{NONCE\}\}/g, nonce);
 }
 
 /**
@@ -282,6 +304,14 @@ const server = Bun.serve({
       });
 
       const response = await handleApiRequest(apiRequest);
+
+      // Add security headers to API responses too
+      const nonce = generateNonce();
+      const securityHeaders = getSecurityHeaders(nonce);
+      Object.entries(securityHeaders).forEach(([key, value]) => {
+        response.headers.set(key, value);
+      });
+
       logRequest(response.status);
       return response;
     }
@@ -316,16 +346,26 @@ const server = Bun.serve({
         // Special handling for index.html - inject base path configuration
         if (filePath === '/index.html') {
           const htmlContent = await file.text();
-          const injectedHtml = injectBasePathConfig(htmlContent);
+          const nonce = generateNonce();
+          const injectedHtml = injectBasePathConfig(htmlContent, nonce);
 
           logRequest(200);
           return new Response(injectedHtml, {
-            headers: { 'Content-Type': 'text/html' }
+            headers: {
+              'Content-Type': 'text/html',
+              ...getSecurityHeaders(nonce)
+            }
           });
         }
 
+        const nonce = generateNonce();
         logRequest(200);
-        return new Response(file, { headers });
+        return new Response(file, {
+          headers: {
+            ...headers,
+            ...getSecurityHeaders(nonce)
+          }
+        });
       }
 
       // Don't fallback to index.html for static asset requests
@@ -342,11 +382,15 @@ const server = Bun.serve({
       const indexFile = Bun.file(publicDir + '/index.html');
       if (await indexFile.exists()) {
         const htmlContent = await indexFile.text();
-        const injectedHtml = injectBasePathConfig(htmlContent);
+        const nonce = generateNonce();
+        const injectedHtml = injectBasePathConfig(htmlContent, nonce);
 
         logRequest(200);
         return new Response(injectedHtml, {
-          headers: { 'Content-Type': 'text/html' }
+          headers: {
+            'Content-Type': 'text/html',
+            ...getSecurityHeaders(nonce)
+          }
         });
       }
 
