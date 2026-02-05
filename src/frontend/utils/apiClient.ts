@@ -149,6 +149,20 @@ class ApiClient {
   }
 
   /**
+   * Make a PATCH request
+   */
+  async patch(endpoint: string, data?: any, token?: string, additionalHeaders?: Record<string, string>): Promise<Response> {
+    const url = this.buildUrl(endpoint);
+    const headers = this.prepareHeaders(token, additionalHeaders);
+    
+    return fetch(url, {
+      method: 'PATCH',
+      headers,
+      body: data ? JSON.stringify(data) : undefined
+    });
+  }
+
+  /**
    * Make a DELETE request
    */
   async delete(endpoint: string, token?: string, additionalHeaders?: Record<string, string>): Promise<Response> {

@@ -225,12 +225,24 @@ export class SchemaService {
         token VARCHAR(100) UNIQUE NOT NULL,
         name VARCHAR(255) NOT NULL,
         scope VARCHAR(20) NOT NULL CHECK (scope IN ('read-only', 'write')),
+        folder_filter TEXT,
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         last_used_at TIMESTAMP WITH TIME ZONE
       )
     `;
 
     await database.query(createTableSQL);
+    
+    // Add folder_filter column if it doesn't exist (migration for existing tables)
+    try {
+      await database.query(`
+        ALTER TABLE access_tokens 
+        ADD COLUMN IF NOT EXISTS folder_filter TEXT
+      `);
+    } catch (error) {
+      console.warn('Failed to add folder_filter column (may already exist):', error);
+    }
+    
     console.log('Access tokens table created/verified');
   }
 

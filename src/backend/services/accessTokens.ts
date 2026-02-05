@@ -9,6 +9,7 @@ export interface AccessToken {
   token: string;
   name: string;
   scope: TokenScope;
+  folder_filter: string | null;
   created_at: Date;
   last_used_at: Date | null;
 }
@@ -17,6 +18,7 @@ export interface AccessTokenInfo {
   id: number;
   name: string;
   scope: TokenScope;
+  folder_filter: string | null;
   created_at: Date;
   last_used_at: Date | null;
   masked_token: string;
@@ -26,6 +28,7 @@ export interface TokenValidationResult {
   valid: boolean;
   scope?: TokenScope;
   tokenId?: number;
+  folderFilter?: string | null;
 }
 
 /**
@@ -51,9 +54,69 @@ function maskToken(token: string): string {
 }
 
 /**
+ * Normalize and validate folder filter
+ * Returns normalized filter or null for no filter
+ * Empty string "" means no filter (access to all folders)
+ * 
+ * Note: This function ensures that whitespace-only filters are treated
+ * as "no filter" by trimming and checking for empty strings.
+ * The root folder "/" is also normalized to null (no filter).
+ */
+function normalizeFolderFilter(folderFilter?: string | null): string | null {
+  // Handle null, undefined, or empty string - all mean "no filter"
+  if (!folderFilter || folderFilter.trim() === '') {
+    return null;
+  }
+
+  // Trim and normalize the filter
+  let normalized = folderFilter.trim();
+  
+  // Remove leading/trailing slashes
+  normalized = normalized.replace(/^\/+|\/+$/g, '');
+  
+  // If empty after normalization (e.g., was "/"), return null
+  if (normalized === '') {
+    return null;
+  }
+  
+  // Convert to lowercase for case-insensitive matching
+  normalized = normalized.toLowerCase();
+  
+  return normalized;
+}
+
+/**
+ * Validate folder filter format
+ * Throws if the format is invalid
+ */
+function validateFolderFilterFormat(folderFilter: string | null): void {
+  if (!folderFilter) {
+    return; // null/empty is valid (means no filter)
+  }
+  
+  // Check for invalid characters (only allow alphanumeric, -, _, /, and *)
+  if (!/^[a-z0-9\-_\/*\s]+$/i.test(folderFilter)) {
+    throw new DatabaseServiceError(
+      DatabaseErrorType.VALIDATION_ERROR,
+      'Invalid folder filter format',
+      'Folder filter can only contain letters, numbers, hyphens, underscores, forward slashes, spaces, and asterisks (*)'
+    );
+  }
+  
+  // Check for invalid patterns like multiple consecutive slashes
+  if (/\/\/+/.test(folderFilter)) {
+    throw new DatabaseServiceError(
+      DatabaseErrorType.VALIDATION_ERROR,
+      'Invalid folder filter format',
+      'Folder filter cannot contain consecutive forward slashes'
+    );
+  }
+}
+
+/**
  * Create a new access token
  */
-export async function createAccessToken(name: string, scope: TokenScope): Promise<AccessToken> {
+export async function createAccessToken(name: string, scope: TokenScope, folderFilter?: string | null): Promise<AccessToken> {
   if (!name || !name.trim()) {
     throw new DatabaseServiceError(
       DatabaseErrorType.VALIDATION_ERROR,
@@ -70,14 +133,18 @@ export async function createAccessToken(name: string, scope: TokenScope): Promis
     );
   }
 
+  // Normalize and validate folder filter
+  const normalizedFilter = normalizeFolderFilter(folderFilter);
+  validateFolderFilterFormat(normalizedFilter);
+
   const token = generateAccessToken();
 
   try {
     const result = await database.query<AccessToken>(
-      `INSERT INTO access_tokens (token, name, scope)
-       VALUES ($1, $2, $3)
-       RETURNING id, token, name, scope, created_at, last_used_at`,
-      [token, name.trim(), scope]
+      `INSERT INTO access_tokens (token, name, scope, folder_filter)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, token, name, scope, folder_filter, created_at, last_used_at`,
+      [token, name.trim(), scope, normalizedFilter]
     );
 
     if (result.rows.length === 0) {
@@ -107,7 +174,7 @@ export async function createAccessToken(name: string, scope: TokenScope): Promis
 export async function listAccessTokens(): Promise<AccessTokenInfo[]> {
   try {
     const result = await database.query<AccessToken>(
-      `SELECT id, token, name, scope, created_at, last_used_at
+      `SELECT id, token, name, scope, folder_filter, created_at, last_used_at
        FROM access_tokens
        ORDER BY created_at DESC`
     );
@@ -116,6 +183,7 @@ export async function listAccessTokens(): Promise<AccessTokenInfo[]> {
       id: row.id,
       name: row.name,
       scope: row.scope,
+      folder_filter: row.folder_filter,
       created_at: row.created_at,
       last_used_at: row.last_used_at,
       masked_token: maskToken(row.token),
@@ -135,7 +203,7 @@ export async function listAccessTokens(): Promise<AccessTokenInfo[]> {
 export async function getAccessToken(token: string): Promise<AccessToken | null> {
   try {
     const result = await database.query<AccessToken>(
-      `SELECT id, token, name, scope, created_at, last_used_at
+      `SELECT id, token, name, scope, folder_filter, created_at, last_used_at
        FROM access_tokens
        WHERE token = $1`,
       [token]
@@ -167,6 +235,44 @@ export async function deleteAccessTokenById(id: number): Promise<boolean> {
       DatabaseErrorType.UNKNOWN_ERROR,
       `Failed to delete access token: ${error instanceof Error ? error.message : 'Unknown error'}`,
       'Could not delete the access token. Please try again.'
+    );
+  }
+}
+
+/**
+ * Update an access token's folder filter
+ */
+export async function updateAccessTokenFolderFilter(id: number, folderFilter: string | null): Promise<AccessToken> {
+  // Normalize and validate folder filter
+  const normalizedFilter = normalizeFolderFilter(folderFilter);
+  validateFolderFilterFormat(normalizedFilter);
+
+  try {
+    const result = await database.query<AccessToken>(
+      `UPDATE access_tokens 
+       SET folder_filter = $1
+       WHERE id = $2
+       RETURNING id, token, name, scope, folder_filter, created_at, last_used_at`,
+      [normalizedFilter, id]
+    );
+
+    if (result.rows.length === 0) {
+      throw new DatabaseServiceError(
+        DatabaseErrorType.NOT_FOUND,
+        'Access token not found',
+        'The specified access token does not exist'
+      );
+    }
+
+    return result.rows[0];
+  } catch (error) {
+    if (error instanceof DatabaseServiceError) {
+      throw error;
+    }
+    throw new DatabaseServiceError(
+      DatabaseErrorType.UNKNOWN_ERROR,
+      `Failed to update access token: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      'Could not update the access token. Please try again.'
     );
   }
 }
@@ -218,7 +324,7 @@ export async function validateAccessToken(token: string): Promise<TokenValidatio
 
   try {
     const result = await database.query<AccessToken>(
-      `SELECT id, scope, last_used_at
+      `SELECT id, scope, folder_filter, last_used_at
        FROM access_tokens
        WHERE token = $1`,
       [token]
@@ -242,6 +348,7 @@ export async function validateAccessToken(token: string): Promise<TokenValidatio
       valid: true,
       scope: tokenData.scope,
       tokenId: tokenData.id,
+      folderFilter: tokenData.folder_filter,
     };
   } catch (error) {
     console.error('Token validation error:', error);
@@ -267,3 +374,46 @@ export function hasPermission(tokenScope: TokenScope, requiredScope: TokenScope)
 
   return false;
 }
+
+/**
+ * Check if an article folder matches the token's folder filter
+ * Returns true if access is allowed, false otherwise
+ * 
+ * @param articleFolder - The folder path of the article (case-sensitive from DB)
+ * @param folderFilter - The token's folder filter (null means no restriction)
+ * 
+ * Examples:
+ * - folderFilter = null -> allows all folders
+ * - folderFilter = "projects" -> allows "projects" and "projects/subfolder"
+ * - folderFilter = "projects/*" -> allows "projects/subfolder" but NOT "projects" itself
+ * - folderFilter = "projects/project a" -> allows only "projects/project a" and subfolders
+ */
+export function checkFolderAccess(articleFolder: string, folderFilter: string | null): boolean {
+  // No filter means access to all folders
+  if (!folderFilter) {
+    return true;
+  }
+
+  // Normalize article folder for comparison (lowercase, trim)
+  const normalizedArticleFolder = (articleFolder || '').toLowerCase().trim();
+  const normalizedFilter = folderFilter.toLowerCase().trim();
+
+  // Handle wildcard patterns
+  if (normalizedFilter.endsWith('/*')) {
+    // Pattern like "projects/*" - matches subfolders only, not the folder itself
+    const basePath = normalizedFilter.slice(0, -2); // Remove "/*"
+    
+    // Check if article is in a subfolder of the base path
+    return normalizedArticleFolder.startsWith(basePath + '/');
+  } else {
+    // Exact folder match or subfolder match
+    // e.g., "projects" matches "projects" and "projects/subfolder"
+    return normalizedArticleFolder === normalizedFilter || 
+           normalizedArticleFolder.startsWith(normalizedFilter + '/');
+  }
+}
+
+/**
+ * Export folder filter validation for external use
+ */
+export { normalizeFolderFilter, validateFolderFilterFormat };

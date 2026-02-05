@@ -1,4 +1,4 @@
-import { authenticate, requireAuth, authenticateWeb, type AuthContext } from '../middleware/auth';
+import { authenticate, requireAuth, authenticateWeb, checkFolderAccess, type AuthContext } from '../middleware/auth';
 import { createRateLimiter, RateLimitPresets } from '../middleware/rateLimit';
 import { createRequestSizeValidator, RequestSizePresets } from '../middleware/requestSize';
 import { DatabaseServiceError, DatabaseErrorType } from '../services/databaseErrors.js';
@@ -9,6 +9,7 @@ import {
   deleteAccessTokenById,
   getAccessToken,
   hasPermission,
+  updateAccessTokenFolderFilter,
   type TokenScope
 } from '../services/accessTokens.js';
 import {
@@ -222,6 +223,25 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     return null;
   };
 
+  // Helper function to check folder access for the authenticated token
+  const checkArticleFolderAccess = (articleFolder: string | undefined): Response | null => {
+    // Admin token (web auth) always has full access
+    if (authContext.tokenName === 'admin') {
+      return null;
+    }
+
+    if (!checkFolderAccess(articleFolder || '', authContext.folderFilter ?? null)) {
+      return new Response(JSON.stringify({
+        error: 'Access denied',
+        message: 'This token does not have access to articles in this folder'
+      }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    return null;
+  };
+
   // Apply rate limiting to all authenticated endpoints
   const rateLimitError = apiRateLimit(request);
   if (rateLimitError) return rateLimitError;
@@ -260,7 +280,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
       try {
         const body = await request.json();
-        const { name, scope } = body;
+        const { name, scope, folderFilter } = body;
 
         if (!name || !name.trim()) {
           return new Response(JSON.stringify({ error: 'Token name is required' }), {
@@ -276,7 +296,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           });
         }
 
-        const token = await createAccessToken(name, scope as TokenScope);
+        const token = await createAccessToken(name, scope as TokenScope, folderFilter);
         return new Response(JSON.stringify(token), {
           status: 201,
           headers: { 'Content-Type': 'application/json' }
@@ -319,6 +339,26 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       } catch (error) {
         return handleServiceError(error, 'Failed to delete access token');
+      }
+    }
+
+    // PATCH /api/access-tokens/:id/folder-filter - Update token folder filter
+    if (path.match(/^\/api\/access-tokens\/\d+\/folder-filter$/) && request.method === 'PATCH') {
+      // This endpoint requires web auth only
+      const webAuthResult = await requireAuth(request, 'write', true);
+      if ('error' in webAuthResult) return webAuthResult.error;
+
+      try {
+        const tokenId = parseInt(path.split('/')[3], 10);
+        const body = await request.json();
+        const { folderFilter } = body;
+
+        const updatedToken = await updateAccessTokenFolderFilter(tokenId, folderFilter);
+        return new Response(JSON.stringify(updatedToken), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to update folder filter');
       }
     }
 
@@ -570,13 +610,29 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
       if (query) {
         // Search articles
-        const results = await searchArticles(query, folder);
+        let results = await searchArticles(query, folder);
+        
+        // Filter results based on folder access
+        if (authContext.folderFilter !== null && authContext.tokenName !== 'admin') {
+          results = results.filter(article => 
+            checkFolderAccess(article.folder || '', authContext.folderFilter ?? null)
+          );
+        }
+        
         return new Response(JSON.stringify(results), {
           headers: { 'Content-Type': 'application/json' }
         });
       } else {
         // List all articles
-        const articles = await listArticles(folder);
+        let articles = await listArticles(folder);
+        
+        // Filter results based on folder access
+        if (authContext.folderFilter !== null && authContext.tokenName !== 'admin') {
+          articles = articles.filter(article => 
+            checkFolderAccess(article.folder || '', authContext.folderFilter ?? null)
+          );
+        }
+        
         return new Response(JSON.stringify(articles), {
           headers: { 'Content-Type': 'application/json' }
         });
@@ -594,6 +650,18 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       if (versionMatch) {
         const filename = versionMatch[1];
         const versionId = versionMatch[2];
+
+        // Check folder access for the article
+        const article = await readArticle(filename);
+        if (!article) {
+          return new Response(JSON.stringify({ error: 'Article not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const folderAccessError = checkArticleFolderAccess(article.folder);
+        if (folderAccessError) return folderAccessError;
 
         if (!versionId) {
           // List all versions
@@ -629,6 +697,10 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       }
 
+      // Check folder access
+      const folderAccessError = checkArticleFolderAccess(article.folder);
+      if (folderAccessError) return folderAccessError;
+
       return new Response(JSON.stringify(article), {
         headers: { 'Content-Type': 'application/json' }
       });
@@ -649,6 +721,11 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           headers: { 'Content-Type': 'application/json' }
         });
       }
+
+      // Check folder access for the target folder
+      const targetFolder = folder || '';
+      const folderAccessError = checkArticleFolderAccess(targetFolder);
+      if (folderAccessError) return folderAccessError;
 
       const article = await createArticle(title, content, folder, message, undefined, authContext.tokenName);
       return new Response(JSON.stringify(article), {
@@ -673,11 +750,23 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         const articleFilename = restoreMatch[1];
         const versionId = restoreMatch[2];
 
+        // Check folder access for the article
+        const article = await readArticle(articleFilename);
+        if (!article) {
+          return new Response(JSON.stringify({ error: 'Article not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const folderAccessError = checkArticleFolderAccess(article.folder);
+        if (folderAccessError) return folderAccessError;
+
         const body = await request.json();
         const { message } = body;
 
-        const article = await restoreArticleVersion(articleFilename, versionId, message);
-        return new Response(JSON.stringify(article), {
+        const restoredArticle = await restoreArticleVersion(articleFilename, versionId, message);
+        return new Response(JSON.stringify(restoredArticle), {
           headers: { 'Content-Type': 'application/json' }
         });
       }
@@ -691,6 +780,25 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
         });
+      }
+
+      // Check folder access for existing article and new folder
+      const existingArticle = await readArticle(filename);
+      if (!existingArticle) {
+        return new Response(JSON.stringify({ error: 'Article not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const oldFolderAccessError = checkArticleFolderAccess(existingArticle.folder);
+      if (oldFolderAccessError) return oldFolderAccessError;
+
+      // If folder is being changed, check access to new folder
+      const targetFolder = folder !== undefined ? folder : existingArticle.folder;
+      if (targetFolder !== existingArticle.folder) {
+        const newFolderAccessError = checkArticleFolderAccess(targetFolder);
+        if (newFolderAccessError) return newFolderAccessError;
       }
 
       const article = await updateArticle(filename, title, content, folder, message, undefined, authContext.tokenName);
@@ -715,6 +823,18 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         const filename = versionMatch[1];
         const versionId = versionMatch[2];
 
+        // Check folder access for the article
+        const article = await readArticle(filename);
+        if (!article) {
+          return new Response(JSON.stringify({ error: 'Article not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const folderAccessError = checkArticleFolderAccess(article.folder);
+        if (folderAccessError) return folderAccessError;
+
         if (!versionId) {
           // Delete all versions
           await deleteArticleVersions(filename);
@@ -730,6 +850,19 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
       // Regular article deletion
       const filename = fullPath;
+      
+      // Check folder access before deletion
+      const article = await readArticle(filename);
+      if (!article) {
+        return new Response(JSON.stringify({ error: 'Article not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const folderAccessError = checkArticleFolderAccess(article.folder);
+      if (folderAccessError) return folderAccessError;
+
       await deleteArticle(filename);
 
       return new Response(JSON.stringify({ success: true }), {

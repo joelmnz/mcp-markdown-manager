@@ -5,6 +5,7 @@ interface AccessToken {
   id: number;
   name: string;
   scope: 'read-only' | 'write';
+  folder_filter: string | null;
   created_at: string;
   last_used_at: string | null;
   masked_token: string;
@@ -15,6 +16,7 @@ interface NewTokenResult {
   token: string;
   name: string;
   scope: string;
+  folder_filter: string | null;
   created_at: string;
 }
 
@@ -29,12 +31,16 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
   const [error, setError] = useState<string | null>(null);
   const [newTokenName, setNewTokenName] = useState('');
   const [newTokenScope, setNewTokenScope] = useState<'read-only' | 'write'>('write');
+  const [newTokenFolderFilter, setNewTokenFolderFilter] = useState('');
   const [creating, setCreating] = useState(false);
   const [newlyCreatedToken, setNewlyCreatedToken] = useState<NewTokenResult | null>(null);
   const [visibleTokens, setVisibleTokens] = useState<Set<number>>(new Set());
   const [copyFeedback, setCopyFeedback] = useState<number | null>(null);
   const [tokenToDelete, setTokenToDelete] = useState<{ id: number; name: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [editingToken, setEditingToken] = useState<{ id: number; name: string; folderFilter: string | null } | null>(null);
+  const [editFolderFilter, setEditFolderFilter] = useState('');
+  const [updating, setUpdating] = useState(false);
 
   useEffect(() => {
     loadTokens();
@@ -74,7 +80,11 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
     try {
       const response = await apiClient.post(
         '/api/access-tokens',
-        { name: newTokenName.trim(), scope: newTokenScope },
+        { 
+          name: newTokenName.trim(), 
+          scope: newTokenScope,
+          folderFilter: newTokenFolderFilter.trim() || null
+        },
         authToken
       );
 
@@ -87,6 +97,7 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
       setNewlyCreatedToken(newToken);
       setNewTokenName('');
       setNewTokenScope('write');
+      setNewTokenFolderFilter('');
       await loadTokens();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create token');
@@ -126,6 +137,43 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
 
   const cancelDeleteToken = () => {
     setTokenToDelete(null);
+  };
+
+  const handleEditFolderFilter = (tokenId: number, tokenName: string, currentFilter: string | null) => {
+    setEditingToken({ id: tokenId, name: tokenName, folderFilter: currentFilter });
+    setEditFolderFilter(currentFilter || '');
+  };
+
+  const handleUpdateFolderFilter = async () => {
+    if (!editingToken) return;
+
+    setUpdating(true);
+    setError(null);
+
+    try {
+      const response = await apiClient.patch(
+        `/api/access-tokens/${editingToken.id}/folder-filter`,
+        { folderFilter: editFolderFilter.trim() || null },
+        authToken
+      );
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to update folder filter');
+      }
+
+      setEditingToken(null);
+      await loadTokens();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update folder filter');
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const cancelEditFolderFilter = () => {
+    setEditingToken(null);
+    setEditFolderFilter('');
   };
 
   const copyToClipboard = async (text: string, tokenId: number) => {
@@ -204,6 +252,23 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
               </small>
             </div>
 
+            <div className="form-group">
+              <label htmlFor="token-folder-filter">Folder Filter (Optional)</label>
+              <input
+                type="text"
+                id="token-folder-filter"
+                value={newTokenFolderFilter}
+                onChange={(e) => setNewTokenFolderFilter(e.target.value)}
+                placeholder='e.g., "projects" or "projects/*" or leave blank for all folders'
+                disabled={creating}
+              />
+              <small className="form-help">
+                Limit this token to specific folders. Leave blank for access to all folders.<br />
+                Examples: "projects" (projects folder and subfolders), "projects/*" (only subfolders), "projects/project a" (specific subfolder).<br />
+                Matching is case-insensitive.
+              </small>
+            </div>
+
             <button type="submit" disabled={creating} className="create-button">
               {creating ? 'Generating...' : 'Generate Access Token'}
             </button>
@@ -222,6 +287,7 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
                 <tr>
                   <th>Name</th>
                   <th>Scope</th>
+                  <th>Folder Filter</th>
                   <th>Token</th>
                   <th>Created</th>
                   <th>Last Used</th>
@@ -236,6 +302,18 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
                       <span className={`scope-badge scope-${t.scope}`}>
                         {t.scope === 'write' ? 'Write' : 'Read-Only'}
                       </span>
+                    </td>
+                    <td className="token-folder-filter" data-label="Folder Filter">
+                      <code className="folder-filter-display">
+                        {t.folder_filter || '(all folders)'}
+                      </code>
+                      <button
+                        onClick={() => handleEditFolderFilter(t.id, t.name, t.folder_filter)}
+                        className="edit-filter-button"
+                        title="Edit folder filter"
+                      >
+                        ✏️
+                      </button>
                     </td>
                     <td className="token-value" data-label="Token">
                       <code className="token-display">
@@ -282,6 +360,10 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
                   {newlyCreatedToken.scope === 'write' ? 'Write' : 'Read-Only'}
                 </span>
               </div>
+              <div className="detail-row">
+                <label>Folder Filter:</label>
+                <code>{newlyCreatedToken.folder_filter || '(all folders)'}</code>
+              </div>
               <div className="detail-row full-width">
                 <label>Token:</label>
                 <div className="token-copy-container">
@@ -327,6 +409,51 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
               <button
                 onClick={cancelDeleteToken}
                 disabled={deleting}
+                className="cancel-button"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingToken && (
+        <div className="modal-overlay" onClick={cancelEditFolderFilter}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Edit Folder Filter</h2>
+            <p className="modal-description">
+              Edit the folder filter for token <strong>"{editingToken.name}"</strong>
+            </p>
+
+            <div className="form-group">
+              <label htmlFor="edit-folder-filter">Folder Filter</label>
+              <input
+                type="text"
+                id="edit-folder-filter"
+                value={editFolderFilter}
+                onChange={(e) => setEditFolderFilter(e.target.value)}
+                placeholder='e.g., "projects" or "projects/*" or leave blank for all folders'
+                disabled={updating}
+              />
+              <small className="form-help">
+                Limit this token to specific folders. Leave blank for access to all folders.<br />
+                Examples: "projects" (projects folder and subfolders), "projects/*" (only subfolders), "projects/project a" (specific subfolder).<br />
+                Matching is case-insensitive.
+              </small>
+            </div>
+
+            <div className="modal-actions">
+              <button
+                onClick={handleUpdateFolderFilter}
+                disabled={updating}
+                className="save-button"
+              >
+                {updating ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                onClick={cancelEditFolderFilter}
+                disabled={updating}
                 className="cancel-button"
               >
                 Cancel
