@@ -36,6 +36,7 @@ export interface IndexStats {
   totalArticles: number;
   indexedArticles: number;
   unindexedArticles: number;
+  noRagArticles: number;
 }
 
 /**
@@ -464,13 +465,18 @@ export class DatabaseEmbeddingService {
     `);
     const indexedArticles = parseInt(indexedResult.rows[0].count, 10);
 
-    const unindexedArticles = totalArticles - indexedArticles;
+    // Get no_rag articles
+    const noRagResult = await database.query('SELECT COUNT(*) as count FROM articles WHERE no_rag = TRUE');
+    const noRagArticles = parseInt(noRagResult.rows[0].count, 10);
+
+    const unindexedArticles = totalArticles - indexedArticles - noRagArticles;
 
     return {
       totalChunks,
       totalArticles,
       indexedArticles,
-      unindexedArticles
+      unindexedArticles,
+      noRagArticles
     };
   }
 
@@ -480,12 +486,12 @@ export class DatabaseEmbeddingService {
   async getDetailedStats(): Promise<{
     unindexedSlugs: string[];
   }> {
-    // Get unindexed slugs
+    // Get unindexed slugs (excluding no_rag articles)
     const unindexedResult = await database.query(`
       SELECT a.slug
       FROM articles a
       LEFT JOIN embeddings e ON a.id = e.article_id
-      WHERE e.id IS NULL
+      WHERE e.id IS NULL AND a.no_rag = FALSE
     `);
     const unindexedSlugs = unindexedResult.rows.map(row => row.slug);
 
@@ -500,12 +506,12 @@ export class DatabaseEmbeddingService {
   async indexUnindexedArticles(): Promise<{ indexed: number; failed: string[] }> {
     console.log('Indexing unindexed articles...');
 
-    // Get articles that don't have embeddings
+    // Get articles that don't have embeddings and aren't marked as no_rag
     const result = await database.query(`
       SELECT a.id, a.slug, a.title, a.content, a.folder, a.created_at, a.updated_at
       FROM articles a
       LEFT JOIN embeddings e ON a.id = e.article_id
-      WHERE e.article_id IS NULL
+      WHERE e.article_id IS NULL AND a.no_rag = FALSE
     `);
 
     const unindexedArticles = result.rows;

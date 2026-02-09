@@ -22,6 +22,9 @@ export class SchemaService {
       await this.createEmbeddingWorkerStatusTable();
       await this.createAccessTokensTable();
 
+      // Update schema with new columns
+      await this.addNoRagColumn();
+
       // Create indexes for performance
       await this.createIndexes();
       
@@ -73,6 +76,7 @@ export class SchemaService {
         content TEXT NOT NULL,
         folder VARCHAR(500) DEFAULT '' NOT NULL,
         is_public BOOLEAN DEFAULT FALSE NOT NULL,
+        no_rag BOOLEAN DEFAULT FALSE NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         created_by VARCHAR(255),
@@ -82,6 +86,20 @@ export class SchemaService {
 
     await database.query(createTableSQL);
     console.log('Articles table created/verified');
+  }
+
+  /**
+   * Add no_rag column to articles table if it doesn't exist
+   */
+  private async addNoRagColumn(): Promise<void> {
+    try {
+      await database.query(`
+        ALTER TABLE articles
+        ADD COLUMN IF NOT EXISTS no_rag BOOLEAN DEFAULT FALSE NOT NULL
+      `);
+    } catch (error) {
+      console.warn('Failed to add no_rag column (might already exist or permission error):', error);
+    }
   }
 
   /**
