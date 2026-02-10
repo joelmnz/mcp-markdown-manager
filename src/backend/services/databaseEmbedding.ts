@@ -230,7 +230,7 @@ export class DatabaseEmbeddingService {
       sql = `
         SELECT 
           e.chunk_id, e.chunk_index, e.heading_path, e.text_content, e.created_at,
-          a.slug, a.title, a.folder, a.is_public, a.created_at as article_created, a.updated_at,
+          a.slug, a.title, a.folder, a.is_public, a.no_rag, a.created_at as article_created, a.updated_at,
           (e.vector <=> $1::vector) as distance
         FROM embeddings e
         JOIN articles a ON e.article_id = a.id
@@ -260,7 +260,7 @@ export class DatabaseEmbeddingService {
       sql = `
         SELECT 
           e.chunk_id, e.chunk_index, e.heading_path, e.text_content, e.vector_data, e.created_at,
-          a.slug, a.title, a.folder, a.is_public, a.created_at as article_created, a.updated_at
+          a.slug, a.title, a.folder, a.is_public, a.no_rag, a.created_at as article_created, a.updated_at
         FROM embeddings e
         JOIN articles a ON e.article_id = a.id
       `;
@@ -305,7 +305,8 @@ export class DatabaseEmbeddingService {
           folder: row.folder,
           created: row.article_created.toISOString(),
           modified: row.updated_at.toISOString(),
-          isPublic: row.is_public
+          isPublic: row.is_public,
+          noRag: row.no_rag ?? false
         }
       }));
     } else {
@@ -333,7 +334,8 @@ export class DatabaseEmbeddingService {
             folder: row.folder,
             created: row.article_created.toISOString(),
             modified: row.updated_at.toISOString(),
-            isPublic: row.is_public
+            isPublic: row.is_public,
+            noRag: row.no_rag ?? false
           }
         };
       });

@@ -443,7 +443,8 @@ export async function getArticleVersion(filename: string, versionId: string): Pr
     content: dbVersion.content,
     folder: dbVersion.folder,
     created: dbVersion.created,
-    isPublic: false // Version snapshots are not marked as public
+    isPublic: false, // Version snapshots are not marked as public
+    noRag: false // Version snapshots don't carry noRag state
   };
 }
 
