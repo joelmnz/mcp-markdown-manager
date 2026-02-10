@@ -57,7 +57,7 @@ function buildHtml() {
   <link rel="icon" type="image/png" sizes="192x192" href="{{BASE_PATH}}/icon-192.png">
   <link rel="apple-touch-icon" href="{{BASE_PATH}}/icon-192.png">
   <link rel="stylesheet" href="{{BASE_PATH}}/${cssFiles[0]}">
-  <script>
+  <script nonce="{{NONCE}}">
     // Runtime configuration injected by server
     // This allows the same built assets to work with any base path
     window.__APP_CONFIG__ = {{BASE_PATH_CONFIG}};

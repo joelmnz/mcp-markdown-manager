@@ -6,6 +6,7 @@ import { basePathService } from './services/basePath.js';
 import { backgroundWorkerService } from './services/backgroundWorker.js';
 import { embeddingQueueConfigService } from './services/embeddingQueueConfig.js';
 import { parseEnvInt } from './utils/config';
+import { generateNonce, addSecurityHeaders } from './middleware/security.js';
 
 
 const PORT = parseEnvInt(process.env.PORT, 5000, 'PORT');
@@ -85,7 +86,7 @@ async function initializeDatabase() {
  * This function replaces template placeholders with runtime configuration,
  * enabling the same built assets to work with any base path deployment.
  */
-function injectBasePathConfig(htmlContent: string): string {
+function injectBasePathConfig(htmlContent: string, nonce: string): string {
   // Get current base path configuration
   const config = basePathService.getConfig();
   const clientConfig = basePathService.getClientConfig();
@@ -101,7 +102,8 @@ function injectBasePathConfig(htmlContent: string): string {
 
   return htmlContent
     .replace(/\{\{BASE_PATH\}\}/g, basePath)
-    .replace(/\{\{BASE_PATH_CONFIG\}\}/g, runtimeConfig);
+    .replace(/\{\{BASE_PATH_CONFIG\}\}/g, runtimeConfig)
+    .replace(/\{\{NONCE\}\}/g, nonce);
 }
 
 /**
@@ -236,16 +238,22 @@ process.on('unhandledRejection', (reason, promise) => {
 const server = Bun.serve({
   port: PORT,
   async fetch(request) {
+    const nonce = generateNonce();
     const url = new URL(request.url);
+    // Check if request is HTTPS:
+    // 1. Direct HTTPS connection (url.protocol)
+    // 2. Behind reverse proxy/tunnel (X-Forwarded-Proto header from Cloudflare, nginx, etc.)
+    const isHttps = url.protocol === 'https:' ||
+      request.headers.get('x-forwarded-proto') === 'https';
     const startTime = Date.now();
 
     const logRequest = (status: number) => {
       const duration = Date.now() - startTime;
       const timestamp = new Date().toISOString();
-      
+
       let shouldLog = true;
       const isHealthCheck = url.pathname.endsWith('/health');
-      
+
       if (LOG_LEVEL === 'error') {
         shouldLog = status >= 500;
       } else if (LOG_LEVEL === 'warn') {
@@ -255,7 +263,7 @@ const server = Bun.serve({
           shouldLog = false;
         }
       }
-      
+
       if (shouldLog) {
         console.log(`[${timestamp}] ${request.method} ${url.pathname} ${status} ${duration}ms`);
       }
@@ -269,7 +277,7 @@ const server = Bun.serve({
     if (routePath === '/mcp') {
       if (!MCP_SERVER_ENABLED) {
         logRequest(404);
-        return new Response('MCP server disabled', { status: 404 });
+        return addSecurityHeaders(new Response('MCP server disabled', { status: 404 }), nonce);
       }
 
       let response: Response;
@@ -284,7 +292,7 @@ const server = Bun.serve({
       }
 
       logRequest(response.status);
-      return response;
+      return addSecurityHeaders(response, nonce);
     }
 
     // Handle API endpoints
@@ -300,7 +308,7 @@ const server = Bun.serve({
 
       const response = await handleApiRequest(apiRequest);
       logRequest(response.status);
-      return response;
+      return addSecurityHeaders(response, nonce);
     }
 
     // Serve static files from public directory
@@ -325,24 +333,24 @@ const server = Bun.serve({
           // Generate manifest.json with runtime base path configuration
           const manifestContent = await generateManifest(basePathConfig);
           logRequest(200);
-          return new Response(manifestContent, {
+          return addSecurityHeaders(new Response(manifestContent, {
             headers: { 'Content-Type': 'application/manifest+json' }
-          });
+          }), nonce);
         }
 
         // Special handling for index.html - inject base path configuration
         if (filePath === '/index.html') {
           const htmlContent = await file.text();
-          const injectedHtml = injectBasePathConfig(htmlContent);
+          const injectedHtml = injectBasePathConfig(htmlContent, nonce);
 
           logRequest(200);
-          return new Response(injectedHtml, {
+          return addSecurityHeaders(new Response(injectedHtml, {
             headers: { 'Content-Type': 'text/html' }
-          });
+          }), nonce);
         }
 
         logRequest(200);
-        return new Response(file, { headers });
+        return addSecurityHeaders(new Response(file, { headers }), nonce);
       }
 
       // Don't fallback to index.html for static asset requests
@@ -352,27 +360,27 @@ const server = Bun.serve({
 
       if (isStaticAsset) {
         logRequest(404);
-        return new Response('Not Found', { status: 404 });
+        return addSecurityHeaders(new Response('Not Found', { status: 404 }), nonce);
       }
 
       // Fallback to index.html for client-side routing (only for HTML routes)
       const indexFile = Bun.file(publicDir + '/index.html');
       if (await indexFile.exists()) {
         const htmlContent = await indexFile.text();
-        const injectedHtml = injectBasePathConfig(htmlContent);
+        const injectedHtml = injectBasePathConfig(htmlContent, nonce);
 
         logRequest(200);
-        return new Response(injectedHtml, {
+        return addSecurityHeaders(new Response(injectedHtml, {
           headers: { 'Content-Type': 'text/html' }
-        });
+        }), nonce);
       }
 
       logRequest(404);
-      return new Response('Not Found', { status: 404 });
+      return addSecurityHeaders(new Response('Not Found', { status: 404 }), nonce);
     }
 
     logRequest(404);
-    return new Response('Not Found', { status: 404 });
+    return addSecurityHeaders(new Response('Not Found', { status: 404 }), nonce);
   },
 });
 
