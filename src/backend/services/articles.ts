@@ -287,9 +287,10 @@ export async function updateArticle(filename: string, title: string, content: st
   // Handle embedding updates with failure isolation
   if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
     const isNoRag = noRag !== undefined ? noRag : existing.noRag;
+    const wasNoRag = existing.noRag;
 
-    if (isNoRag) {
-      // If noRag is true, we need to delete existing embeddings if any
+    if (isNoRag && !wasNoRag) {
+      // Only enqueue delete when transitioning from noRag=false to noRag=true
       await safelyHandleEmbeddingOperation(async () => {
         const articleId = await databaseArticleService.getArticleId(updatedArticle.slug);
         if (articleId) {
@@ -308,7 +309,7 @@ export async function updateArticle(filename: string, title: string, content: st
           });
         }
       }, 'article no-rag embedding cleanup');
-    } else {
+    } else if (!isNoRag) {
       await safelyHandleEmbeddingOperation(async () => {
         // Get article ID for task queuing
         const articleId = await databaseArticleService.getArticleId(updatedArticle.slug);

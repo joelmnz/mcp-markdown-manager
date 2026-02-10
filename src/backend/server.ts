@@ -9,6 +9,7 @@ import { parseEnvInt } from './utils/config';
 
 
 const PORT = parseEnvInt(process.env.PORT, 5000, 'PORT');
+const LOG_LEVEL = process.env.LOG_LEVEL?.toLowerCase() || 'info';
 
 const MCP_SERVER_ENABLED = process.env.MCP_SERVER_ENABLED?.toLowerCase() === 'true';
 
@@ -241,7 +242,23 @@ const server = Bun.serve({
     const logRequest = (status: number) => {
       const duration = Date.now() - startTime;
       const timestamp = new Date().toISOString();
-      console.log(`[${timestamp}] ${request.method} ${url.pathname} ${status} ${duration}ms`);
+      
+      let shouldLog = true;
+      const isHealthCheck = url.pathname.endsWith('/health');
+      
+      if (LOG_LEVEL === 'error') {
+        shouldLog = status >= 500;
+      } else if (LOG_LEVEL === 'warn') {
+        shouldLog = status >= 400;
+      } else if (LOG_LEVEL === 'info') {
+        if (isHealthCheck && status < 400) {
+          shouldLog = false;
+        }
+      }
+      
+      if (shouldLog) {
+        console.log(`[${timestamp}] ${request.method} ${url.pathname} ${status} ${duration}ms`);
+      }
     };
 
     // Strip base path from URL for internal routing
@@ -409,6 +426,7 @@ console.log('🔧 Environment Configuration:');
 console.log(`   BASE_URL: ${process.env.BASE_URL ? `"${process.env.BASE_URL}"` : 'Not set'}`);
 console.log(`   BASE_PATH: ${process.env.BASE_PATH ? `"${process.env.BASE_PATH}"` : 'Not set'}`);
 console.log(`   NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+console.log(`   LOG_LEVEL: ${LOG_LEVEL}`);
 console.log(`   PORT: ${PORT}`);
 
 // Display validation warnings and recommendations

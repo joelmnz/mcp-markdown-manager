@@ -1,7 +1,15 @@
-import { describe, expect, test, mock, beforeEach } from "bun:test";
+import { describe, expect, test, mock, beforeEach, afterAll } from "bun:test";
 
-// Set env var immediately
+const originalSemanticSearchEnabled = process.env.SEMANTIC_SEARCH_ENABLED;
 process.env.SEMANTIC_SEARCH_ENABLED = 'true';
+
+afterAll(() => {
+  if (originalSemanticSearchEnabled !== undefined) {
+    process.env.SEMANTIC_SEARCH_ENABLED = originalSemanticSearchEnabled;
+  } else {
+    delete process.env.SEMANTIC_SEARCH_ENABLED;
+  }
+});
 
 // Mock dependencies
 const mockDatabaseArticleService = {
@@ -86,10 +94,13 @@ describe("Article Service - No RAG", () => {
     await updateArticle('test-article.md', 'Test Article', 'Content', '', undefined, undefined, undefined, true);
 
     expect(mockDatabaseArticleService.updateArticle).toHaveBeenCalled();
-    // Check if delete task was enqueued
     expect(mockEmbeddingQueueService.enqueueTask).toHaveBeenCalledWith(expect.objectContaining({
         operation: 'delete',
         metadata: expect.objectContaining({ reason: 'no_rag_enabled' })
+    }));
+    expect(mockEmbeddingQueueService.enqueueTask).toHaveBeenCalledTimes(1);
+    expect(mockEmbeddingQueueService.enqueueTask).not.toHaveBeenCalledWith(expect.objectContaining({
+        operation: 'update'
     }));
   });
 

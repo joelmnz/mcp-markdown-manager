@@ -97,8 +97,23 @@ export class SchemaService {
         ALTER TABLE articles
         ADD COLUMN IF NOT EXISTS no_rag BOOLEAN DEFAULT FALSE NOT NULL
       `);
+      
+      // Verify column exists
+      const result = await database.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'articles' AND column_name = 'no_rag'
+      `);
+      
+      if (result.rows.length === 0) {
+        throw new Error('Failed to create no_rag column: column verification failed');
+      }
     } catch (error) {
+      if (error instanceof Error && error.message.includes('column verification failed')) {
+        throw error;
+      }
       console.warn('Failed to add no_rag column (might already exist or permission error):', error);
+      throw new Error(`Schema initialization failed: unable to add no_rag column - ${error}`);
     }
   }
 

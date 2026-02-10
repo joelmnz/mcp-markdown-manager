@@ -650,6 +650,13 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       }
 
+      if (noRag !== undefined && typeof noRag !== 'boolean') {
+        return new Response(JSON.stringify({ error: 'noRag must be a boolean' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
       const article = await createArticle(title, content, folder, message, undefined, authContext.tokenName, noRag);
       return new Response(JSON.stringify(article), {
         status: 201,
@@ -688,6 +695,13 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
       if (!title || !content) {
         return new Response(JSON.stringify({ error: 'Title and content are required' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (noRag !== undefined && typeof noRag !== 'boolean') {
+        return new Response(JSON.stringify({ error: 'noRag must be a boolean' }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' }
         });

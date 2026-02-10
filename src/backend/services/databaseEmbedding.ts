@@ -460,7 +460,7 @@ export class DatabaseEmbeddingService {
     const articlesResult = await database.query('SELECT COUNT(*) as count FROM articles');
     const totalArticles = parseInt(articlesResult.rows[0].count, 10);
 
-    // Get indexed articles (articles that have embeddings)
+    // Get indexed articles (articles that have embeddings, include no_rag articles as this should reflect the actual number of articles)
     const indexedResult = await database.query(`
       SELECT COUNT(DISTINCT article_id) as count 
       FROM embeddings
