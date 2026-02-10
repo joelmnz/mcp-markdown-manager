@@ -407,6 +407,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           tasksByPriority: detailedStats.tasksByPriority,
           tasksByOperation: detailedStats.tasksByOperation,
           recentActivity: detailedStats.recentActivity,
+          recentErrors: detailedStats.recentErrors,
           health: health
         }), {
           headers: { 'Content-Type': 'application/json' }
@@ -419,6 +420,79 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           status: 500,
           headers: { 'Content-Type': 'application/json' }
         });
+      }
+    }
+
+    // DELETE /api/queue/tasks/failed - Clear all failed tasks
+    if (path === '/api/queue/tasks/failed' && request.method === 'DELETE') {
+      // Check if semantic search is enabled
+      if (!SEMANTIC_SEARCH_ENABLED) {
+        return new Response(JSON.stringify({ error: 'Semantic search is not enabled' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const config = embeddingQueueConfigService.getConfig();
+      if (!config.enabled) {
+        return new Response(JSON.stringify({ error: 'Embedding queue is disabled' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Require write scope
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
+
+      try {
+        const count = await embeddingQueueService.clearFailedTasks();
+        return new Response(JSON.stringify({
+          success: true,
+          message: `Cleared ${count} failed tasks`,
+          count
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to clear failed tasks');
+      }
+    }
+
+    // DELETE /api/queue/tasks/:id - Delete a specific task
+    if (path.startsWith('/api/queue/tasks/') && request.method === 'DELETE') {
+      // Check if semantic search is enabled
+      if (!SEMANTIC_SEARCH_ENABLED) {
+        return new Response(JSON.stringify({ error: 'Semantic search is not enabled' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const config = embeddingQueueConfigService.getConfig();
+      if (!config.enabled) {
+        return new Response(JSON.stringify({ error: 'Embedding queue is disabled' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // Require write scope
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
+
+      const taskId = path.replace('/api/queue/tasks/', '');
+
+      try {
+        await embeddingQueueService.deleteTask(taskId);
+        return new Response(JSON.stringify({
+          success: true,
+          message: 'Task deleted successfully'
+        }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to delete task');
       }
     }
 
