@@ -682,7 +682,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
       if (scopeError) return scopeError;
 
       const body = await request.json();
-      const { title, content, folder, message } = body;
+      const { title, content, folder, message, noRag } = body;
 
       if (!title || !content) {
         return new Response(JSON.stringify({ error: 'Title and content are required' }), {
@@ -691,7 +691,14 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       }
 
-      const article = await createArticle(title, content, folder, message, undefined, authContext.tokenName);
+      if (noRag !== undefined && typeof noRag !== 'boolean') {
+        return new Response(JSON.stringify({ error: 'noRag must be a boolean' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const article = await createArticle(title, content, folder, message, undefined, authContext.tokenName, noRag);
       return new Response(JSON.stringify(article), {
         status: 201,
         headers: { 'Content-Type': 'application/json' }
@@ -725,7 +732,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
       // Regular article update
       const body = await request.json();
-      const { title, content, folder, message } = body;
+      const { title, content, folder, message, noRag } = body;
 
       if (!title || !content) {
         return new Response(JSON.stringify({ error: 'Title and content are required' }), {
@@ -734,7 +741,14 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         });
       }
 
-      const article = await updateArticle(filename, title, content, folder, message, undefined, authContext.tokenName);
+      if (noRag !== undefined && typeof noRag !== 'boolean') {
+        return new Response(JSON.stringify({ error: 'noRag must be a boolean' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const article = await updateArticle(filename, title, content, folder, message, undefined, authContext.tokenName, noRag);
       return new Response(JSON.stringify(article), {
         headers: { 'Content-Type': 'application/json' }
       });

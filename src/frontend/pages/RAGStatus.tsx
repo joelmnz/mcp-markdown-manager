@@ -6,6 +6,7 @@ interface RAGStatusData {
   totalChunks: number;
   indexedArticles: number;
   totalArticles: number;
+  noRagArticles: number;
   unindexedFiles: string[];
   message?: string;
 }
@@ -312,6 +313,11 @@ export function RAGStatus({ token, onNavigate }: RAGStatusProps) {
           <div className="rag-stat-card">
             <div className="rag-stat-value">{status.unindexedFiles.length}</div>
             <div className="rag-stat-label">Unindexed Files</div>
+          </div>
+
+          <div className="rag-stat-card">
+            <div className="rag-stat-value">{status.noRagArticles}</div>
+            <div className="rag-stat-label">No RAG Articles</div>
           </div>
         </div>
 

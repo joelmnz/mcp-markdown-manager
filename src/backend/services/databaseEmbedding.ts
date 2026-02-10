@@ -36,6 +36,7 @@ export interface IndexStats {
   totalArticles: number;
   indexedArticles: number;
   unindexedArticles: number;
+  noRagArticles: number;
 }
 
 /**
@@ -229,7 +230,7 @@ export class DatabaseEmbeddingService {
       sql = `
         SELECT 
           e.chunk_id, e.chunk_index, e.heading_path, e.text_content, e.created_at,
-          a.slug, a.title, a.folder, a.is_public, a.created_at as article_created, a.updated_at,
+          a.slug, a.title, a.folder, a.is_public, a.no_rag, a.created_at as article_created, a.updated_at,
           (e.vector <=> $1::vector) as distance
         FROM embeddings e
         JOIN articles a ON e.article_id = a.id
@@ -259,7 +260,7 @@ export class DatabaseEmbeddingService {
       sql = `
         SELECT 
           e.chunk_id, e.chunk_index, e.heading_path, e.text_content, e.vector_data, e.created_at,
-          a.slug, a.title, a.folder, a.is_public, a.created_at as article_created, a.updated_at
+          a.slug, a.title, a.folder, a.is_public, a.no_rag, a.created_at as article_created, a.updated_at
         FROM embeddings e
         JOIN articles a ON e.article_id = a.id
       `;
@@ -304,7 +305,8 @@ export class DatabaseEmbeddingService {
           folder: row.folder,
           created: row.article_created.toISOString(),
           modified: row.updated_at.toISOString(),
-          isPublic: row.is_public
+          isPublic: row.is_public,
+          noRag: row.no_rag ?? false
         }
       }));
     } else {
@@ -332,7 +334,8 @@ export class DatabaseEmbeddingService {
             folder: row.folder,
             created: row.article_created.toISOString(),
             modified: row.updated_at.toISOString(),
-            isPublic: row.is_public
+            isPublic: row.is_public,
+            noRag: row.no_rag ?? false
           }
         };
       });
@@ -457,20 +460,25 @@ export class DatabaseEmbeddingService {
     const articlesResult = await database.query('SELECT COUNT(*) as count FROM articles');
     const totalArticles = parseInt(articlesResult.rows[0].count, 10);
 
-    // Get indexed articles (articles that have embeddings)
+    // Get indexed articles (articles that have embeddings, include no_rag articles as this should reflect the actual number of articles)
     const indexedResult = await database.query(`
       SELECT COUNT(DISTINCT article_id) as count 
       FROM embeddings
     `);
     const indexedArticles = parseInt(indexedResult.rows[0].count, 10);
 
-    const unindexedArticles = totalArticles - indexedArticles;
+    // Get no_rag articles
+    const noRagResult = await database.query('SELECT COUNT(*) as count FROM articles WHERE no_rag = TRUE');
+    const noRagArticles = parseInt(noRagResult.rows[0].count, 10);
+
+    const unindexedArticles = totalArticles - indexedArticles - noRagArticles;
 
     return {
       totalChunks,
       totalArticles,
       indexedArticles,
-      unindexedArticles
+      unindexedArticles,
+      noRagArticles
     };
   }
 
@@ -480,12 +488,12 @@ export class DatabaseEmbeddingService {
   async getDetailedStats(): Promise<{
     unindexedSlugs: string[];
   }> {
-    // Get unindexed slugs
+    // Get unindexed slugs (excluding no_rag articles)
     const unindexedResult = await database.query(`
       SELECT a.slug
       FROM articles a
       LEFT JOIN embeddings e ON a.id = e.article_id
-      WHERE e.id IS NULL
+      WHERE e.id IS NULL AND a.no_rag = FALSE
     `);
     const unindexedSlugs = unindexedResult.rows.map(row => row.slug);
 
@@ -500,12 +508,12 @@ export class DatabaseEmbeddingService {
   async indexUnindexedArticles(): Promise<{ indexed: number; failed: string[] }> {
     console.log('Indexing unindexed articles...');
 
-    // Get articles that don't have embeddings
+    // Get articles that don't have embeddings and aren't marked as no_rag
     const result = await database.query(`
       SELECT a.id, a.slug, a.title, a.content, a.folder, a.created_at, a.updated_at
       FROM articles a
       LEFT JOIN embeddings e ON a.id = e.article_id
-      WHERE e.article_id IS NULL
+      WHERE e.article_id IS NULL AND a.no_rag = FALSE
     `);
 
     const unindexedArticles = result.rows;

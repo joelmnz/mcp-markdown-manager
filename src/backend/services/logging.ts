@@ -543,6 +543,21 @@ class LoggingService {
    * Log to console with structured format
    */
   private logToConsole(entry: LogEntry): void {
+    const levels: Record<string, number> = {
+      'debug': 0,
+      'info': 1,
+      'warn': 2,
+      'error': 3
+    };
+
+    const configLevel = process.env.LOG_LEVEL?.toLowerCase() || 'info';
+    const configWeight = levels[configLevel] ?? 1;
+    const entryWeight = levels[entry.level] ?? 1;
+
+    if (entryWeight < configWeight) {
+      return;
+    }
+
     const timestamp = entry.timestamp.toISOString();
     const prefix = `[${timestamp}] [${entry.level.toUpperCase()}] [${entry.category}]`;
     
