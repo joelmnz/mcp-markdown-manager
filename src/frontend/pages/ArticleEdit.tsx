@@ -30,6 +30,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
   const [converting, setConverting] = useState(false);
   const [error, setError] = useState('');
   const [isPublic, setIsPublic] = useState(false);
+  const [noRag, setNoRag] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
@@ -52,6 +53,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         setContent(data.content);
         setFolder(data.folder || '');
         setIsPublic(data.isPublic || false);
+        setNoRag(data.noRag || false);
       } else {
         setError('Article not found');
       }
@@ -73,7 +75,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       setError('');
 
       const url = isNew ? '/api/articles' : `/api/articles/${filename}.md`;
-      const data = { title, content, folder };
+      const data = { title, content, folder, noRag };
 
       const response = isNew
         ? await apiClient.post(url, data, token)
@@ -294,6 +296,20 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
             placeholder="Folder path (optional, e.g. projects/web-dev)"
             className="edit-folder-input"
           />
+        </div>
+      </div>
+
+      <div className="edit-metadata-row" style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
+        <div className="edit-metadata-item" style={{ flex: '0 0 auto' }}>
+          <label className="public-toggle-label">
+            <input
+              type="checkbox"
+              checked={noRag}
+              onChange={(e) => setNoRag(e.target.checked)}
+              className="public-toggle-checkbox"
+            />
+            <span className="public-toggle-text" title="Skip RAG indexing for this article">No RAG</span>
+          </label>
         </div>
       </div>
 

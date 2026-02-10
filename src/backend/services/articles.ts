@@ -13,6 +13,7 @@ export interface Article {
   folder?: string;
   created: string;
   isPublic: boolean;
+  noRag: boolean;
   modifiedBy?: string;
 }
 
@@ -23,6 +24,7 @@ export interface ArticleMetadata {
   created: string;
   modified: string;
   isPublic: boolean;
+  noRag: boolean;
   modifiedBy?: string;
 }
 
@@ -110,6 +112,7 @@ function convertToLegacyArticle(dbArticle: any): Article {
     folder: dbArticle.folder,
     created: dbArticle.created,
     isPublic: dbArticle.isPublic,
+    noRag: dbArticle.noRag,
     modifiedBy: dbArticle.updatedBy
   };
 }
@@ -123,6 +126,7 @@ function convertToLegacyMetadata(dbMetadata: any): ArticleMetadata {
     created: dbMetadata.created,
     modified: dbMetadata.modified,
     isPublic: dbMetadata.isPublic,
+    noRag: dbMetadata.noRag,
     modifiedBy: dbMetadata.updatedBy
   };
 }
@@ -220,18 +224,18 @@ export async function readArticle(filename: string): Promise<Article | null> {
 }
 
 // Create a new article
-export async function createArticle(title: string, content: string, folder: string = '', message?: string, options?: ArticleServiceOptions, createdBy?: string): Promise<Article> {
+export async function createArticle(title: string, content: string, folder: string = '', message?: string, options?: ArticleServiceOptions, createdBy?: string, noRag: boolean = false): Promise<Article> {
   const cleanedContent = cleanMarkdownContent(content);
 
   // Create article in database first (ensures article persistence precedes task queuing)
-  const dbArticle = await databaseArticleService.createArticle(title, cleanedContent, folder, message, createdBy);
+  const dbArticle = await databaseArticleService.createArticle(title, cleanedContent, folder, message, createdBy, noRag);
 
   // Create initial version snapshot
   const filename = slugToFilename(dbArticle.slug);
   await createVersionSnapshot(filename, title, cleanedContent, folder, message || 'Initial version');
 
   // Handle embedding generation with failure isolation
-  if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
+  if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding && !noRag) {
     await safelyHandleEmbeddingOperation(async () => {
       // Get article ID for task queuing
       const articleId = await databaseArticleService.getArticleId(dbArticle.slug);
@@ -260,7 +264,7 @@ export async function createArticle(title: string, content: string, folder: stri
 }
 
 // Update an existing article
-export async function updateArticle(filename: string, title: string, content: string, folder?: string, message?: string, options?: ArticleServiceOptions, updatedBy?: string): Promise<Article> {
+export async function updateArticle(filename: string, title: string, content: string, folder?: string, message?: string, options?: ArticleServiceOptions, updatedBy?: string, noRag?: boolean): Promise<Article> {
   const cleanedContent = cleanMarkdownContent(content);
   const slug = filenameToSlug(filename);
 
@@ -274,7 +278,7 @@ export async function updateArticle(filename: string, title: string, content: st
   const targetFolder = folder !== undefined ? folder : existing.folder;
 
   // Update article in database first (this handles slug changes automatically)
-  const updatedArticle = await databaseArticleService.updateArticle(slug, title, cleanedContent, targetFolder, message, updatedBy);
+  const updatedArticle = await databaseArticleService.updateArticle(slug, title, cleanedContent, targetFolder, message, updatedBy, noRag);
 
   // Create version snapshot
   const newFilename = slugToFilename(updatedArticle.slug);
@@ -282,47 +286,72 @@ export async function updateArticle(filename: string, title: string, content: st
 
   // Handle embedding updates with failure isolation
   if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
-    await safelyHandleEmbeddingOperation(async () => {
-      // Get article ID for task queuing
-      const articleId = await databaseArticleService.getArticleId(updatedArticle.slug);
+    const isNoRag = noRag !== undefined ? noRag : existing.noRag;
+    const wasNoRag = existing.noRag;
 
-      if (articleId) {
-        // If slug changed, queue a delete task for the old slug first
-        if (filename !== newFilename) {
-          const oldSlug = filenameToSlug(filename);
+    if (isNoRag && !wasNoRag) {
+      // Only enqueue delete when transitioning from noRag=false to noRag=true
+      await safelyHandleEmbeddingOperation(async () => {
+        const articleId = await databaseArticleService.getArticleId(updatedArticle.slug);
+        if (articleId) {
           const config = embeddingQueueConfigService.getConfig();
           await embeddingQueueService.enqueueTask({
             articleId,
-            slug: oldSlug,
+            slug: updatedArticle.slug,
             operation: 'delete',
             priority: options?.embeddingPriority || 'normal',
             maxAttempts: config.maxRetries,
             scheduledAt: new Date(),
             metadata: {
-              filename,
-              reason: 'slug_change_cleanup'
+              filename: newFilename,
+              reason: 'no_rag_enabled'
             }
           });
         }
+      }, 'article no-rag embedding cleanup');
+    } else if (!isNoRag) {
+      await safelyHandleEmbeddingOperation(async () => {
+        // Get article ID for task queuing
+        const articleId = await databaseArticleService.getArticleId(updatedArticle.slug);
 
-        // Queue embedding update task for background processing
-        const config = embeddingQueueConfigService.getConfig();
-        await embeddingQueueService.enqueueTask({
-          articleId,
-          slug: updatedArticle.slug,
-          operation: 'update',
-          priority: options?.embeddingPriority || 'normal',
-          maxAttempts: config.maxRetries,
-          scheduledAt: new Date(),
-          metadata: {
-            filename: newFilename,
-            title,
-            contentLength: cleanedContent.length,
-            slugChanged: filename !== newFilename
+        if (articleId) {
+          // If slug changed, queue a delete task for the old slug first
+          if (filename !== newFilename) {
+            const oldSlug = filenameToSlug(filename);
+            const config = embeddingQueueConfigService.getConfig();
+            await embeddingQueueService.enqueueTask({
+              articleId,
+              slug: oldSlug,
+              operation: 'delete',
+              priority: options?.embeddingPriority || 'normal',
+              maxAttempts: config.maxRetries,
+              scheduledAt: new Date(),
+              metadata: {
+                filename,
+                reason: 'slug_change_cleanup'
+              }
+            });
           }
-        });
-      }
-    }, 'article update embedding task queuing');
+
+          // Queue embedding update task for background processing
+          const config = embeddingQueueConfigService.getConfig();
+          await embeddingQueueService.enqueueTask({
+            articleId,
+            slug: updatedArticle.slug,
+            operation: 'update',
+            priority: options?.embeddingPriority || 'normal',
+            maxAttempts: config.maxRetries,
+            scheduledAt: new Date(),
+            metadata: {
+              filename: newFilename,
+              title,
+              contentLength: cleanedContent.length,
+              slugChanged: filename !== newFilename
+            }
+          });
+        }
+      }, 'article update embedding task queuing');
+    }
   }
 
   return convertToLegacyArticle(updatedArticle);
@@ -415,7 +444,8 @@ export async function getArticleVersion(filename: string, versionId: string): Pr
     content: dbVersion.content,
     folder: dbVersion.folder,
     created: dbVersion.created,
-    isPublic: false // Version snapshots are not marked as public
+    isPublic: false, // Version snapshots are not marked as public
+    noRag: false // Version snapshots don't carry noRag state
   };
 }
 
