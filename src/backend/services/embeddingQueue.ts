@@ -660,14 +660,14 @@ class EmbeddingQueueService implements QueueManager {
     try {
       const result = await database.query(`
         DELETE FROM embedding_tasks
-        WHERE id = $1
+        WHERE id = $1 AND status = 'failed'
       `, [taskId]);
 
       if (result.rowCount === 0) {
         throw new DatabaseServiceError(
           DatabaseErrorType.NOT_FOUND,
-          `Task with ID ${taskId} not found`,
-          'Task not found.'
+          `Failed task with ID ${taskId} not found`,
+          'Task not found or not in failed status.'
         );
       }
     } catch (error) {

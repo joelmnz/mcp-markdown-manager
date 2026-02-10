@@ -407,6 +407,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           tasksByPriority: detailedStats.tasksByPriority,
           tasksByOperation: detailedStats.tasksByOperation,
           recentActivity: detailedStats.recentActivity,
+          recentErrors: detailedStats.recentErrors,
           health: health
         }), {
           headers: { 'Content-Type': 'application/json' }
@@ -424,6 +425,22 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
     // DELETE /api/queue/tasks/failed - Clear all failed tasks
     if (path === '/api/queue/tasks/failed' && request.method === 'DELETE') {
+      // Check if semantic search is enabled
+      if (!SEMANTIC_SEARCH_ENABLED) {
+        return new Response(JSON.stringify({ error: 'Semantic search is not enabled' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const config = embeddingQueueConfigService.getConfig();
+      if (!config.enabled) {
+        return new Response(JSON.stringify({ error: 'Embedding queue is disabled' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
       // Require write scope
       const scopeError = checkScope('write');
       if (scopeError) return scopeError;
@@ -444,6 +461,22 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
     // DELETE /api/queue/tasks/:id - Delete a specific task
     if (path.startsWith('/api/queue/tasks/') && request.method === 'DELETE') {
+      // Check if semantic search is enabled
+      if (!SEMANTIC_SEARCH_ENABLED) {
+        return new Response(JSON.stringify({ error: 'Semantic search is not enabled' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const config = embeddingQueueConfigService.getConfig();
+      if (!config.enabled) {
+        return new Response(JSON.stringify({ error: 'Embedding queue is disabled' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
       // Require write scope
       const scopeError = checkScope('write');
       if (scopeError) return scopeError;

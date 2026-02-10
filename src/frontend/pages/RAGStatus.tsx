@@ -444,6 +444,7 @@ export function RAGStatus({ token, onNavigate }: RAGStatusProps) {
                                 className="icon-button"
                                 onClick={() => copyToClipboard(error.errorMessage)}
                                 title="Copy error message"
+                                aria-label="Copy error message"
                               >
                                 📋
                               </button>
