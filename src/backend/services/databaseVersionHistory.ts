@@ -122,7 +122,8 @@ export class DatabaseVersionHistoryService {
       content: row.content,
       folder: row.folder,
       created: row.created_at.toISOString(),
-      isPublic: false // Version snapshots are not public
+      isPublic: false, // Version snapshots are not public
+      noRag: false // Version snapshots don't carry noRag state
     };
   }
 

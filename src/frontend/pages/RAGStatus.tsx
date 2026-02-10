@@ -6,8 +6,17 @@ interface RAGStatusData {
   totalChunks: number;
   indexedArticles: number;
   totalArticles: number;
+  noRagArticles: number;
   unindexedFiles: string[];
   message?: string;
+}
+
+interface QueueError {
+  id: string;
+  slug: string;
+  operation: string;
+  errorMessage: string;
+  completedAt: string;
 }
 
 interface QueueStatusData {
@@ -26,6 +35,7 @@ interface QueueStatusData {
     tasksFailedLast24h: number;
     averageProcessingTime: number | null;
   };
+  recentErrors?: QueueError[];
   health: {
     isHealthy: boolean;
     totalTasks: number;
@@ -178,6 +188,53 @@ export function RAGStatus({ token, onNavigate }: RAGStatusProps) {
     }
   };
 
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      // Optional: show a small toast or visual feedback
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+    }
+  };
+
+  const handleDeleteError = async (taskId: string) => {
+    if (!confirm('Are you sure you want to delete this error record?')) {
+      return;
+    }
+
+    try {
+      const response = await apiClient.delete(`/api/queue/tasks/${taskId}`, token);
+      if (response.ok) {
+        loadQueueStatus(false);
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Failed to delete task');
+      }
+    } catch (err) {
+      console.error('Error deleting task:', err);
+      setError('Failed to delete task');
+    }
+  };
+
+  const handleClearAllErrors = async () => {
+    if (!confirm('Are you sure you want to clear ALL failed tasks? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const response = await apiClient.delete('/api/queue/tasks/failed', token);
+      if (response.ok) {
+        loadQueueStatus(false);
+      } else {
+        const data = await response.json();
+        setError(data.error || 'Failed to clear errors');
+      }
+    } catch (err) {
+      console.error('Error clearing errors:', err);
+      setError('Failed to clear errors');
+    }
+  };
+
   if (loading) {
     return (
       <div className="page">
@@ -257,6 +314,11 @@ export function RAGStatus({ token, onNavigate }: RAGStatusProps) {
             <div className="rag-stat-value">{status.unindexedFiles.length}</div>
             <div className="rag-stat-label">Unindexed Files</div>
           </div>
+
+          <div className="rag-stat-card">
+            <div className="rag-stat-value">{status.noRagArticles}</div>
+            <div className="rag-stat-label">No RAG Articles</div>
+          </div>
         </div>
 
         {/* Queue Statistics Section */}
@@ -327,6 +389,83 @@ export function RAGStatus({ token, onNavigate }: RAGStatusProps) {
                 </div>
               </div>
             </div>
+
+            {/* Recent Errors Section */}
+            {queueStatus.recentErrors && queueStatus.recentErrors.length > 0 && (
+              <div className="rag-section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                  <h2 style={{ marginBottom: 0 }}>Recent Errors</h2>
+                  <button
+                    className="button button-danger"
+                    onClick={handleClearAllErrors}
+                    style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }}
+                  >
+                    🗑️ Clear All Errors
+                  </button>
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="tokens-table" style={{ fontSize: '0.9rem' }}>
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Article</th>
+                        <th>Operation</th>
+                        <th style={{ width: '40%' }}>Error</th>
+                        <th style={{ width: '100px', textAlign: 'right' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {queueStatus.recentErrors.map(error => (
+                        <tr key={error.id}>
+                          <td>{new Date(error.completedAt).toLocaleString()}</td>
+                          <td>{error.slug}</td>
+                          <td>
+                            <span style={{
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              background: 'var(--bg-tertiary)',
+                              fontSize: '0.8rem'
+                            }}>
+                              {error.operation}
+                            </span>
+                          </td>
+                          <td style={{
+                            fontFamily: 'monospace',
+                            color: 'var(--danger-color)',
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word'
+                          }}>
+                            {error.errorMessage}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                              <button
+                                className="icon-button"
+                                onClick={() => copyToClipboard(error.errorMessage)}
+                                title="Copy error message"
+                                aria-label="Copy error message"
+                              >
+                                📋
+                              </button>
+                              <button
+                                className="icon-button"
+                                onClick={() => handleDeleteError(error.id)}
+                                title="Delete error"
+                                aria-label="Delete error"
+                                style={{ color: 'var(--danger-color)' }}
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </>
         )}
 
