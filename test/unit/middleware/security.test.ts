@@ -14,24 +14,38 @@ describe("Security Middleware", () => {
     expect(nonce1).not.toBe(nonce2);
   });
 
-  test("addSecurityHeaders should add CSP headers with nonce", () => {
+  test("addSecurityHeaders should add CSP headers with nonce (HTTP)", () => {
     const response = new Response("ok");
     const nonce = "test-nonce-123";
 
-    const secureResponse = addSecurityHeaders(response, nonce);
+    const secureResponse = addSecurityHeaders(response, nonce, false);
 
     const csp = secureResponse.headers.get("Content-Security-Policy");
     expect(csp).toBeDefined();
     expect(csp).toContain(`nonce-${nonce}`);
     expect(csp).toContain("script-src 'self' 'nonce-test-nonce-123'");
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(csp).not.toContain("upgrade-insecure-requests");
+  });
+
+  test("addSecurityHeaders should add CSP headers with nonce (HTTPS)", () => {
+    const response = new Response("ok");
+    const nonce = "test-nonce-456";
+
+    const secureResponse = addSecurityHeaders(response, nonce, true);
+
+    const csp = secureResponse.headers.get("Content-Security-Policy");
+    expect(csp).toBeDefined();
+    expect(csp).toContain(`nonce-${nonce}`);
+    expect(csp).toContain("script-src 'self' 'nonce-test-nonce-456'");
+    expect(csp).toContain("upgrade-insecure-requests");
   });
 
   test("addSecurityHeaders should add other security headers", () => {
     const response = new Response("ok");
     const nonce = generateNonce();
 
-    const secureResponse = addSecurityHeaders(response, nonce);
+    const secureResponse = addSecurityHeaders(response, nonce, false);
 
     expect(secureResponse.headers.get("X-Frame-Options")).toBe("DENY");
     expect(secureResponse.headers.get("X-Content-Type-Options")).toBe("nosniff");

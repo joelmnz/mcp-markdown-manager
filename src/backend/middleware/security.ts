@@ -12,9 +12,10 @@ export function generateNonce(): string {
  *
  * @param response The Bun response object
  * @param nonce The nonce used for Content-Security-Policy
+ * @param isHttps Whether the request was made over HTTPS
  * @returns The response with security headers added
  */
-export function addSecurityHeaders(response: Response, nonce: string): Response {
+export function addSecurityHeaders(response: Response, nonce: string, isHttps: boolean = false): Response {
   // Content Security Policy
   // script-src: Allow self and scripts with correct nonce
   // style-src: Allow self and unsafe-inline (required for React/emotion/etc)
@@ -25,7 +26,8 @@ export function addSecurityHeaders(response: Response, nonce: string): Response 
   // base-uri: Self (prevents base tag hijacking)
   // form-action: Self (prevents form submission to external sites)
   // frame-ancestors: None (prevents clickjacking)
-  const csp = [
+  // upgrade-insecure-requests: Only on HTTPS to avoid breaking HTTP deployments
+  const cspDirectives = [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}'`,
     "style-src 'self' 'unsafe-inline'",
@@ -35,9 +37,16 @@ export function addSecurityHeaders(response: Response, nonce: string): Response 
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    "frame-ancestors 'none'",
-    "upgrade-insecure-requests"
-  ].join('; ');
+    "frame-ancestors 'none'"
+  ];
+
+  // Only add upgrade-insecure-requests on HTTPS deployments
+  // This prevents breaking HTTP-only deployments (local dev, private networks)
+  if (isHttps) {
+    cspDirectives.push("upgrade-insecure-requests");
+  }
+
+  const csp = cspDirectives.join('; ');
 
   response.headers.set('Content-Security-Policy', csp);
 

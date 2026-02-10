@@ -240,15 +240,20 @@ const server = Bun.serve({
   async fetch(request) {
     const nonce = generateNonce();
     const url = new URL(request.url);
+    // Check if request is HTTPS:
+    // 1. Direct HTTPS connection (url.protocol)
+    // 2. Behind reverse proxy/tunnel (X-Forwarded-Proto header from Cloudflare, nginx, etc.)
+    const isHttps = url.protocol === 'https:' ||
+      request.headers.get('x-forwarded-proto') === 'https';
     const startTime = Date.now();
 
     const logRequest = (status: number) => {
       const duration = Date.now() - startTime;
       const timestamp = new Date().toISOString();
-      
+
       let shouldLog = true;
       const isHealthCheck = url.pathname.endsWith('/health');
-      
+
       if (LOG_LEVEL === 'error') {
         shouldLog = status >= 500;
       } else if (LOG_LEVEL === 'warn') {
@@ -258,7 +263,7 @@ const server = Bun.serve({
           shouldLog = false;
         }
       }
-      
+
       if (shouldLog) {
         console.log(`[${timestamp}] ${request.method} ${url.pathname} ${status} ${duration}ms`);
       }
@@ -272,7 +277,7 @@ const server = Bun.serve({
     if (routePath === '/mcp') {
       if (!MCP_SERVER_ENABLED) {
         logRequest(404);
-        return new Response('MCP server disabled', { status: 404 });
+        return addSecurityHeaders(new Response('MCP server disabled', { status: 404 }), nonce);
       }
 
       let response: Response;
