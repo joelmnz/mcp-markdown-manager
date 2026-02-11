@@ -877,7 +877,7 @@ body {
 
 .edit-metadata-row-two-col {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
   gap: 1.5rem;
   margin-bottom: 1.5rem;
   align-items: flex-start;
@@ -888,6 +888,41 @@ body {
   flex-direction: column;
 }
 
+
+.edit-options-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.edit-options-item {
+  flex: 0 0 auto;
+}
+
+.edit-public-sharing-section {
+  margin: 0;
+  height: 100%;
+  box-sizing: border-box;
+  align-content: flex-start;
+}
+
+.edit-slug-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.edit-rename-button {
+  white-space: nowrap;
+}
+
+.edit-slug-help {
+  color: var(--text-tertiary);
+  font-size: 0.85em;
+  margin-top: 0.25rem;
+  display: block;
+}
 .edit-container {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1075,13 +1110,20 @@ body {
 
   .article-actions {
     width: 100%;
-    gap: 0.25rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
   }
 
   .article-actions .button {
-    flex: 1;
-    padding: 0.4rem 0.6rem;
-    font-size: 0.8rem;
+    width: 100%;
+    min-height: 2.4rem;
+    padding: 0.55rem 0.6rem;
+    font-size: 0.88rem;
+  }
+
+  .article-actions .button-primary {
+    grid-column: 1 / -1;
   }
 
   .edit-metadata-row {
@@ -1096,6 +1138,29 @@ body {
 
   .edit-container {
     grid-template-columns: 1fr;
+  }
+
+  .edit-options-row {
+    margin-bottom: 1rem;
+  }
+
+  .edit-slug-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .edit-rename-button {
+    width: 100%;
+  }
+
+  .share-link-pill {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .edit-textarea,
+  .preview-content {
+    min-height: 360px;
   }
 
   .preview-section {

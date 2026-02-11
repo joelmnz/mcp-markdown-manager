@@ -299,8 +299,8 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         </div>
       </div>
 
-      <div className="edit-metadata-row" style={{ display: 'flex', gap: '1rem', alignItems: 'center', marginBottom: '1rem' }}>
-        <div className="edit-metadata-item" style={{ flex: '0 0 auto' }}>
+      <div className="edit-options-row">
+        <div className="edit-metadata-item edit-options-item">
           <label className="public-toggle-label">
             <input
               type="checkbox"
@@ -315,7 +315,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
 
       {!isNew && (
         <div className="edit-metadata-row-two-col">
-          <div className="public-sharing-section" style={{ margin: 0, height: '100%', boxSizing: 'border-box' }}>
+          <div className="public-sharing-section edit-public-sharing-section">
             <label className="public-toggle-label">
               <input
                 type="checkbox"
@@ -349,7 +349,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
 
           <div className="edit-metadata-item">
             <label className="edit-label">Article Slug/Filename</label>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <div className="edit-slug-row">
               <input
                 type="text"
                 value={filename}
@@ -357,15 +357,14 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
                 className="edit-slug-input"
               />
               <button
-                className="button button-secondary"
+                className="button button-secondary edit-rename-button"
                 onClick={() => setShowRenameModal(true)}
                 title="Rename article slug/filename"
-                style={{ whiteSpace: 'nowrap' }}
               >
                 Rename Slug
               </button>
             </div>
-            <small style={{ color: 'var(--text-tertiary)', fontSize: '0.85em', marginTop: '4px', display: 'block' }}>
+            <small className="edit-slug-help">
               The slug is used as the filename and in URLs. Must be unique.
             </small>
           </div>
