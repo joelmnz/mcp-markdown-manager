@@ -3,6 +3,7 @@ import { lint } from 'markdownlint/sync';
 import { applyFixes } from 'markdownlint';
 import { MarkdownView } from '../components/MarkdownView';
 import { RenameSlugModal } from '../components/RenameSlugModal';
+import { ImageGalleryModal } from '../components/ImageGalleryModal';
 import TurndownService from 'turndown';
 import { gfm } from 'turndown-plugin-gfm';
 import { apiClient } from '../utils/apiClient';
@@ -34,6 +35,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
   const [copySuccess, setCopySuccess] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
   const isNew = !filename;
 
   useEffect(() => {
@@ -228,6 +230,18 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
     onNavigate(`/edit/${newSlug}`);
   };
 
+  const handleImageSelected = async (markdown: string) => {
+    try {
+      await navigator.clipboard.writeText(markdown);
+      alert('Image markdown copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy to clipboard', err);
+      // Fallback: append to content if clipboard fails
+      setContent(prev => prev + '\n' + markdown);
+    }
+    setShowImageModal(false);
+  };
+
   if (loading) {
     return <div className="page"><div className="loading">Loading...</div></div>;
   }
@@ -255,6 +269,13 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
             disabled={linting || !content.trim()}
           >
             {linting ? 'Linting...' : 'Lint'}
+          </button>
+          <button
+            className="button"
+            onClick={() => setShowImageModal(true)}
+            title="Attach Image"
+          >
+            Attach Image
           </button>
           <button
             className="button preview-toggle-button"
@@ -400,6 +421,13 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         currentSlug={filename || ''}
         token={token}
         onSlugRenamed={handleSlugRenamed}
+      />
+
+      <ImageGalleryModal
+        isOpen={showImageModal}
+        onClose={() => setShowImageModal(false)}
+        onSelectImage={handleImageSelected}
+        token={token}
       />
     </div>
   );

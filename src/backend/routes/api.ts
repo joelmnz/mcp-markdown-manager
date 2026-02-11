@@ -37,6 +37,7 @@ import { backgroundWorkerService } from '../services/backgroundWorker.js';
 import { embeddingQueueService } from '../services/embeddingQueue.js';
 import { embeddingQueueConfigService } from '../services/embeddingQueueConfig.js';
 import { importStatusService } from '../services/importStatus.js';
+import { imageService } from '../services/images.js';
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 
@@ -170,6 +171,37 @@ export async function handleApiRequest(request: Request): Promise<Response> {
     }
   }
 
+  // Public image endpoint (no auth required, but could implement referrer check if strictly needed)
+  // For now, if you know the filename, you can see it.
+  // In a stricter system, we would check if the image is used in any public articles.
+  if (path.startsWith('/api/images/') && request.method === 'GET') {
+    // Apply light rate limiting to prevent abuse
+    const rateLimitError = publicRateLimit(request);
+    if (rateLimitError) return rateLimitError;
+
+    try {
+      const filename = path.replace('/api/images/', '');
+
+      // Basic directory traversal protection is handled by imageService.getImagePath
+      const filePath = imageService.getImagePath(filename);
+      const file = Bun.file(filePath);
+
+      if (await file.exists()) {
+        const record = await imageService.getImageRecord(filename);
+        const headers: Record<string, string> = {
+          'Content-Type': record?.mime_type || 'application/octet-stream',
+          'Cache-Control': 'public, max-age=31536000, immutable'
+        };
+        return new Response(file, { headers });
+      } else {
+        return new Response('Image not found', { status: 404 });
+      }
+    } catch (error) {
+      console.error('Image serve error:', error);
+      return new Response('Internal server error', { status: 500 });
+    }
+  }
+
   // Public article endpoint (no auth required)
   if (path.startsWith('/api/public-articles/') && request.method === 'GET') {
     // Apply light rate limiting to prevent abuse
@@ -233,6 +265,134 @@ export async function handleApiRequest(request: Request): Promise<Response> {
   }
 
   try {
+    // ==================== Image Management Endpoints ====================
+
+    // POST /api/images/upload - Upload new image
+    if (path === '/api/images/upload' && request.method === 'POST') {
+      // Require write scope
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
+
+      try {
+        const formData = await request.formData();
+        const file = formData.get('file');
+
+        if (!file || !(file instanceof Blob)) {
+          return new Response(JSON.stringify({ error: 'No file uploaded' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const buffer = Buffer.from(await file.arrayBuffer());
+        const originalName = file.name || 'unknown';
+        const mimeType = file.type || 'application/octet-stream';
+
+        const result = await imageService.saveImage(
+          buffer,
+          originalName,
+          mimeType,
+          authContext.tokenName
+        );
+
+        if (result.success) {
+          return new Response(JSON.stringify(result), {
+            status: 201,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } else {
+          return new Response(JSON.stringify({ error: result.error }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      } catch (error) {
+        return handleServiceError(error, 'Failed to upload image');
+      }
+    }
+
+    // GET /api/images - List all images
+    if (path === '/api/images' && request.method === 'GET') {
+      try {
+        const limit = parseInt(url.searchParams.get('limit') || '50', 10);
+        const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+        const result = await imageService.listImages(limit, offset);
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to list images');
+      }
+    }
+
+    // DELETE /api/images/:filename - Delete image
+    if (path.startsWith('/api/images/') && request.method === 'DELETE') {
+      // Require write scope
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
+
+      try {
+        const filename = path.replace('/api/images/', '');
+        const success = await imageService.deleteImage(filename);
+
+        if (success) {
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } else {
+          return new Response(JSON.stringify({ error: 'Image not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      } catch (error) {
+        return handleServiceError(error, 'Failed to delete image');
+      }
+    }
+
+    // GET /api/admin/images/audit - Audit images
+    if (path === '/api/admin/images/audit' && request.method === 'GET') {
+      // Require write scope
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
+
+      try {
+        const result = await imageService.auditImages();
+        return new Response(JSON.stringify(result), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to audit images');
+      }
+    }
+
+    // POST /api/admin/images/cleanup - Cleanup orphaned images
+    if (path === '/api/admin/images/cleanup' && request.method === 'POST') {
+      // Require write scope
+      const scopeError = checkScope('write');
+      if (scopeError) return scopeError;
+
+      try {
+        const body = await request.json();
+        const { filenames } = body;
+
+        if (!Array.isArray(filenames)) {
+          return new Response(JSON.stringify({ error: 'filenames must be an array' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const count = await imageService.cleanupOrphans(filenames);
+        return new Response(JSON.stringify({ success: true, count }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      } catch (error) {
+        return handleServiceError(error, 'Failed to cleanup images');
+      }
+    }
+
     // ==================== Access Token Management Endpoints ====================
     // These endpoints require web auth (AUTH_TOKEN) only
 

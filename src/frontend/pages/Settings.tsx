@@ -164,6 +164,30 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
       )}
 
       <section className="settings-section">
+        <h2>Tools</h2>
+        <div className="settings-actions" style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+          <button
+            className="button button-secondary"
+            onClick={() => onNavigate('/import-files')}
+          >
+            📥 Import Files
+          </button>
+          <button
+            className="button button-secondary"
+            onClick={() => onNavigate('/rag-status')}
+          >
+            📊 RAG & Queue Status
+          </button>
+          <button
+            className="button button-secondary"
+            onClick={() => onNavigate('/admin/images')}
+          >
+            🖼️ Image Administration
+          </button>
+        </div>
+      </section>
+
+      <section className="settings-section">
         <h2>Access Tokens</h2>
         <p className="section-description">
           Generate access tokens to grant third-party applications access to your MCP server and API.
