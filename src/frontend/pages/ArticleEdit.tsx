@@ -277,8 +277,10 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
 
       <div className="edit-metadata-row">
         <div className="edit-metadata-item">
-          <label className="edit-label">Title</label>
+          <label className="edit-label" htmlFor="article-title">Title</label>
           <input
+            id="article-title"
+            required
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -288,8 +290,9 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         </div>
 
         <div className="edit-metadata-item">
-          <label className="edit-label">Folder</label>
+          <label className="edit-label" htmlFor="article-folder">Folder</label>
           <input
+            id="article-folder"
             type="text"
             value={folder}
             onChange={(e) => setFolder(e.target.value)}
@@ -348,9 +351,10 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
           </div>
 
           <div className="edit-metadata-item">
-            <label className="edit-label">Article Slug/Filename</label>
+            <label className="edit-label" htmlFor="article-slug">Article Slug/Filename</label>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <input
+                id="article-slug"
                 type="text"
                 value={filename}
                 disabled
@@ -374,8 +378,10 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
 
       <div className={`edit-container ${!showPreview ? 'preview-hidden' : ''}`}>
         <div className="edit-section">
-          <label className="edit-label">Content (Markdown)</label>
+          <label className="edit-label" htmlFor="article-content">Content (Markdown)</label>
           <textarea
+            id="article-content"
+            required
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Write your article in markdown..."
