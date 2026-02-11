@@ -10,12 +10,11 @@
   - `bun run dc:ui` - Quick start (down, build, up in one command)
   - `docker compose down` - Stop containers, run when you're done testing.
   - `docker logs mcp-markdown-manager` - View backend logs
-- **Tests**: No formal test runner. Run individual scripts in `scripts/`:
-  - `bun scripts/test-parsing.ts` - Markdown parsing
-  - `bun scripts/test-import.ts` - Import functionality
-  - `bun scripts/test-error-handling.ts` - DB error handling
-  - `bun scripts/test-api-client-runtime.ts` - API Client tests
-  - `bun scripts/verify-mcp.ts <AUTH_TOKEN>` - MCP server integration test (requires server running)
+- **Tests**:
+  - `bun test` - Run all unit tests (no database required)
+  - `bun test --watch` - Run tests in watch mode
+  - `bun test:integration` - Run integration tests (requires database via `bun run dc:db`)
+  - `bun run precommit` - Full precommit suite (tests + typecheck + build)
 
 ## Verification Strategy
 
@@ -41,6 +40,97 @@
 ### Pre-Commit Checklist
 
 Before committing code, run `bun run precommit` to ensure the project is in a valid state and has no build errors that would prevent it from running.
+
+## Testing Strategy
+
+The project uses a **hybrid testing approach** to balance coverage with CI/CD compatibility:
+
+### Unit Tests (No Database Required)
+Located in `test/unit/`, these tests run in CI/CD environments without docker/database:
+
+- **Validation** (`test/unit/validation.test.ts`)
+  - Input validation and sanitization
+  - Security checks and boundary conditions
+  - No external dependencies
+
+- **Services** (`test/unit/services/`)
+  - `articles.test.ts` - Article CRUD with mocked database
+  - `accessTokens.test.ts` - Token management with mocked database
+  - Tests business logic without actual database calls
+
+- **Middleware** (`test/unit/middleware/`)
+  - `auth.test.ts` - Authentication and authorization logic
+  - Scope validation and token handling
+
+- **Frontend** (`src/frontend/**/__tests__/`)
+  - Component and utility tests using happy-dom
+
+**Run unit tests:**
+```bash
+bun test              # Run all unit tests
+bun test --watch      # Watch mode for development
+```
+
+### Integration Tests (Database Required)
+Located in `test/integration/`, these tests require a PostgreSQL database:
+
+- **Database Operations** (`test/integration/database.test.ts`)
+  - Full CRUD operations with real database
+  - Constraint validation
+  - Migration verification
+  - Access token operations
+
+**Run integration tests:**
+```bash
+# 1. Start database
+bun run dc:db
+
+# 2. Run integration tests
+bun test:integration
+
+# 3. Stop database when done
+docker compose down
+```
+
+### Test Coverage Focus
+
+**Core functionality covered by unit tests:**
+- ✅ Article CRUD business logic
+- ✅ Input validation and security
+- ✅ Authentication and authorization
+- ✅ Access token management
+- ✅ Slug generation and parsing
+
+**Verified by integration tests:**
+- ✅ Database schema and migrations
+- ✅ SQL queries and constraints
+- ✅ Transaction handling
+- ✅ Real-world CRUD workflows
+
+### When to Run Each Test Type
+
+**During Development:**
+- Run `bun test --watch` for fast feedback on logic changes
+- Run `bun test:integration` before major features
+
+**Before Committing:**
+- Run `bun run precommit` which includes all unit tests
+
+**CI/CD Pipeline:**
+- Unit tests run automatically (no database required)
+- Integration tests run in environments with PostgreSQL
+
+### Writing New Tests
+
+**Unit tests** for:
+- Pure functions (parsing, validation, utilities)
+- Business logic with mockable dependencies
+- API/MCP handlers with mocked services
+
+**Integration tests** for:
+- Database schema changes
+- Complex SQL queries
+- End-to-end workflows requiring database
 
 ## Code Style & Conventions
 - **Runtime**: Bun (`bun run`). ESM only (`"type": "module"`).

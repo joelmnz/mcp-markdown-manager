@@ -1,20 +1,40 @@
 import { afterEach, expect, beforeAll } from "bun:test";
-import { cleanup } from "@testing-library/react";
-import * as matchers from "@testing-library/jest-dom/matchers";
-import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
-beforeAll(() => {
-  GlobalRegistrator.register();
-  
-  if (typeof document !== 'undefined' && !document.body) {
-    document.body = document.createElement('body');
-  }
-});
+// Only import React testing utilities if available
+let cleanup: (() => void) | undefined;
+try {
+  const testingLibrary = await import("@testing-library/react");
+  cleanup = testingLibrary.cleanup;
+} catch {
+  // @testing-library/react not needed for all tests
+}
 
-expect.extend(matchers);
+// Only extend with matchers if available
+try {
+  const matchers = await import("@testing-library/jest-dom/matchers");
+  expect.extend(matchers);
+} catch {
+  // jest-dom matchers not needed for all tests
+}
+
+// Only register happy-dom for browser-like tests
+try {
+  const { GlobalRegistrator } = await import("@happy-dom/global-registrator");
+  beforeAll(() => {
+    GlobalRegistrator.register();
+
+    if (typeof document !== 'undefined' && !document.body) {
+      document.body = document.createElement('body');
+    }
+  });
+} catch {
+  // happy-dom not needed for all tests
+}
 
 afterEach(() => {
-  cleanup();
+  if (cleanup) {
+    cleanup();
+  }
 });
 
 if (typeof window !== 'undefined') {
