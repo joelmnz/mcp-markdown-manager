@@ -9,6 +9,7 @@ import { ArticleEdit } from './pages/ArticleEdit';
 import { RAGStatus } from './pages/RAGStatus';
 import { ImportFiles } from './pages/ImportFiles';
 import { Settings } from './pages/Settings';
+import { AdminImages } from './pages/AdminImages';
 import { PublicArticleView } from './components/PublicArticleView';
 import {
   initializeRuntimeConfig,
@@ -35,6 +36,7 @@ type Route =
   | { type: 'rag-status' }
   | { type: 'import-files' }
   | { type: 'settings' }
+  | { type: 'admin-images' }
   | { type: 'public-article'; slug: string };
 
 function App() {
@@ -211,6 +213,10 @@ function App() {
 
     if (normalizedPath === '/settings') {
       return { type: 'settings' };
+    }
+
+    if (normalizedPath === '/admin/images') {
+      return { type: 'admin-images' };
     }
 
     if (normalizedPath.startsWith('/public-article/')) {
@@ -391,6 +397,9 @@ function App() {
         )}
         {route.type === 'settings' && (
           <Settings authToken={token} onNavigate={navigate} />
+        )}
+        {route.type === 'admin-images' && (
+            <AdminImages token={token} />
         )}
         {route.type === 'article' && (
           <ArticleView filename={route.filename} token={token} onNavigate={navigate} />

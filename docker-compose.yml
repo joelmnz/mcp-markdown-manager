@@ -54,8 +54,10 @@ services:
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-nomic-embed-text}
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - IMAGES_DIR=/images
     volumes:
       - ./data:/data
+      - ./images:/images
     depends_on:
       postgres:
         condition: service_healthy

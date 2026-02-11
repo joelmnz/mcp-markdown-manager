@@ -5,6 +5,7 @@ import { databaseHealthService } from './services/databaseHealth.js';
 import { basePathService } from './services/basePath.js';
 import { backgroundWorkerService } from './services/backgroundWorker.js';
 import { embeddingQueueConfigService } from './services/embeddingQueueConfig.js';
+import { imageService } from './services/images.js';
 import { parseEnvInt } from './utils/config';
 import { generateNonce, addSecurityHeaders } from './middleware/security.js';
 
@@ -140,6 +141,9 @@ async function generateManifest(config: any): Promise<string> {
 
 // Initialize database before starting server
 await initializeDatabase();
+
+// Initialize image directory
+await imageService.ensureImageDir();
 
 // Initialize background worker for embedding queue
 async function initializeBackgroundWorker() {

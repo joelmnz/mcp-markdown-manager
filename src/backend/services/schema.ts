@@ -21,6 +21,7 @@ export class SchemaService {
       await this.createEmbeddingTasksTable();
       await this.createEmbeddingWorkerStatusTable();
       await this.createAccessTokensTable();
+      await this.createImagesTable();
 
       // Update schema with new columns
       await this.addNoRagColumn();
@@ -268,6 +269,26 @@ export class SchemaService {
   }
 
   /**
+   * Create the images table
+   */
+  private async createImagesTable(): Promise<void> {
+    const createTableSQL = `
+      CREATE TABLE IF NOT EXISTS images (
+        id SERIAL PRIMARY KEY,
+        filename VARCHAR(255) UNIQUE NOT NULL,
+        original_name VARCHAR(255) NOT NULL,
+        mime_type VARCHAR(100) NOT NULL,
+        size BIGINT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        created_by VARCHAR(255)
+      )
+    `;
+
+    await database.query(createTableSQL);
+    console.log('Images table created/verified');
+  }
+
+  /**
    * Create database indexes for performance
    */
   private async createIndexes(): Promise<void> {
@@ -298,6 +319,10 @@ export class SchemaService {
 
       // Access tokens indexes
       'CREATE INDEX IF NOT EXISTS idx_access_tokens_token ON access_tokens(token)',
+
+      // Images indexes
+      'CREATE INDEX IF NOT EXISTS idx_images_created_at ON images(created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_images_filename ON images(filename)',
     ];
 
     // Add vector index if extension is available
@@ -343,7 +368,7 @@ export class SchemaService {
         AND table_name IN ('articles', 'article_history', 'embeddings', 'embedding_tasks', 'embedding_worker_status', 'access_tokens')
       `);
 
-      const expectedTables = ['articles', 'article_history', 'embeddings', 'embedding_tasks', 'embedding_worker_status', 'access_tokens'];
+      const expectedTables = ['articles', 'article_history', 'embeddings', 'embedding_tasks', 'embedding_worker_status', 'access_tokens', 'images'];
       const existingTables = tableCheck.rows.map(row => row.table_name);
       
       const allTablesExist = expectedTables.every(table => existingTables.includes(table));
