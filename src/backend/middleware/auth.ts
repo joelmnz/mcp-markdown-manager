@@ -1,10 +1,14 @@
 import { validateAccessToken, hasPermission, getTokenNameById, type TokenScope } from '../services/accessTokens.js';
+import { timingSafeEqual } from 'node:crypto';
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 
 if (!AUTH_TOKEN) {
   throw new Error('AUTH_TOKEN environment variable is required');
 }
+
+// Cache buffer for constant-time comparison
+const AUTH_TOKEN_BUFFER = Buffer.from(AUTH_TOKEN);
 
 export interface AuthContext {
   scope: TokenScope;
@@ -37,7 +41,15 @@ export function authenticateWeb(request: Request): boolean {
     return false;
   }
 
-  return token === AUTH_TOKEN;
+  // Use timingSafeEqual to prevent timing attacks
+  // AUTH_TOKEN_BUFFER is guaranteed to be defined by the check at the top of the file
+  const tokenBuffer = Buffer.from(token);
+
+  if (tokenBuffer.length !== AUTH_TOKEN_BUFFER.length) {
+    return false;
+  }
+
+  return timingSafeEqual(tokenBuffer, AUTH_TOKEN_BUFFER);
 }
 
 /**
