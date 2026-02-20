@@ -1,10 +1,14 @@
 import { validateAccessToken, hasPermission, getTokenNameById, type TokenScope } from '../services/accessTokens.js';
+import { timingSafeEqual } from 'node:crypto';
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 
 if (!AUTH_TOKEN) {
   throw new Error('AUTH_TOKEN environment variable is required');
 }
+
+// Pre-compute buffer for constant-time comparison to avoid overhead on every request
+const AUTH_TOKEN_BUFFER = Buffer.from(AUTH_TOKEN);
 
 export interface AuthContext {
   scope: TokenScope;
@@ -37,7 +41,24 @@ export function authenticateWeb(request: Request): boolean {
     return false;
   }
 
-  return token === AUTH_TOKEN;
+  // Use timingSafeEqual to prevent timing attacks
+  try {
+    const tokenBuffer = Buffer.from(token);
+
+    // Timing attack prevention: Check lengths first
+    // If lengths differ, we still want to avoid immediate return if possible to mask length?
+    // Actually, checking length first is standard practice as timingSafeEqual throws if lengths differ.
+    // Length leakage is usually considered acceptable or unavoidable for variable length tokens,
+    // but AUTH_TOKEN is fixed for a deployment.
+    if (tokenBuffer.length !== AUTH_TOKEN_BUFFER.length) {
+      return false;
+    }
+
+    return timingSafeEqual(tokenBuffer, AUTH_TOKEN_BUFFER);
+  } catch (error) {
+    console.error('Error during token comparison:', error);
+    return false;
+  }
 }
 
 /**
