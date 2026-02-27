@@ -61,6 +61,48 @@ function isExternalUrl(url: string): boolean {
   return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('//');
 }
 
+const PreBlock = ({ children, ...props }: React.DetailedHTMLProps<React.HTMLAttributes<HTMLPreElement>, HTMLPreElement>) => {
+  const [copied, setCopied] = React.useState(false);
+  const preRef = React.useRef<HTMLPreElement>(null);
+
+  // Check if child is MermaidDiagram to avoid double copy buttons
+  const child = React.Children.toArray(children)[0];
+  const isMermaid = React.isValidElement(child) && child.type === MermaidDiagram;
+
+  if (isMermaid) {
+    return <pre {...props}>{children}</pre>;
+  }
+
+  const handleCopy = async () => {
+    if (!preRef.current) return;
+
+    const text = preRef.current.textContent || '';
+    if (text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      } catch (err) {
+        console.error('Failed to copy code:', err);
+      }
+    }
+  };
+
+  return (
+    <div className="code-block-wrapper" style={{ position: 'relative', marginBottom: '1rem' }}>
+      <button
+        onClick={handleCopy}
+        className="copy-code-button"
+        aria-label={copied ? "Copied" : "Copy code"}
+        title="Copy code"
+      >
+        {copied ? '✓' : '📋'}
+      </button>
+      <pre ref={preRef} {...props} style={{ marginBottom: 0 }}>{children}</pre>
+    </div>
+  );
+};
+
 /**
  * Reusable component for rendering markdown with Mermaid diagram support
  */
@@ -109,7 +151,8 @@ export function MarkdownView({ content }: MarkdownViewProps) {
               {children}
             </code>
           );
-        }
+        },
+        pre: PreBlock
       }}
     >
       {content}
