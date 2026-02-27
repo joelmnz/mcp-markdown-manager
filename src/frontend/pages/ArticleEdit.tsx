@@ -277,8 +277,9 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
 
       <div className="edit-metadata-row">
         <div className="edit-metadata-item">
-          <label className="edit-label">Title</label>
+          <label htmlFor="article-title" className="edit-label">Title</label>
           <input
+            id="article-title"
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -288,8 +289,9 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         </div>
 
         <div className="edit-metadata-item">
-          <label className="edit-label">Folder</label>
+          <label htmlFor="article-folder" className="edit-label">Folder</label>
           <input
+            id="article-folder"
             type="text"
             value={folder}
             onChange={(e) => setFolder(e.target.value)}
@@ -374,8 +376,9 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
 
       <div className={`edit-container ${!showPreview ? 'preview-hidden' : ''}`}>
         <div className="edit-section">
-          <label className="edit-label">Content (Markdown)</label>
+          <label htmlFor="article-content" className="edit-label">Content (Markdown)</label>
           <textarea
+            id="article-content"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder="Write your article in markdown..."
