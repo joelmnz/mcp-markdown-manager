@@ -7,6 +7,7 @@ import { backgroundWorkerService } from './services/backgroundWorker.js';
 import { embeddingQueueConfigService } from './services/embeddingQueueConfig.js';
 import { parseEnvInt } from './utils/config';
 import { generateNonce, addSecurityHeaders } from './middleware/security.js';
+import { resolve, join, sep } from 'path';
 
 
 const PORT = parseEnvInt(process.env.PORT, 5000, 'PORT');
@@ -319,7 +320,20 @@ const server = Bun.serve({
     // Serve index.html for all non-API routes (SPA routing)
     if (!routePath.startsWith('/api/') && !routePath.startsWith('/mcp')) {
       const filePath = routePath === '/' ? '/index.html' : routePath;
-      const file = Bun.file(publicDir + filePath);
+
+      // Prevent path traversal
+      const resolvedPublicDir = resolve(publicDir);
+      const targetPath = join(resolvedPublicDir, filePath);
+
+      // Ensure the target path is within the public directory
+      // Strict check: must start with public dir + separator to avoid partial matching (e.g. /public-secret)
+      // Exception: if targetPath equals resolvedPublicDir exactly (root access), though filePath usually starts with /
+      if (!targetPath.startsWith(resolvedPublicDir + sep) && targetPath !== resolvedPublicDir) {
+        logRequest(403);
+        return addSecurityHeaders(new Response('Forbidden', { status: 403 }), nonce);
+      }
+
+      const file = Bun.file(targetPath);
 
       if (await file.exists()) {
         // Set proper MIME type for all files
