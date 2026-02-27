@@ -7,6 +7,41 @@ interface HeaderProps {
   onNavigate: (path: string) => void;
 }
 
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="icon-button"
+      style={{
+        position: 'absolute',
+        top: '0.5rem',
+        right: '0.5rem',
+        backgroundColor: 'var(--bg-tertiary)',
+        border: '1px solid var(--border-color)',
+        padding: '0.25rem 0.5rem',
+        fontSize: '1rem',
+        opacity: 0.8
+      }}
+      title={copied ? "Copied!" : "Copy to clipboard"}
+      aria-label={copied ? "Copied" : "Copy to clipboard"}
+    >
+      {copied ? '✅' : '📋'}
+    </button>
+  );
+}
+
 export function Header({ theme, onThemeToggle, onLogout, onNavigate }: HeaderProps) {
   const [showInfo, setShowInfo] = useState(false);
   const apiBaseUrl = window.location.origin;
@@ -106,12 +141,14 @@ export function Header({ theme, onThemeToggle, onLogout, onNavigate }: HeaderPro
                 <p>Connect AI agents using the Model Context Protocol (Streamable HTTP):</p>
                 
                 <p><strong>For <a href="https://github.com/agent0ai/agent-zero">Agent Zero</a>:</strong></p>
-                <div className="info-code">
+                <div className="info-code" style={{ position: 'relative' }}>
+                  <CopyButton text={JSON.stringify(mcpConfigAgentZero, null, 2)} />
                   <pre>{JSON.stringify(mcpConfigAgentZero, null, 2)}</pre>
                 </div>
                 
                 <p><strong>For <a href="https://code.visualstudio.com/docs/copilot/customization/mcp-servers">VS Code</a>:</strong></p>
-                <div className="info-code">
+                <div className="info-code" style={{ position: 'relative' }}>
+                  <CopyButton text={JSON.stringify(mcpConfigVSCode, null, 2)} />
                   <pre>{JSON.stringify(mcpConfigVSCode, null, 2)}</pre>
                 </div>
                 
@@ -181,7 +218,8 @@ export function Header({ theme, onThemeToggle, onLogout, onNavigate }: HeaderPro
               <section className="info-section">
                 <h3>🔐 Authentication</h3>
                 <p>All endpoints require Bearer token authentication:</p>
-                <div className="info-code">
+                <div className="info-code" style={{ position: 'relative' }}>
+                  <CopyButton text="Authorization: Bearer YOUR_AUTH_TOKEN" />
                   <pre>Authorization: Bearer YOUR_AUTH_TOKEN</pre>
                 </div>
               </section>
@@ -191,7 +229,11 @@ export function Header({ theme, onThemeToggle, onLogout, onNavigate }: HeaderPro
                 <h3>📝 Request Examples</h3>
                 <div className="example-block">
                   <h4>Create Article (REST)</h4>
-                  <div className="info-code">
+                  <div className="info-code" style={{ position: 'relative' }}>
+                    <CopyButton text={`curl -X POST ${apiBaseUrl}/api/articles \\
+  -H "Authorization: Bearer YOUR_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"title":"New Article","content":"# Content"}'`} />
                     <pre>{`curl -X POST ${apiBaseUrl}/api/articles \\
   -H "Authorization: Bearer YOUR_TOKEN" \\
   -H "Content-Type: application/json" \\
@@ -200,7 +242,14 @@ export function Header({ theme, onThemeToggle, onLogout, onNavigate }: HeaderPro
                 </div>
                 <div className="example-block">
                   <h4>List Articles (MCP)</h4>
-                  <div className="info-code">
+                  <div className="info-code" style={{ position: 'relative' }}>
+                    <CopyButton text={`{
+  "method": "tools/call",
+  "params": {
+    "name": "listArticles",
+    "arguments": {}
+  }
+}`} />
                     <pre>{`{
   "method": "tools/call",
   "params": {
