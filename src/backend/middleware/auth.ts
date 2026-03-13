@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { validateAccessToken, hasPermission, getTokenNameById, type TokenScope } from '../services/accessTokens.js';
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
@@ -37,7 +38,20 @@ export function authenticateWeb(request: Request): boolean {
     return false;
   }
 
-  return token === AUTH_TOKEN;
+  try {
+    const a = Buffer.from(token, 'utf8');
+    const b = Buffer.from(AUTH_TOKEN!, 'utf8');
+    if (a.length !== b.length) {
+      // Prevent timing attacks by returning false when lengths don't match,
+      // but do a dummy comparison to avoid a length-based timing leak.
+      // timingSafeEqual throws if lengths are different.
+      timingSafeEqual(b, b);
+      return false;
+    }
+    return timingSafeEqual(a, b);
+  } catch (error) {
+    return false;
+  }
 }
 
 /**
