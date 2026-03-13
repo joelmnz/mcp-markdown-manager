@@ -8,6 +8,7 @@ interface Article {
   filename: string;
   title: string;
   content: string;
+  notes?: string;
   created: string;
   isPublic: boolean;
   modifiedBy?: string;
@@ -360,6 +361,14 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
         <div className="markdown-content">
           <MarkdownView content={article.content} />
         </div>
+        {!isViewingHistory && article.notes?.trim() && (
+          <>
+            <h2 style={{ marginTop: '2rem' }}>Notes</h2>
+            <div className="markdown-content">
+              <MarkdownView content={article.notes} />
+            </div>
+          </>
+        )}
       </article>
     </div>
   );

@@ -17,6 +17,11 @@ interface TestCase {
   expectedUrlPrefix: string;
 }
 
+interface RequestExpectation {
+  expectedUrl: string;
+  expectedBody?: Record<string, unknown>;
+}
+
 const testCases: TestCase[] = [
   {
     name: 'Root path deployment',
@@ -86,10 +91,20 @@ async function testApiClientConfiguration() {
       console.log(`  🔧 Configuration: baseUrl="${testCase.baseUrl}", apiBaseUrl="${testCase.apiBaseUrl}"`);
       
       // Test different HTTP methods
-      const testEndpoints = [
+      const testEndpoints: Array<{ method: 'GET' | 'POST' | 'PUT' | 'DELETE'; endpoint: string } & RequestExpectation> = [
         { method: 'GET', endpoint: '/api/articles', expectedUrl: `${testCase.expectedUrlPrefix}/articles` },
-        { method: 'POST', endpoint: '/api/articles', expectedUrl: `${testCase.expectedUrlPrefix}/articles` },
-        { method: 'PUT', endpoint: '/api/articles/test.md', expectedUrl: `${testCase.expectedUrlPrefix}/articles/test.md` },
+        {
+          method: 'POST',
+          endpoint: '/api/articles',
+          expectedUrl: `${testCase.expectedUrlPrefix}/articles`,
+          expectedBody: { title: 'Test Article', content: '# Heading', notes: 'Test notes' }
+        },
+        {
+          method: 'PUT',
+          endpoint: '/api/articles/test.md',
+          expectedUrl: `${testCase.expectedUrlPrefix}/articles/test.md`,
+          expectedBody: { title: 'Updated Article', content: '# Updated', notes: 'Updated notes' }
+        },
         { method: 'DELETE', endpoint: '/api/articles/test.md', expectedUrl: `${testCase.expectedUrlPrefix}/articles/test.md` }
       ];
       
@@ -100,8 +115,10 @@ async function testApiClientConfiguration() {
         
         // Capture the actual URL that would be called
         let capturedUrl = '';
+        let capturedBody: unknown;
         (global as any).fetch = (url: string, options?: RequestInit) => {
           capturedUrl = url;
+          capturedBody = options?.body ? JSON.parse(String(options.body)) : undefined;
           return mockFetch(url, options);
         };
         
@@ -112,10 +129,10 @@ async function testApiClientConfiguration() {
               await apiClient.get(test.endpoint, 'test-token');
               break;
             case 'POST':
-              await apiClient.post(test.endpoint, { test: 'data' }, 'test-token');
+              await apiClient.post(test.endpoint, test.expectedBody, 'test-token');
               break;
             case 'PUT':
-              await apiClient.put(test.endpoint, { test: 'data' }, 'test-token');
+              await apiClient.put(test.endpoint, test.expectedBody, 'test-token');
               break;
             case 'DELETE':
               await apiClient.delete(test.endpoint, 'test-token');
@@ -129,6 +146,18 @@ async function testApiClientConfiguration() {
             console.log(`    ❌ ${test.method} URL incorrect: expected "${test.expectedUrl}", got "${capturedUrl}"`);
             testCasePassed = false;
             allTestsPassed = false;
+          }
+
+          if (test.expectedBody) {
+            const expectedBody = JSON.stringify(test.expectedBody);
+            const actualBody = JSON.stringify(capturedBody);
+            if (actualBody === expectedBody) {
+              console.log(`    ✅ ${test.method} body preserved notes payload`);
+            } else {
+              console.log(`    ❌ ${test.method} body incorrect: expected "${expectedBody}", got "${actualBody}"`);
+              testCasePassed = false;
+              allTestsPassed = false;
+            }
           }
         } catch (error) {
           console.log(`    ❌ ${test.method} failed with error: ${error}`);

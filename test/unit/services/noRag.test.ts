@@ -68,7 +68,7 @@ describe("Article Service - No RAG", () => {
 
     await createArticle('Test Article', 'Content', '', undefined, undefined, undefined, true);
 
-    expect(mockDatabaseArticleService.createArticle).toHaveBeenCalledWith('Test Article', 'Content', '', undefined, undefined, true);
+    expect(mockDatabaseArticleService.createArticle).toHaveBeenCalledWith('Test Article', 'Content', '', undefined, undefined, true, undefined);
     expect(mockEmbeddingQueueService.enqueueTask).not.toHaveBeenCalled();
   });
 
@@ -79,7 +79,7 @@ describe("Article Service - No RAG", () => {
 
     await createArticle('Test Article', 'Content', '', undefined, undefined, undefined, false);
 
-    expect(mockDatabaseArticleService.createArticle).toHaveBeenCalledWith('Test Article', 'Content', '', undefined, undefined, false);
+    expect(mockDatabaseArticleService.createArticle).toHaveBeenCalledWith('Test Article', 'Content', '', undefined, undefined, false, undefined);
     expect(mockEmbeddingQueueService.enqueueTask).toHaveBeenCalled();
   });
 
@@ -106,13 +106,13 @@ describe("Article Service - No RAG", () => {
 
   test("updateArticle should update embeddings when noRag is false", async () => {
       const existingArticle = { slug: 'test-article', title: 'Test Article', content: 'Content', folder: '', created: new Date().toISOString(), isPublic: false, noRag: false };
-      const updatedArticle = { ...existingArticle, noRag: false };
+      const updatedArticle = { ...existingArticle, content: 'Updated content', noRag: false };
 
       mockDatabaseArticleService.readArticle.mockResolvedValue(existingArticle);
       mockDatabaseArticleService.updateArticle.mockResolvedValue(updatedArticle);
       mockDatabaseArticleService.getArticleId.mockResolvedValue(1);
 
-      await updateArticle('test-article.md', 'Test Article', 'Content', '', undefined, undefined, undefined, false);
+      await updateArticle('test-article.md', 'Test Article', 'Updated content', '', undefined, undefined, undefined, false);
 
       expect(mockEmbeddingQueueService.enqueueTask).toHaveBeenCalledWith(expect.objectContaining({
           operation: 'update'

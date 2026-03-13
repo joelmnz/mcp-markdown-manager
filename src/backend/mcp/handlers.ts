@@ -16,6 +16,7 @@ import {
   validateQuery,
   validateArray,
   validateNumber,
+  validateNotes,
 } from './validation';
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
@@ -250,7 +251,7 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
   },
 
   createArticle: async (args, context) => {
-    const { title, content, folder } = args as { title: string; content: string; folder?: string };
+    const { title, content, folder, notes } = args as { title: string; content: string; folder?: string; notes?: string };
     
     // Validate title
     const titleValidation = validateTitle(title);
@@ -273,6 +274,11 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
       }
       sanitizedFolder = folderValidation.sanitized;
     }
+
+    const notesValidation = validateNotes(notes);
+    if (!notesValidation.valid) {
+      throw new Error(notesValidation.error);
+    }
     
     const article = await createArticle(
       titleValidation.sanitized!,
@@ -280,7 +286,9 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
       sanitizedFolder,
       undefined,
       { embeddingPriority: 'normal' },
-      context?.tokenName
+      context?.tokenName,
+      false,
+      notesValidation.sanitized
     );
     return {
       content: [{ type: 'text', text: JSON.stringify(article, null, 2) }],
@@ -288,7 +296,7 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
   },
 
   updateArticle: async (args, context) => {
-    const { filename, title, content, folder } = args as { filename: string; title: string; content: string; folder?: string };
+    const { filename, title, content, folder, notes } = args as { filename: string; title: string; content: string; folder?: string; notes?: string };
     
     // Validate filename
     const filenameValidation = validateFilename(filename);
@@ -317,6 +325,11 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
       }
       sanitizedFolder = folderValidation.sanitized;
     }
+
+    const notesValidation = validateNotes(notes);
+    if (!notesValidation.valid) {
+      throw new Error(notesValidation.error);
+    }
     
     const article = await updateArticle(
       filenameValidation.sanitized!,
@@ -325,7 +338,9 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
       sanitizedFolder,
       undefined,
       { embeddingPriority: 'normal' },
-      context?.tokenName
+      context?.tokenName,
+      undefined,
+      notesValidation.sanitized
     );
     return {
       content: [{ type: 'text', text: JSON.stringify(article, null, 2) }],
