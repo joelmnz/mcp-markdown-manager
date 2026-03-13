@@ -17,6 +17,7 @@ export interface ValidationResult {
 // Security limits configuration
 const MAX_TITLE_LENGTH = 500;
 const MAX_CONTENT_LENGTH = 10 * 1024 * 1024; // 10MB
+const MAX_NOTES_LENGTH = 10 * 1024 * 1024; // 10MB
 const MAX_FILENAME_LENGTH = 255;
 const MAX_FOLDER_PATH_LENGTH = 1000;
 const MAX_QUERY_LENGTH = 1000;
@@ -158,6 +159,18 @@ export function validateContent(content: any): ValidationResult {
     maxLength: MAX_CONTENT_LENGTH,
     minLength: 1,
     checkDangerous: false, // Content can contain code, markdown, etc.
+  });
+}
+
+/**
+ * Validate article notes
+ */
+export function validateNotes(notes: any): ValidationResult {
+  return validateString(notes, 'notes', {
+    required: false,
+    maxLength: MAX_NOTES_LENGTH,
+    allowEmpty: true,
+    checkDangerous: false,
   });
 }
 

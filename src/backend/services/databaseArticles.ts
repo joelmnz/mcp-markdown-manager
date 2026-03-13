@@ -15,6 +15,7 @@ export interface DatabaseArticle {
   title: string;
   slug: string;
   content: string;
+  notes?: string;
   folder: string;
   isPublic: boolean;
   noRag: boolean;
@@ -29,6 +30,7 @@ export interface Article {
   slug: string;
   title: string;
   content: string;
+  notes?: string;
   folder: string;
   created: string;
   isPublic: boolean;
@@ -39,6 +41,7 @@ export interface Article {
 export interface ArticleMetadata {
   slug: string;
   title: string;
+  notes?: string;
   folder: string;
   created: string;
   modified: string;
@@ -98,6 +101,7 @@ export class DatabaseArticleService {
       slug: row.slug,
       title: row.title,
       content: row.content,
+      notes: row.notes ?? undefined,
       folder: row.folder,
       created: row.created_at.toISOString(),
       isPublic: row.is_public,
@@ -113,6 +117,7 @@ export class DatabaseArticleService {
     return {
       slug: row.slug,
       title: row.title,
+      notes: row.notes ?? undefined,
       folder: row.folder,
       created: row.created_at.toISOString(),
       modified: row.updated_at.toISOString(),
@@ -129,6 +134,7 @@ export class DatabaseArticleService {
     try {
       let query = `
         SELECT slug, title, folder, is_public, no_rag, created_at, updated_at, updated_by
+               , notes
         FROM articles
       `;
       const params: any[] = [];
@@ -175,6 +181,7 @@ export class DatabaseArticleService {
   async searchArticles(query: string, folder?: string): Promise<ArticleMetadata[]> {
     let sql = `
       SELECT slug, title, folder, is_public, no_rag, created_at, updated_at, updated_by
+             , notes
       FROM articles
       WHERE title ILIKE $1
     `;
@@ -277,7 +284,8 @@ export class DatabaseArticleService {
     folder?: string,
     message?: string,
     createdBy?: string,
-    noRag: boolean = false
+    noRag: boolean = false,
+    notes?: string
   ): Promise<Article> {
     try {
       const normalizedFolder = this.normalizeFolder(folder);
@@ -294,10 +302,10 @@ export class DatabaseArticleService {
       const now = new Date();
 
       const result = await database.query(
-        `INSERT INTO articles (title, slug, content, folder, is_public, no_rag, created_at, updated_at, created_by, updated_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `INSERT INTO articles (title, slug, content, notes, folder, is_public, no_rag, created_at, updated_at, created_by, updated_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          RETURNING *`,
-        [title.trim(), slug, content.trim(), normalizedFolder, false, noRag, now, now, createdBy || null, createdBy || null]
+        [title.trim(), slug, content.trim(), notes ?? null, normalizedFolder, false, noRag, now, now, createdBy || null, createdBy || null]
       );
 
       return this.dbRowToArticle(result.rows[0]);
@@ -321,7 +329,8 @@ export class DatabaseArticleService {
     folder?: string,
     message?: string,
     updatedBy?: string,
-    noRag?: boolean
+    noRag?: boolean,
+    notes?: string
   ): Promise<Article> {
     // Validate inputs
     if (!title || title.trim().length === 0) {
@@ -364,13 +373,14 @@ export class DatabaseArticleService {
 
     // Determine no_rag value
     const newNoRag = noRag !== undefined ? noRag : existingRow.no_rag;
+    const newNotes = notes !== undefined ? notes : existingRow.notes;
 
     const result = await database.query(
       `UPDATE articles 
-       SET title = $1, slug = $2, content = $3, folder = $4, updated_at = $5, updated_by = $6, no_rag = $7
-       WHERE id = $8
+       SET title = $1, slug = $2, content = $3, folder = $4, updated_at = $5, updated_by = $6, no_rag = $7, notes = $8
+       WHERE id = $9
        RETURNING *`,
-      [title, newSlug, content, normalizedFolder, updatedAt, updatedBy || null, newNoRag, articleId]
+      [title, newSlug, content, normalizedFolder, updatedAt, updatedBy || null, newNoRag, newNotes ?? null, articleId]
     );
 
     if (result.rows.length === 0) {
@@ -499,6 +509,7 @@ export class DatabaseArticleService {
       // Include articles in subfolders using ILIKE pattern for case-insensitivity
       query = `
         SELECT slug, title, folder, is_public, no_rag, created_at, updated_at
+               , notes
         FROM articles
         WHERE folder ILIKE $1
         ORDER BY updated_at DESC
@@ -508,6 +519,7 @@ export class DatabaseArticleService {
       // Exact folder match (case-insensitive)
       query = `
         SELECT slug, title, folder, is_public, no_rag, created_at, updated_at
+               , notes
         FROM articles
         WHERE folder ILIKE $1
         ORDER BY updated_at DESC

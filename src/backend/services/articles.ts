@@ -10,6 +10,7 @@ export interface Article {
   filename: string;  // Will be slug + '.md' for compatibility
   title: string;
   content: string;
+  notes?: string;
   folder?: string;
   created: string;
   isPublic: boolean;
@@ -20,6 +21,7 @@ export interface Article {
 export interface ArticleMetadata {
   filename: string;  // Will be slug + '.md' for compatibility
   title: string;
+  notes?: string;
   folder?: string;
   created: string;
   modified: string;
@@ -109,6 +111,7 @@ function convertToLegacyArticle(dbArticle: any): Article {
     filename: slugToFilename(dbArticle.slug),
     title: dbArticle.title,
     content: dbArticle.content,
+    notes: dbArticle.notes,
     folder: dbArticle.folder,
     created: dbArticle.created,
     isPublic: dbArticle.isPublic,
@@ -122,6 +125,7 @@ function convertToLegacyMetadata(dbMetadata: any): ArticleMetadata {
   return {
     filename: slugToFilename(dbMetadata.slug),
     title: dbMetadata.title,
+    notes: dbMetadata.notes,
     folder: dbMetadata.folder,
     created: dbMetadata.created,
     modified: dbMetadata.modified,
@@ -224,11 +228,11 @@ export async function readArticle(filename: string): Promise<Article | null> {
 }
 
 // Create a new article
-export async function createArticle(title: string, content: string, folder: string = '', message?: string, options?: ArticleServiceOptions, createdBy?: string, noRag: boolean = false): Promise<Article> {
+export async function createArticle(title: string, content: string, folder: string = '', message?: string, options?: ArticleServiceOptions, createdBy?: string, noRag: boolean = false, notes?: string): Promise<Article> {
   const cleanedContent = cleanMarkdownContent(content);
 
   // Create article in database first (ensures article persistence precedes task queuing)
-  const dbArticle = await databaseArticleService.createArticle(title, cleanedContent, folder, message, createdBy, noRag);
+  const dbArticle = await databaseArticleService.createArticle(title, cleanedContent, folder, message, createdBy, noRag, notes);
 
   // Create initial version snapshot
   const filename = slugToFilename(dbArticle.slug);
@@ -264,7 +268,7 @@ export async function createArticle(title: string, content: string, folder: stri
 }
 
 // Update an existing article
-export async function updateArticle(filename: string, title: string, content: string, folder?: string, message?: string, options?: ArticleServiceOptions, updatedBy?: string, noRag?: boolean): Promise<Article> {
+export async function updateArticle(filename: string, title: string, content: string, folder?: string, message?: string, options?: ArticleServiceOptions, updatedBy?: string, noRag?: boolean, notes?: string): Promise<Article> {
   const cleanedContent = cleanMarkdownContent(content);
   const slug = filenameToSlug(filename);
 
@@ -276,17 +280,24 @@ export async function updateArticle(filename: string, title: string, content: st
 
   // Use existing folder if not provided
   const targetFolder = folder !== undefined ? folder : existing.folder;
+  const nextNoRag = noRag !== undefined ? noRag : existing.noRag;
+  const noRagChanged = nextNoRag !== existing.noRag;
+  const affectsVersionedContent =
+    title !== existing.title ||
+    cleanedContent !== existing.content ||
+    targetFolder !== existing.folder;
 
   // Update article in database first (this handles slug changes automatically)
-  const updatedArticle = await databaseArticleService.updateArticle(slug, title, cleanedContent, targetFolder, message, updatedBy, noRag);
+  const updatedArticle = await databaseArticleService.updateArticle(slug, title, cleanedContent, targetFolder, message, updatedBy, noRag, notes);
 
-  // Create version snapshot
   const newFilename = slugToFilename(updatedArticle.slug);
-  await createVersionSnapshot(newFilename, title, cleanedContent, targetFolder, message || 'Updated article');
+  if (affectsVersionedContent) {
+    await createVersionSnapshot(newFilename, title, cleanedContent, targetFolder, message || 'Updated article');
+  }
 
   // Handle embedding updates with failure isolation
-  if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding) {
-    const isNoRag = noRag !== undefined ? noRag : existing.noRag;
+  if (isBackgroundEmbeddingEnabled() && !options?.skipEmbedding && (affectsVersionedContent || noRagChanged)) {
+    const isNoRag = nextNoRag;
     const wasNoRag = existing.noRag;
 
     if (isNoRag && !wasNoRag) {

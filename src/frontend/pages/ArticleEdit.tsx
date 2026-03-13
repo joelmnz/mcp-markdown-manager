@@ -23,6 +23,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [notes, setNotes] = useState('');
   const [folder, setFolder] = useState(getInitialFolder());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -51,6 +52,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
         const data = await response.json();
         setTitle(data.title);
         setContent(data.content);
+        setNotes(data.notes || '');
         setFolder(data.folder || '');
         setIsPublic(data.isPublic || false);
         setNoRag(data.noRag || false);
@@ -75,7 +77,7 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
       setError('');
 
       const url = isNew ? '/api/articles' : `/api/articles/${filename}.md`;
-      const data = { title, content, folder, noRag };
+      const data = { title, content, folder, noRag, notes };
 
       const response = isNew
         ? await apiClient.post(url, data, token)
@@ -380,6 +382,14 @@ export function ArticleEdit({ filename, token, onNavigate }: ArticleEditProps) {
             onChange={(e) => setContent(e.target.value)}
             placeholder="Write your article in markdown..."
             className="edit-textarea"
+          />
+          <label className="edit-label" style={{ marginTop: '1rem' }}>Notes</label>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Add notes for this article. Markdown will render on the article page."
+            className="edit-textarea"
+            style={{ minHeight: '160px' }}
           />
         </div>
 

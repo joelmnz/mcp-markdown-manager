@@ -24,6 +24,7 @@ export class SchemaService {
 
       // Update schema with new columns
       await this.addNoRagColumn();
+      await this.addNotesColumn();
 
       // Create indexes for performance
       await this.createIndexes();
@@ -74,6 +75,7 @@ export class SchemaService {
         title VARCHAR(500) NOT NULL,
         slug VARCHAR(255) UNIQUE NOT NULL,
         content TEXT NOT NULL,
+        notes TEXT,
         folder VARCHAR(500) DEFAULT '' NOT NULL,
         is_public BOOLEAN DEFAULT FALSE NOT NULL,
         no_rag BOOLEAN DEFAULT FALSE NOT NULL,
@@ -114,6 +116,34 @@ export class SchemaService {
       }
       console.warn('Failed to add no_rag column (might already exist or permission error):', error);
       throw new Error(`Schema initialization failed: unable to add no_rag column - ${error}`);
+    }
+  }
+
+  /**
+   * Add notes column to articles table if it doesn't exist
+   */
+  private async addNotesColumn(): Promise<void> {
+    try {
+      await database.query(`
+        ALTER TABLE articles
+        ADD COLUMN IF NOT EXISTS notes TEXT
+      `);
+
+      const result = await database.query(`
+        SELECT column_name
+        FROM information_schema.columns
+        WHERE table_name = 'articles' AND column_name = 'notes'
+      `);
+
+      if (result.rows.length === 0) {
+        throw new Error('Failed to create notes column: column verification failed');
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('column verification failed')) {
+        throw error;
+      }
+      console.warn('Failed to add notes column (might already exist or permission error):', error);
+      throw new Error(`Schema initialization failed: unable to add notes column - ${error}`);
     }
   }
 
