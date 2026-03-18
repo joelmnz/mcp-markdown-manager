@@ -97,7 +97,8 @@ function injectBasePathConfig(htmlContent: string, nonce: string): string {
   // Create runtime configuration object for frontend
   const runtimeConfig = JSON.stringify({
     ...clientConfig,
-    isRoot: config.isRoot
+    isRoot: config.isRoot,
+    ttsEnabled: Boolean(process.env.KOKORO_TTS_URL?.trim())
   });
 
   return htmlContent

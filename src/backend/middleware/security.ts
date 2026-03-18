@@ -32,6 +32,7 @@ export function addSecurityHeaders(response: Response, nonce: string, isHttps: b
     `script-src 'self' 'nonce-${nonce}'`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
+    "media-src 'self' blob:",
     "connect-src 'self'",
     "font-src 'self'",
     "object-src 'none'",

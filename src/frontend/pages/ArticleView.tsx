@@ -3,6 +3,7 @@ import { MarkdownView } from '../components/MarkdownView';
 import { useFullscreen } from '../hooks/useFullscreen';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import { apiClient } from '../utils/apiClient';
+import { getRuntimeConfig } from '../utils/runtimeConfig';
 
 interface Article {
   filename: string;
@@ -38,8 +39,16 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
   const [loadingVersion, setLoadingVersion] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
+  const [copyTtsFeedback, setCopyTtsFeedback] = useState(false);
+  const [ttsLoading, setTtsLoading] = useState(false);
+  const [ttsCopying, setTtsCopying] = useState(false);
+  const [ttsError, setTtsError] = useState('');
+  const [isPlayingTts, setIsPlayingTts] = useState(false);
   const articleContentRef = useRef<HTMLElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
   const { toggleFullscreen, wakeLockActive } = useFullscreen();
+  const ttsEnabled = getRuntimeConfig().ttsEnabled;
 
   // Update document title when article is loaded
   useDocumentTitle(article?.title);
@@ -80,6 +89,20 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
     loadArticle();
     loadVersions();
   }, [filename]);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+        audioUrlRef.current = null;
+      }
+    };
+  }, []);
 
   const loadVersion = async (versionId: string, index: number) => {
     try {
@@ -215,6 +238,97 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
     }
   };
 
+  const clearAudioPlayback = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+
+    setIsPlayingTts(false);
+  };
+
+  const handleCopyForTts = async () => {
+    if (!article) return;
+
+    try {
+      setTtsCopying(true);
+      setTtsError('');
+
+      const response = await apiClient.post('/api/tts/preprocess', {
+        content: article.content
+      }, token);
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to prepare article text for TTS');
+      }
+
+      const data = await response.json();
+      await navigator.clipboard.writeText(data.text);
+      setCopyTtsFeedback(true);
+      setTimeout(() => setCopyTtsFeedback(false), 2000);
+    } catch (err) {
+      setTtsError(err instanceof Error ? err.message : 'Failed to prepare article text for TTS');
+    } finally {
+      setTtsCopying(false);
+    }
+  };
+
+  const handleStopTts = () => {
+    clearAudioPlayback();
+  };
+
+  const handleReadArticle = async () => {
+    if (!article) return;
+
+    try {
+      setTtsLoading(true);
+      setTtsError('');
+      clearAudioPlayback();
+
+      const response = await apiClient.post('/api/tts/audio', {
+        content: article.content
+      }, token);
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to generate audio');
+      }
+
+      const audioBlob = await response.blob();
+      if (!audioBlob.size) {
+        throw new Error('Speech service returned empty audio');
+      }
+
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audioUrlRef.current = audioUrl;
+      audioRef.current = audio;
+
+      audio.onended = () => {
+        clearAudioPlayback();
+      };
+
+      audio.onerror = () => {
+        setTtsError('Audio playback failed');
+        clearAudioPlayback();
+      };
+
+      await audio.play();
+      setIsPlayingTts(true);
+    } catch (err) {
+      clearAudioPlayback();
+      setTtsError(err instanceof Error ? err.message : 'Failed to play audio');
+    } finally {
+      setTtsLoading(false);
+    }
+  };
+
   const isViewingHistory = currentVersionIndex !== -1;
   const canNavigateBack = currentVersionIndex === -1 ? versions.length > 0 : currentVersionIndex < versions.length - 1;
   const canNavigateForward = currentVersionIndex > -1;
@@ -320,6 +434,34 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
             )}
           </div>
           <div className="article-meta-controls">
+            {ttsEnabled && (
+              <>
+                <button
+                  className="button button-secondary"
+                  onClick={handleCopyForTts}
+                  disabled={ttsCopying || ttsLoading}
+                  title="Copy speech-ready text"
+                >
+                  {copyTtsFeedback ? '✓ TTS Copied!' : ttsCopying ? 'Preparing...' : 'Copy for TTS'}
+                </button>
+                {isPlayingTts ? (
+                  <button
+                    className="button button-secondary"
+                    onClick={handleStopTts}
+                  >
+                    Stop
+                  </button>
+                ) : (
+                  <button
+                    className="button button-secondary"
+                    onClick={handleReadArticle}
+                    disabled={ttsLoading}
+                  >
+                    {ttsLoading ? 'Reading...' : 'Read'}
+                  </button>
+                )}
+              </>
+            )}
             {article.isPublic && !isViewingHistory && (
               <a
                 href={`/public-article/${filename}`}
@@ -351,6 +493,11 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
               )}
             </span>
           </div>
+          {ttsError && (
+            <div className="error-message" style={{ marginTop: '8px' }}>
+              {ttsError}
+            </div>
+          )}
         </div>
         {isViewingHistory && currentVersion?.message && (
           <div className="version-message">

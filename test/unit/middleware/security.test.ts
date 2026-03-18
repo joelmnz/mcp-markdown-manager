@@ -25,6 +25,7 @@ describe("Security Middleware", () => {
     expect(csp).toContain(`nonce-${nonce}`);
     expect(csp).toContain("script-src 'self' 'nonce-test-nonce-123'");
     expect(csp).toContain("style-src 'self' 'unsafe-inline'");
+    expect(csp).toContain("media-src 'self' blob:");
     expect(csp).not.toContain("upgrade-insecure-requests");
   });
 
