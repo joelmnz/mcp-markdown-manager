@@ -37,6 +37,7 @@ import { backgroundWorkerService } from '../services/backgroundWorker.js';
 import { embeddingQueueService } from '../services/embeddingQueue.js';
 import { embeddingQueueConfigService } from '../services/embeddingQueueConfig.js';
 import { importStatusService } from '../services/importStatus.js';
+import { isKokoroTtsEnabled, preprocessMarkdownForTts, synthesizeSpeechFromMarkdown } from '../services/tts';
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 
@@ -652,6 +653,78 @@ export async function handleApiRequest(request: Request): Promise<Response> {
         // List all articles
         const articles = await listArticles(folder);
         return new Response(JSON.stringify(articles), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
+    // POST /api/tts/preprocess - Convert markdown to speech-friendly text
+    if (path === '/api/tts/preprocess' && request.method === 'POST') {
+      if (!isKokoroTtsEnabled()) {
+        return new Response(JSON.stringify({ error: 'Kokoro TTS is not configured' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const body = await request.json();
+      const { content } = body;
+
+      if (typeof content !== 'string') {
+        return new Response(JSON.stringify({ error: 'content must be a string' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const text = preprocessMarkdownForTts(content);
+
+      if (!text) {
+        return new Response(JSON.stringify({ error: 'Article has no readable text for TTS' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      return new Response(JSON.stringify({ text }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // POST /api/tts/audio - Generate speech audio from markdown
+    if (path === '/api/tts/audio' && request.method === 'POST') {
+      if (!isKokoroTtsEnabled()) {
+        return new Response(JSON.stringify({ error: 'Kokoro TTS is not configured' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      const body = await request.json();
+      const { content } = body;
+
+      if (typeof content !== 'string') {
+        return new Response(JSON.stringify({ error: 'content must be a string' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      try {
+        const audioResponse = await synthesizeSpeechFromMarkdown(content);
+        const headers = new Headers();
+        headers.set('Content-Type', audioResponse.headers.get('Content-Type') || 'audio/mpeg');
+        headers.set('Cache-Control', 'no-store');
+
+        return new Response(audioResponse.body, {
+          status: 200,
+          headers
+        });
+      } catch (error) {
+        return new Response(JSON.stringify({
+          error: error instanceof Error ? error.message : 'Failed to generate speech audio'
+        }), {
+          status: 502,
           headers: { 'Content-Type': 'application/json' }
         });
       }

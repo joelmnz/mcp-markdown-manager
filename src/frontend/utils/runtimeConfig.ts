@@ -5,6 +5,7 @@ export interface RuntimeConfig {
   baseUrl: string;
   apiBaseUrl: string;
   mcpBaseUrl: string;
+  ttsEnabled: boolean;
 }
 
 /**
@@ -22,7 +23,8 @@ interface ConfigValidationResult {
 const DEFAULT_CONFIG: RuntimeConfig = {
   baseUrl: '',
   apiBaseUrl: '',
-  mcpBaseUrl: ''
+  mcpBaseUrl: '',
+  ttsEnabled: false
 };
 
 /**
@@ -114,6 +116,10 @@ function validateConfig(config: any): ConfigValidationResult {
   if (config.mcpBaseUrl !== undefined && typeof config.mcpBaseUrl !== 'string') {
     errors.push('mcpBaseUrl must be a string');
   }
+
+  if (config.ttsEnabled !== undefined && typeof config.ttsEnabled !== 'boolean') {
+    errors.push('ttsEnabled must be a boolean');
+  }
   
   if (errors.length > 0) {
     return {
@@ -127,7 +133,8 @@ function validateConfig(config: any): ConfigValidationResult {
   const normalizedConfig: RuntimeConfig = {
     baseUrl: normalizeBasePath(config.baseUrl || ''),
     apiBaseUrl: normalizeBasePath(config.apiBaseUrl || ''),
-    mcpBaseUrl: normalizeBasePath(config.mcpBaseUrl || '')
+    mcpBaseUrl: normalizeBasePath(config.mcpBaseUrl || ''),
+    ttsEnabled: Boolean(config.ttsEnabled)
   };
   
   return {

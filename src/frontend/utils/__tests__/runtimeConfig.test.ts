@@ -32,7 +32,7 @@ function runTests() {
   console.log('Test 1 - No runtime config:', {
     isValid: result1.isValid,
     config: result1.config,
-    expected: { baseUrl: '', apiBaseUrl: '', mcpBaseUrl: '' }
+    expected: { baseUrl: '', apiBaseUrl: '', mcpBaseUrl: '', ttsEnabled: false }
   });
 
   // Test 2: Valid runtime configuration
@@ -40,7 +40,8 @@ function runTests() {
   (window as any).__APP_CONFIG__ = {
     baseUrl: '/md',
     apiBaseUrl: '/md',
-    mcpBaseUrl: '/md'
+    mcpBaseUrl: '/md',
+    ttsEnabled: true
   };
   
   const result2 = initializeRuntimeConfig();
@@ -55,13 +56,14 @@ function runTests() {
   (window as any).__APP_CONFIG__ = {
     baseUrl: 'md/',
     apiBaseUrl: '/md/',
-    mcpBaseUrl: 'md'
+    mcpBaseUrl: 'md',
+    ttsEnabled: true
   };
   
   const result3 = initializeRuntimeConfig();
   console.log('Test 3 - Path normalization:', {
     config: result3.config,
-    expected: { baseUrl: '/md', apiBaseUrl: '/md', mcpBaseUrl: '/md' }
+    expected: { baseUrl: '/md', apiBaseUrl: '/md', mcpBaseUrl: '/md', ttsEnabled: true }
   });
 
   // Test 4: Invalid configuration
