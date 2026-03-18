@@ -297,12 +297,12 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to generate speech audio');
+        throw new Error(data.error || 'Failed to generate audio');
       }
 
       const audioBlob = await response.blob();
       if (!audioBlob.size) {
-        throw new Error('Kokoro TTS returned empty audio');
+        throw new Error('Speech service returned empty audio');
       }
 
       const audioUrl = URL.createObjectURL(audioBlob);
@@ -323,7 +323,7 @@ export function ArticleView({ filename, token, onNavigate }: ArticleViewProps) {
       setIsPlayingTts(true);
     } catch (err) {
       clearAudioPlayback();
-      setTtsError(err instanceof Error ? err.message : 'Failed to play article audio');
+      setTtsError(err instanceof Error ? err.message : 'Failed to play audio');
     } finally {
       setTtsLoading(false);
     }

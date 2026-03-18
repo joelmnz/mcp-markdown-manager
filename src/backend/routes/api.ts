@@ -721,8 +721,9 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           headers
         });
       } catch (error) {
+        console.error('TTS audio generation failed:', error);
         return new Response(JSON.stringify({
-          error: error instanceof Error ? error.message : 'Failed to generate speech audio'
+          error: 'Failed to generate audio'
         }), {
           status: 502,
           headers: { 'Content-Type': 'application/json' }

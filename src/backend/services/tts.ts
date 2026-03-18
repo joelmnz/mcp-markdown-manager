@@ -93,8 +93,7 @@ export async function synthesizeSpeechFromMarkdown(markdown: string): Promise<Re
   });
 
   if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new Error(errorText || `Kokoro TTS request failed with status ${response.status}`);
+    throw new Error(`Failed to generate speech (status ${response.status})`);
   }
 
   return response;
