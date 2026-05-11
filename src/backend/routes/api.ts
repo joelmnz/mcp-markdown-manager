@@ -260,9 +260,12 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
       try {
         const body = await request.json();
-        const { name, scope, folderRegex } = body;
+        const payload = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+        const name = typeof payload.name === 'string' ? payload.name : '';
+        const scope = payload.scope;
+        const folderRegex = payload.folderRegex;
 
-        if (!name || !name.trim()) {
+        if (!name.trim()) {
           return new Response(JSON.stringify({ error: 'Token name is required' }), {
             status: 400,
             headers: { 'Content-Type': 'application/json' }
@@ -271,6 +274,13 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
         if (scope !== 'read-only' && scope !== 'write') {
           return new Response(JSON.stringify({ error: 'Scope must be either "read-only" or "write"' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        if (folderRegex !== undefined && folderRegex !== null && typeof folderRegex !== 'string') {
+          return new Response(JSON.stringify({ error: 'Folder restriction must be a string' }), {
             status: 400,
             headers: { 'Content-Type': 'application/json' }
           });

@@ -54,8 +54,20 @@ function maskToken(token: string): string {
 }
 
 
-function validateFolderRegex(folderRegex?: string | null): string | null {
-  const trimmed = folderRegex?.trim();
+function validateFolderRegex(folderRegex?: unknown): string | null {
+  if (folderRegex === undefined || folderRegex === null) {
+    return null;
+  }
+
+  if (typeof folderRegex !== 'string') {
+    throw new DatabaseServiceError(
+      DatabaseErrorType.VALIDATION_ERROR,
+      `Invalid folder regex type: ${typeof folderRegex}`,
+      'Folder restriction must be a string'
+    );
+  }
+
+  const trimmed = folderRegex.trim();
   if (!trimmed) {
     return null;
   }

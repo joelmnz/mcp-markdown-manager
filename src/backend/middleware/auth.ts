@@ -3,10 +3,6 @@ import { authenticateOAuthToken, type OAuthRole } from '../services/oauth.js';
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 
-if (!AUTH_TOKEN) {
-  throw new Error('AUTH_TOKEN environment variable is required');
-}
-
 export type AuthType = 'local-token' | 'oauth' | 'auth-token';
 
 export interface AuthContext {
@@ -45,6 +41,10 @@ export function getBearerToken(request: Request): string | null {
  * This is ONLY used for web UI login validation
  */
 export function authenticateWeb(request: Request): boolean {
+  if (!AUTH_TOKEN) {
+    return false;
+  }
+
   const token = getBearerToken(request);
 
   if (!token) {
@@ -162,6 +162,15 @@ export async function requireAuth(
   requiredScope?: TokenScope,
   useWebAuth: boolean = false
 ): Promise<{ error: Response } | { auth: AuthContext }> {
+  if (useWebAuth && !AUTH_TOKEN) {
+    return {
+      error: new Response(JSON.stringify({ error: 'Web authentication is unavailable because AUTH_TOKEN is not configured' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    };
+  }
+
   const authContext = await authenticate(request, useWebAuth);
 
   if (!authContext) {
