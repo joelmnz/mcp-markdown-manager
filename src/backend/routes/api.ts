@@ -260,7 +260,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
       try {
         const body = await request.json();
-        const { name, scope } = body;
+        const { name, scope, folderRegex } = body;
 
         if (!name || !name.trim()) {
           return new Response(JSON.stringify({ error: 'Token name is required' }), {
@@ -276,7 +276,7 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           });
         }
 
-        const token = await createAccessToken(name, scope as TokenScope);
+        const token = await createAccessToken(name, scope as TokenScope, folderRegex);
         return new Response(JSON.stringify(token), {
           status: 201,
           headers: { 'Content-Type': 'application/json' }

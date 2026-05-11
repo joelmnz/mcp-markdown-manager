@@ -8,6 +8,7 @@ interface AccessToken {
   created_at: string;
   last_used_at: string | null;
   masked_token: string;
+  folder_regex: string | null;
 }
 
 interface NewTokenResult {
@@ -16,6 +17,7 @@ interface NewTokenResult {
   name: string;
   scope: string;
   created_at: string;
+  folder_regex: string | null;
 }
 
 interface SettingsProps {
@@ -29,6 +31,7 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
   const [error, setError] = useState<string | null>(null);
   const [newTokenName, setNewTokenName] = useState('');
   const [newTokenScope, setNewTokenScope] = useState<'read-only' | 'write'>('write');
+  const [newTokenFolderRegex, setNewTokenFolderRegex] = useState('');
   const [creating, setCreating] = useState(false);
   const [newlyCreatedToken, setNewlyCreatedToken] = useState<NewTokenResult | null>(null);
   const [visibleTokens, setVisibleTokens] = useState<Set<number>>(new Set());
@@ -74,7 +77,11 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
     try {
       const response = await apiClient.post(
         '/api/access-tokens',
-        { name: newTokenName.trim(), scope: newTokenScope },
+        {
+          name: newTokenName.trim(),
+          scope: newTokenScope,
+          folderRegex: newTokenFolderRegex.trim() || null,
+        },
         authToken
       );
 
@@ -87,6 +94,7 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
       setNewlyCreatedToken(newToken);
       setNewTokenName('');
       setNewTokenScope('write');
+      setNewTokenFolderRegex('');
       await loadTokens();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create token');
@@ -204,6 +212,21 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
               </small>
             </div>
 
+            <div className="form-group">
+              <label htmlFor="token-folder-regex">Folder Restriction (optional regex)</label>
+              <input
+                type="text"
+                id="token-folder-regex"
+                value={newTokenFolderRegex}
+                onChange={(e) => setNewTokenFolderRegex(e.target.value)}
+                placeholder="e.g., ^projects/.*-ai(?:/.*)?$"
+                disabled={creating}
+              />
+              <small className="form-help">
+                Leave blank for all folders. When set, MCP tools can only access matching article folders.
+              </small>
+            </div>
+
             <button type="submit" disabled={creating} className="create-button">
               {creating ? 'Generating...' : 'Generate Access Token'}
             </button>
@@ -223,6 +246,7 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
                   <th>Name</th>
                   <th>Scope</th>
                   <th>Token</th>
+                  <th>Folder Restriction</th>
                   <th>Created</th>
                   <th>Last Used</th>
                   <th>Actions</th>
@@ -241,6 +265,9 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
                       <code className="token-display">
                         {visibleTokens.has(t.id) ? t.masked_token : '••••••••••'}
                       </code>
+                    </td>
+                    <td className="token-value" data-label="Folder Restriction">
+                      {t.folder_regex ? <code className="token-display">{t.folder_regex}</code> : 'All folders'}
                     </td>
                     <td className="token-date" data-label="Created">{formatDate(t.created_at)}</td>
                     <td className="token-date" data-label="Last Used">
@@ -281,6 +308,10 @@ export function Settings({ authToken, onNavigate }: SettingsProps) {
                 <span className={`scope-badge scope-${newlyCreatedToken.scope}`}>
                   {newlyCreatedToken.scope === 'write' ? 'Write' : 'Read-Only'}
                 </span>
+              </div>
+              <div className="detail-row">
+                <label>Folder Restriction:</label>
+                <span>{newlyCreatedToken.folder_regex || 'All folders'}</span>
               </div>
               <div className="detail-row full-width">
                 <label>Token:</label>
