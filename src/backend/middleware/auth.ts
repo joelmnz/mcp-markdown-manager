@@ -1,28 +1,38 @@
 import { validateAccessToken, hasPermission, getTokenNameById, type TokenScope } from '../services/accessTokens.js';
+import { authenticateOAuthToken, type OAuthRole } from '../services/oauth.js';
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
 
-if (!AUTH_TOKEN) {
-  throw new Error('AUTH_TOKEN environment variable is required');
-}
+export type AuthType = 'local-token' | 'oauth' | 'auth-token';
 
 export interface AuthContext {
+  authType: AuthType;
   scope: TokenScope;
+  role: OAuthRole;
+  principalId: string;
+  principalName: string;
   tokenId?: number;
   tokenName?: string;
+  folderRegex?: string;
+  groups?: string[];
 }
 
 /**
- * Extract Bearer token from Authorization header
+ * Extract a token from a strict Authorization: Bearer <token> header.
  */
-function getBearerToken(request: Request): string | null {
+export function getBearerToken(request: Request): string | null {
   const authHeader = request.headers.get('Authorization');
 
   if (!authHeader) {
     return null;
   }
 
-  const token = authHeader.replace('Bearer ', '').trim();
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  const token = match[1].trim();
   return token || null;
 }
 
@@ -31,6 +41,10 @@ function getBearerToken(request: Request): string | null {
  * This is ONLY used for web UI login validation
  */
 export function authenticateWeb(request: Request): boolean {
+  if (!AUTH_TOKEN) {
+    return false;
+  }
+
   const token = getBearerToken(request);
 
   if (!token) {
@@ -65,43 +79,74 @@ export async function authenticateAccessToken(request: Request): Promise<AuthCon
     tokenName = name || undefined;
   }
 
+  const principalName = tokenName || `token-${validation.tokenId ?? 'unknown'}`;
+
   return {
+    authType: 'local-token',
     scope: validation.scope,
+    role: validation.scope === 'write' ? 'editor' : 'reader',
+    principalId: validation.tokenId ? `token:${validation.tokenId}` : principalName,
+    principalName,
     tokenId: validation.tokenId,
     tokenName,
+    folderRegex: validation.folderRegex,
   };
 }
 
 /**
- * Combined authentication: checks both web auth and access tokens
- * For web-only endpoints (token management), pass useWebAuth=true to ONLY accept AUTH_TOKEN
- * For API/MCP endpoints, this accepts BOTH access tokens and AUTH_TOKEN for flexibility
+ * Authenticate using an OAuth/OIDC access token.
+ */
+export async function authenticateOAuth(request: Request): Promise<AuthContext | null> {
+  const token = getBearerToken(request);
+
+  if (!token) {
+    return null;
+  }
+
+  return authenticateOAuthToken(token);
+}
+
+function createAuthTokenContext(): AuthContext {
+  return {
+    authType: 'auth-token',
+    scope: 'write',
+    role: 'admin',
+    principalId: 'auth-token:admin',
+    principalName: 'admin',
+    tokenName: 'admin',
+  };
+}
+
+/**
+ * Combined authentication: checks web auth, access tokens, and optional OAuth tokens.
+ * For web-only endpoints (token management), pass useWebAuth=true to ONLY accept AUTH_TOKEN.
+ * For API/MCP endpoints, this accepts access tokens, OAuth tokens when enabled, and AUTH_TOKEN for compatibility.
  */
 export async function authenticate(request: Request, useWebAuth: boolean = false): Promise<AuthContext | null> {
   if (useWebAuth) {
     // Web-only mode: check AUTH_TOKEN env var ONLY
     const isValid = authenticateWeb(request);
     if (isValid) {
-      // Web auth always has write scope and uses "admin" as token name
-      return { scope: 'write', tokenName: 'admin' };
+      return createAuthTokenContext();
     }
     return null;
   }
 
-  // API/MCP mode: Try access token first, then fall back to AUTH_TOKEN
-  // This allows both web UI (using AUTH_TOKEN) and external APIs (using access tokens) to work
-
-  // First, try access token from database
+  // API/MCP mode: Try local access token first, then optional OAuth, then AUTH_TOKEN fallback.
   const accessTokenAuth = await authenticateAccessToken(request);
   if (accessTokenAuth) {
     return accessTokenAuth;
   }
 
+  const oauthAuth = await authenticateOAuth(request);
+  if (oauthAuth) {
+    return oauthAuth;
+  }
+
   // Fall back to AUTH_TOKEN for web UI compatibility
   const isWebAuth = authenticateWeb(request);
   if (isWebAuth) {
-    // AUTH_TOKEN always has write scope and uses "admin" as token name
-    return { scope: 'write', tokenName: 'admin' };
+    return createAuthTokenContext();
   }
 
   return null;
@@ -117,6 +162,15 @@ export async function requireAuth(
   requiredScope?: TokenScope,
   useWebAuth: boolean = false
 ): Promise<{ error: Response } | { auth: AuthContext }> {
+  if (useWebAuth && !AUTH_TOKEN) {
+    return {
+      error: new Response(JSON.stringify({ error: 'Web UI authentication requires AUTH_TOKEN to be configured' }), {
+        status: 501,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    };
+  }
+
   const authContext = await authenticate(request, useWebAuth);
 
   if (!authContext) {

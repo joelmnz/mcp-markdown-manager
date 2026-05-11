@@ -260,9 +260,12 @@ export async function handleApiRequest(request: Request): Promise<Response> {
 
       try {
         const body = await request.json();
-        const { name, scope } = body;
+        const payload = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+        const name = typeof payload.name === 'string' ? payload.name : '';
+        const scope = payload.scope;
+        const folderRegex = payload.folderRegex;
 
-        if (!name || !name.trim()) {
+        if (!name.trim()) {
           return new Response(JSON.stringify({ error: 'Token name is required' }), {
             status: 400,
             headers: { 'Content-Type': 'application/json' }
@@ -276,7 +279,14 @@ export async function handleApiRequest(request: Request): Promise<Response> {
           });
         }
 
-        const token = await createAccessToken(name, scope as TokenScope);
+        if (folderRegex !== undefined && folderRegex !== null && typeof folderRegex !== 'string') {
+          return new Response(JSON.stringify({ error: 'Folder restriction must be a string' }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        const token = await createAccessToken(name, scope as TokenScope, folderRegex);
         return new Response(JSON.stringify(token), {
           status: 201,
           headers: { 'Content-Type': 'application/json' }

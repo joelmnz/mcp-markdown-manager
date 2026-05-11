@@ -17,7 +17,8 @@ import { logSecurityEvent } from './validation.ts';
 import { createRateLimiter, RateLimitPresets } from '../middleware/rateLimit';
 import { createRequestSizeValidator, RequestSizePresets } from '../middleware/requestSize';
 import { parseEnvInt } from '../utils/config';
-import { validateAccessToken, getTokenNameById, type TokenScope } from '../services/accessTokens.js';
+import { type TokenScope } from '../services/accessTokens.js';
+import { authenticate, getBearerToken, type AuthContext } from '../middleware/auth.js';
 
 
 type McpSessionEntry = {
@@ -26,6 +27,7 @@ type McpSessionEntry = {
   scope: TokenScope;
   tokenId?: number;
   tokenName?: string;
+  auth: AuthContext;
   createdAtMs: number;
   lastSeenAtMs: number;
   ip: string;
@@ -52,41 +54,6 @@ const MCP_MAX_REQUEST_SIZE_BYTES = parseEnvInt(process.env.MCP_MAX_REQUEST_SIZE_
 
 // Session management for HTTP transport
 const sessions: Record<string, McpSessionEntry> = {};
-
-function getBearerToken(request: Request): string | null {
-  const authHeader = request.headers.get('Authorization');
-  if (!authHeader) return null;
-
-  const match = authHeader.match(/^Bearer\s+(.+)$/i);
-  if (!match) return null;
-
-  const token = match[1].trim();
-  return token ? token : null;
-}
-
-async function isAuthorizedToken(token: string | null): Promise<{ valid: boolean; scope?: TokenScope; tokenId?: number; tokenName?: string }> {
-  if (!token) return { valid: false };
-
-  const validation = await validateAccessToken(token);
-  
-  if (!validation.valid || !validation.scope) {
-    return { valid: false };
-  }
-
-  // Get token name for tracking
-  let tokenName;
-  if (validation.tokenId) {
-    const name = await getTokenNameById(validation.tokenId);
-    tokenName = name || undefined;
-  }
-
-  return {
-    valid: validation.valid,
-    scope: validation.scope,
-    tokenId: validation.tokenId,
-    tokenName,
-  };
-}
 
 function getClientIp(request: Request): string {
   const forwardedFor = request.headers.get('x-forwarded-for');
@@ -161,9 +128,9 @@ const mcpSizeValidator = createRequestSizeValidator({
 
 async function getAuthorizedSession(request: Request, sessionId: string | null): Promise<{ entry: McpSessionEntry; sessionId: string } | Response> {
   const token = getBearerToken(request);
-  const authResult = await isAuthorizedToken(token);
+  const authResult = await authenticate(request);
 
-  if (!authResult.valid) {
+  if (!token || !authResult) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' },
@@ -240,7 +207,7 @@ function getToolsForScope(scope: TokenScope, allTools: any[]): any[] {
 }
 
 // Create a configured MCP server instance with scope-based tool filtering
-function createConfiguredMCPServer(scope: TokenScope, tokenName?: string) {
+function createConfiguredMCPServer(scope: TokenScope, tokenName?: string, auth?: AuthContext) {
   const server = new Server(
     {
       name: 'mcp-markdown-manager',
@@ -425,7 +392,7 @@ function createConfiguredMCPServer(scope: TokenScope, tokenName?: string) {
         throw new Error(`Tool "${toolName}" requires write scope, but token has ${scope} scope`);
       }
 
-      const result = await handler(request.params.arguments, { tokenName });
+      const result = await handler(request.params.arguments, { tokenName, auth });
 
       loggingService.logPerformanceMetric(`mcp_tool_${toolName}`, Date.now() - startTime, {
         metadata: { success: true }
@@ -457,15 +424,15 @@ function isInitializeRequest(body: any): boolean {
 
 export async function handleMCPPostRequest(request: Request): Promise<Response> {
   const token = getBearerToken(request);
-  const authResult = await isAuthorizedToken(token);
+  const authResult = await authenticate(request);
 
-  if (!authResult.valid || !authResult.scope) {
+  if (!token || !authResult) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   }
 
   const tokenScope = authResult.scope;
   const tokenId = authResult.tokenId;
-  const tokenName = authResult.tokenName;
+  const tokenName = authResult.tokenName || authResult.principalName;
 
   // Validate request size before processing
   const sizeCheck = await mcpSizeValidator(request);
@@ -497,6 +464,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
         scope: tokenScope,
         tokenId,
         tokenName,
+        auth: authResult,
         createdAtMs: nowMs,
         lastSeenAtMs: nowMs,
         ip,
@@ -509,7 +477,7 @@ export async function handleMCPPostRequest(request: Request): Promise<Response> 
         delete sessions[newSessionId];
       };
 
-      const server = createConfiguredMCPServer(tokenScope, tokenName);
+      const server = createConfiguredMCPServer(tokenScope, tokenName, authResult);
       await server.connect(transport);
 
       loggingService.log(LogLevel.INFO, LogCategory.TASK_LIFECYCLE, `New MCP session initialized: ${newSessionId}`, {

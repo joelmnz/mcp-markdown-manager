@@ -390,7 +390,7 @@ console.log('🚀 MCP Markdown Manager Server Started');
 console.log('=====================================');
 console.log(`📡 Server: http://localhost:${PORT}`);
 console.log(`🗄️  Database: PostgreSQL`);
-console.log(`🔒 Authentication: ${process.env.AUTH_TOKEN ? 'Enabled' : 'MISSING - Set AUTH_TOKEN!'}`);
+console.log(`🔒 Authentication: ${process.env.AUTH_TOKEN ? 'AUTH_TOKEN enabled' : 'AUTH_TOKEN not configured (OAuth/access tokens only)'}`);
 console.log(`🤖 MCP Server: ${MCP_SERVER_ENABLED ? 'Enabled at /mcp' : 'Disabled'}`);
 
 // Embedding queue configuration logging

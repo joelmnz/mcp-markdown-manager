@@ -11,6 +11,7 @@ export interface AccessToken {
   scope: TokenScope;
   created_at: Date;
   last_used_at: Date | null;
+  folder_regex: string | null;
 }
 
 export interface AccessTokenInfo {
@@ -20,12 +21,14 @@ export interface AccessTokenInfo {
   created_at: Date;
   last_used_at: Date | null;
   masked_token: string;
+  folder_regex: string | null;
 }
 
 export interface TokenValidationResult {
   valid: boolean;
   scope?: TokenScope;
   tokenId?: number;
+  folderRegex?: string;
 }
 
 /**
@@ -50,10 +53,41 @@ function maskToken(token: string): string {
   return `sk-md-****...${last4}`;
 }
 
+
+function validateFolderRegex(folderRegex?: unknown): string | null {
+  if (folderRegex === undefined || folderRegex === null) {
+    return null;
+  }
+
+  if (typeof folderRegex !== 'string') {
+    throw new DatabaseServiceError(
+      DatabaseErrorType.VALIDATION_ERROR,
+      `Invalid folder regex type: ${typeof folderRegex}`,
+      'Folder restriction must be a string'
+    );
+  }
+
+  const trimmed = folderRegex.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    new RegExp(trimmed);
+    return trimmed;
+  } catch (error) {
+    throw new DatabaseServiceError(
+      DatabaseErrorType.VALIDATION_ERROR,
+      `Invalid folder regex: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      'Folder restriction must be a valid regular expression'
+    );
+  }
+}
+
 /**
  * Create a new access token
  */
-export async function createAccessToken(name: string, scope: TokenScope): Promise<AccessToken> {
+export async function createAccessToken(name: string, scope: TokenScope, folderRegex?: string | null): Promise<AccessToken> {
   if (!name || !name.trim()) {
     throw new DatabaseServiceError(
       DatabaseErrorType.VALIDATION_ERROR,
@@ -71,13 +105,14 @@ export async function createAccessToken(name: string, scope: TokenScope): Promis
   }
 
   const token = generateAccessToken();
+  const validatedFolderRegex = validateFolderRegex(folderRegex);
 
   try {
     const result = await database.query<AccessToken>(
-      `INSERT INTO access_tokens (token, name, scope)
-       VALUES ($1, $2, $3)
-       RETURNING id, token, name, scope, created_at, last_used_at`,
-      [token, name.trim(), scope]
+      `INSERT INTO access_tokens (token, name, scope, folder_regex)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, token, name, scope, folder_regex, created_at, last_used_at`,
+      [token, name.trim(), scope, validatedFolderRegex]
     );
 
     if (result.rows.length === 0) {
@@ -107,7 +142,7 @@ export async function createAccessToken(name: string, scope: TokenScope): Promis
 export async function listAccessTokens(): Promise<AccessTokenInfo[]> {
   try {
     const result = await database.query<AccessToken>(
-      `SELECT id, token, name, scope, created_at, last_used_at
+      `SELECT id, token, name, scope, folder_regex, created_at, last_used_at
        FROM access_tokens
        ORDER BY created_at DESC`
     );
@@ -119,6 +154,7 @@ export async function listAccessTokens(): Promise<AccessTokenInfo[]> {
       created_at: row.created_at,
       last_used_at: row.last_used_at,
       masked_token: maskToken(row.token),
+      folder_regex: row.folder_regex,
     }));
   } catch (error) {
     throw new DatabaseServiceError(
@@ -135,7 +171,7 @@ export async function listAccessTokens(): Promise<AccessTokenInfo[]> {
 export async function getAccessToken(token: string): Promise<AccessToken | null> {
   try {
     const result = await database.query<AccessToken>(
-      `SELECT id, token, name, scope, created_at, last_used_at
+      `SELECT id, token, name, scope, folder_regex, created_at, last_used_at
        FROM access_tokens
        WHERE token = $1`,
       [token]
@@ -218,7 +254,7 @@ export async function validateAccessToken(token: string): Promise<TokenValidatio
 
   try {
     const result = await database.query<AccessToken>(
-      `SELECT id, scope, last_used_at
+      `SELECT id, scope, folder_regex, last_used_at
        FROM access_tokens
        WHERE token = $1`,
       [token]
@@ -242,6 +278,7 @@ export async function validateAccessToken(token: string): Promise<TokenValidatio
       valid: true,
       scope: tokenData.scope,
       tokenId: tokenData.id,
+      folderRegex: tokenData.folder_regex || undefined,
     };
   } catch (error) {
     console.error('Token validation error:', error);

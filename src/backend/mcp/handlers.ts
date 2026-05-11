@@ -17,12 +17,52 @@ import {
   validateArray,
   validateNumber,
 } from './validation';
+import type { AuthContext } from '../middleware/auth';
 
 const SEMANTIC_SEARCH_ENABLED = process.env.SEMANTIC_SEARCH_ENABLED?.toLowerCase() === 'true';
 const MCP_MULTI_SEARCH_LIMIT = Number.parseInt(process.env.MCP_MULTI_SEARCH_LIMIT ?? '10', 10);
 
 export interface McpHandlerContext {
   tokenName?: string;
+  auth?: AuthContext;
+}
+
+interface FolderScopedItem {
+  folder?: string;
+}
+
+function getFolderPattern(context?: McpHandlerContext): RegExp | null {
+  const folderRegex = context?.auth?.folderRegex;
+  if (!folderRegex) return null;
+  return new RegExp(folderRegex);
+}
+
+function normalizeFolderForAuth(folder?: string): string {
+  return !folder || folder === '/' ? '' : folder;
+}
+
+function isFolderAllowed(folder: string | undefined, context?: McpHandlerContext): boolean {
+  const pattern = getFolderPattern(context);
+  if (!pattern) return true;
+  return pattern.test(normalizeFolderForAuth(folder));
+}
+
+function assertFolderAllowed(folder: string | undefined, context?: McpHandlerContext): void {
+  if (!isFolderAllowed(folder, context)) {
+    throw new Error('Forbidden: this token is not allowed to access that folder');
+  }
+}
+
+function filterFolderScopedItems<T extends FolderScopedItem>(items: T[], context?: McpHandlerContext): T[] {
+  const pattern = getFolderPattern(context);
+  if (!pattern) return items;
+  return items.filter(item => pattern.test(normalizeFolderForAuth(item.folder)));
+}
+
+function assertSearchFolderProvidedWhenRestricted(folder: string | undefined, context?: McpHandlerContext): void {
+  if (context?.auth?.folderRegex && (folder === undefined || folder === null)) {
+    throw new Error('A folder parameter is required when this token has a folder restriction');
+  }
 }
 
 export const toolHandlers: Record<string, (args: any, context?: McpHandlerContext) => Promise<any>> = {
@@ -54,14 +94,16 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
       limit = limitValidation.sanitized || 100;
     }
     
-    const articles = await listArticles(sanitizedFolder, limit);
+    const articles = filterFolderScopedItems(await listArticles(sanitizedFolder, limit), context);
     return {
       content: [{ type: 'text', text: JSON.stringify(articles, null, 2) }],
     };
   },
 
   listFolders: async (args, context) => {
-    const folders = await getFolders();
+    const folders = getFolderPattern(context)
+      ? (await getFolders()).filter(folder => isFolderAllowed(folder, context))
+      : await getFolders();
     return {
       content: [{ type: 'text', text: JSON.stringify(folders, null, 2) }],
     };
@@ -86,7 +128,7 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
       sanitizedFolder = folderValidation.sanitized;
     }
     
-    const results = await searchArticles(queryValidation.sanitized!, sanitizedFolder);
+    const results = filterFolderScopedItems(await searchArticles(queryValidation.sanitized!, sanitizedFolder), context);
     return {
       content: [{ type: 'text', text: JSON.stringify(results, null, 2) }],
     };
@@ -120,9 +162,9 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
     const allResults = await Promise.all(
       titlesValidation.sanitized!.map((title: string) => searchArticles(title, sanitizedFolder))
     );
-    const uniqueResults = Array.from(
+    const uniqueResults = filterFolderScopedItems(Array.from(
       new Map(allResults.flat().map(article => [article.filename, article])).values()
-    );
+    ), context);
 
     return {
       content: [{ type: 'text', text: JSON.stringify(uniqueResults, null, 2) }],
@@ -164,6 +206,9 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
       sanitizedFolder = folderValidation.sanitized;
     }
     
+    assertSearchFolderProvidedWhenRestricted(sanitizedFolder, context);
+    assertFolderAllowed(sanitizedFolder, context);
+
     const results = await semanticSearch(queryValidation.sanitized!, resultCount, sanitizedFolder);
     return {
       content: [{ type: 'text', text: JSON.stringify(results, null, 2) }],
@@ -211,6 +256,9 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
       sanitizedFolder = folderValidation.sanitized;
     }
 
+    assertSearchFolderProvidedWhenRestricted(sanitizedFolder, context);
+    assertFolderAllowed(sanitizedFolder, context);
+
     const allResults = await Promise.all(
       queriesValidation.sanitized!.map((query: string) => semanticSearch(query, resultsPerQuery, sanitizedFolder))
     );
@@ -244,6 +292,7 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
     
     const article = await readArticle(filenameValidation.sanitized!);
     if (!article) throw new Error(`Article ${filenameValidation.sanitized} not found`);
+    assertFolderAllowed(article.folder, context);
     return {
       content: [{ type: 'text', text: JSON.stringify(article, null, 2) }],
     };
@@ -274,6 +323,8 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
       sanitizedFolder = folderValidation.sanitized;
     }
     
+    assertFolderAllowed(sanitizedFolder, context);
+
     const article = await createArticle(
       titleValidation.sanitized!,
       contentValidation.sanitized!,
@@ -318,6 +369,11 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
       sanitizedFolder = folderValidation.sanitized;
     }
     
+    const existingArticle = await readArticle(filenameValidation.sanitized!);
+    if (!existingArticle) throw new Error(`Article ${filenameValidation.sanitized} not found`);
+    assertFolderAllowed(existingArticle.folder, context);
+    assertFolderAllowed(sanitizedFolder ?? existingArticle.folder, context);
+
     const article = await updateArticle(
       filenameValidation.sanitized!,
       titleValidation.sanitized!,
@@ -341,6 +397,10 @@ export const toolHandlers: Record<string, (args: any, context?: McpHandlerContex
       throw new Error(filenameValidation.error);
     }
     
+    const existingArticle = await readArticle(filenameValidation.sanitized!);
+    if (!existingArticle) throw new Error(`Article ${filenameValidation.sanitized} not found`);
+    assertFolderAllowed(existingArticle.folder, context);
+
     await deleteArticle(filenameValidation.sanitized!);
     return {
       content: [{ type: 'text', text: JSON.stringify({ success: true, filename: filenameValidation.sanitized }, null, 2) }],

@@ -24,6 +24,7 @@ export class SchemaService {
 
       // Update schema with new columns
       await this.addNoRagColumn();
+      await this.addAccessTokenFolderRegexColumn();
 
       // Create indexes for performance
       await this.createIndexes();
@@ -258,6 +259,7 @@ export class SchemaService {
         token VARCHAR(100) UNIQUE NOT NULL,
         name VARCHAR(255) NOT NULL,
         scope VARCHAR(20) NOT NULL CHECK (scope IN ('read-only', 'write')),
+        folder_regex TEXT,
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         last_used_at TIMESTAMP WITH TIME ZONE
       )
@@ -265,6 +267,22 @@ export class SchemaService {
 
     await database.query(createTableSQL);
     console.log('Access tokens table created/verified');
+  }
+
+
+  /**
+   * Add folder_regex column to access_tokens table if it doesn't exist
+   */
+  private async addAccessTokenFolderRegexColumn(): Promise<void> {
+    try {
+      await database.query(`
+        ALTER TABLE access_tokens
+        ADD COLUMN IF NOT EXISTS folder_regex TEXT
+      `);
+    } catch (error) {
+      console.warn('Failed to add folder_regex column to access_tokens:', error);
+      throw new Error(`Schema initialization failed: unable to add folder_regex column - ${error}`);
+    }
   }
 
   /**
