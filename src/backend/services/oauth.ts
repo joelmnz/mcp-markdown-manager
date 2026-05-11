@@ -165,8 +165,9 @@ async function getDiscoveryMetadata(config: OAuthConfig): Promise<OidcDiscoveryM
   }
 
   const metadata = await response.json() as OidcDiscoveryMetadata;
-  if (normalizeUrl(metadata.issuer) !== config.issuerUrl) {
-    throw new Error(`OIDC issuer mismatch: expected ${config.issuerUrl}, got ${metadata.issuer}`);
+  const metadataIssuer = normalizeUrl(metadata.issuer);
+  if (metadataIssuer !== config.issuerUrl) {
+    throw new Error(`OIDC issuer mismatch: expected ${config.issuerUrl}, got ${metadataIssuer}`);
   }
 
   discoveryCache = metadata;
