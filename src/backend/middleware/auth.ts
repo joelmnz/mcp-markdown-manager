@@ -164,8 +164,8 @@ export async function requireAuth(
 ): Promise<{ error: Response } | { auth: AuthContext }> {
   if (useWebAuth && !AUTH_TOKEN) {
     return {
-      error: new Response(JSON.stringify({ error: 'Web authentication is unavailable because AUTH_TOKEN is not configured' }), {
-        status: 503,
+      error: new Response(JSON.stringify({ error: 'Web UI authentication requires AUTH_TOKEN to be configured' }), {
+        status: 501,
         headers: { 'Content-Type': 'application/json' }
       })
     };
